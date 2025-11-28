@@ -1,0 +1,131 @@
+1st item is inclusion indicator, 2nd item is prior type (0 = beta, 1 = gamma, 2 = normal), 3rd and 4th items are prior parameters
+1. TB transmission probability per contact per day (if infectious individual is smear-positive)
+1	0	3.97	657.7
+2. Proportion experiencing fast progression
+1	0	20.18	268.15
+3. Annual rate of reactivation in HIV-negative individuals
+0	1	25.0	16666.7
+4. Reduction in TB incidence per 100 increase in CD4
+0	0	19.52	7.974
+5. Relative rate of TB incidence on ART (controlling for CD4)
+0	0	49.05	11.51
+6. Reduction in TB incidence in previously-infected individuals (HIV-neg)
+0	0	12.32	3.27
+7. Relative rate of immunity to TB per 100-cell increase in CD4
+0	1	484.0	440.0
+8. Annual recovery rate in smear-positive TB
+0	1	20.25	225.0
+9. Annual recovery rate in smear-negative TB
+1	1	12.96	72.0
+10. Relative infectivity of smear-negative TB
+0	0	1.83	5.50
+11. Rate of relapse in immediate post-treatment state
+0	1	11.11	111.1
+12. Increase in TB risk if previously experienced TB
+0	1	2.25	2.25
+13. Smear-negative TB mortality (untreated)
+0	1	25.0	409.8
+14. Smear-positive TB mortality (untreated)
+1	1	25.0	117.9
+15. Increase in TB mortality rate per 10-year increase in age
+0	1	182.25	135.0
+16. Relative rate of TB mortality per 50 cell increase in CD4 count, if HIV+
+0	0	38.49	5.75
+17. Relative rate of TB mortality if on ART
+1	0	20.72	6.95
+18. Annual rate of health seeking in males with smear-neg TB
+1	1	19.07	8.91
+19. Annual rate of health seeking in males in the general population
+1	1	5.29	4.60
+20. Annual rate of health seeking in males due to TB-like symptoms
+0	1	2.15	9.78
+21. % of active TB cases seeking Rx who are treated empirically, if no lab test is done
+1	0	1.000	1.000
+22. % of smear-neg TB cases who are treated empirically, if initially screened smear-neg
+0	0	1.000	1.000
+23. RR empiric treatment if not seeking Rx because of TB symptoms
+0	0	1.00	1.00
+24. RR empiric treatment if symptoms are not due to TB
+0	0	1.000	1.000
+25. Prob of cure if patient drops out before completing TB Rx
+0	0	1.000	1.000
+26. Ultimate proportion of symptomatic TB patients who get screened
+0	0	1.000	1.000
+27. Relative rate of health seeking in women, compared to men
+1	1	83.13	53.63
+28. Annual mortality rate in HIV-neg men receiving TB treatment
+1	1	13.44	122.2
+29. Relative rate of TB mortality in men on TB treatment, compared to women
+0	1	76.4	58.3
+30. Proportion of incident TB cases in HIV-negative adults that are smear-positive
+0	0	12.46	11.50
+31. Relative rate of health seeking in HIV-pos adults, compared to HIV-neg adults
+0	1	6.25	1.25
+32. RR of screening in TB patients seeking Rx for TB symptoms, compared to those seeking Rx for other conditions (low screening, RRscreenSymptomsBase)
+0	1	12.14	1.394
+33. Reduction in empirical Rx (after a negative screen) due to Xpert
+0	0	3.914	2.108
+34. RR symptoms in patients with smear-positive TB, compared to smear-neg TB
+0	1	19.36	8.80
+35. Prevalence of cough >2 weeks in people with smear-negative TB
+0	0	3.00	12.00
+36. RR of screening in TB patients seeking Rx for TB symptoms, compared to those seeking Rx for other conditions (high screening, RRscreenSymptomsUlt)
+1	1	11.11	2.778
+37. RR - 1 for effect of risky drinking on TB incidence
+1	1	8.91	4.59
+38. RR - 1 for effect of diabetes on TB incidence
+0	1	9.74	3.76
+39. RR - 1 for effect of current smoking on TB incidence
+0	1	1.45	3.09
+40. RR - 1 for TB incidence, per 10-year increase in smoking duration
+1	1	10.03	26.39
+41. RR - 1 for effect of low BMI on TB incidence
+0	1	10.24	12.80
+42. Initial proportion of TB cases that are rifapmicin-resistant
+0	0	98.0	4801.0
+43. DOTS effectiveness adjustment
+0	0	1.000	1.000
+44. Relative infectiousness of rifampicin-resistant TB
+0	1	6.25	12.5
+45. Prob of acquiring rifampicin resistance if failing first-line treatment
+0	0	6.46	74.3
+46. OR for acquiring rifampicin resistant, per 100 cell increase in CD4
+0	0	12.32	3.27
+47. OR for treatment failure, if rifampicin resistant and receiving first-line drugs
+0	1	9.000	0.600
+48. Prob of drug susceptibility testing if failing treatment, post-2010
+0	0	1.000	1.000
+49. RR of drug susceptibility testing if failing treatment, comparing 2001 to 2011
+0	0	1.000	1.000
+50. RR of drug susceptibility testing if failing treatment, comparing 1985 to 2001
+0	0	1.000	1.000
+51. RR of drug susceptibility testing if failing treatment, comparing dropouts to those continuing Rx
+0	0	1.000	1.000
+52. Initital LTFU rate
+0	0	19.53	146.0
+53. Ratio of mimimum treated mortality to mortality before 2000
+0	0	14.12	6.64
+54. Ratio of mimimum infectiousness to infectiousness before 2000
+0	0	7.84	8.49
+55. RR of TB infection in males, relative to females
+0	1	100.0	83.33
+56. Proportion of positive TB tests in the private sector
+0	0	7.50	42.5
+57. Adjustment to #TB microbiological diagnoses in 1980s
+1	1	16.00	16.00
+58. Relative reduction in contact rates post-COVID (relative to 2021-22 rates)
+1	0	2.625	2.625
+59. Ultimate monthly rate of TPT uptake
+1	0	8.91	981.1
+60. Ultimate fraction of TB patients tested microbiologically if seeking Rx for symptoms
+1	0	4.95	36.29
+61. Relative rate of Rx discontinuation over 2021+, relative to 2016
+1	1	16.00	0.0625
+62. Ult ART delay in men
+1	1	16.00	2.25
+63. Ult ART delay in women
+1	1	16.00	1.25
+64. Log empiric to microbiological
+0	2	0.00	0.50
+65. Ultimate TUTT screening freq in ART patients
+1	1	1.44	4.80

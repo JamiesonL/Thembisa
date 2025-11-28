@@ -1,0 +1,220 @@
+CrudeContact
+6.20	6.40
+5.50	5.70
+4.70	5.40
+4.70	5.30
+ContactRednCOVID
+0.60	0.40	0.20
+DoddMixMatrix: contacts of males aged 10-17
+0.021	0.254	0.240	0.043	0.029
+0.015	0.178	0.168	0.030	0.021
+DoddMixMatrix: contacts of males aged 18-25
+0.022	0.045	0.302	0.150	0.070
+0.024	0.032	0.155	0.119	0.080
+DoddMixMatrix: contacts of males aged 26-45
+0.029	0.040	0.124	0.294	0.090
+0.026	0.042	0.123	0.166	0.070
+DoddMixMatrix: contacts of males aged 46+
+0.030	0.058	0.130	0.184	0.130
+0.037	0.047	0.117	0.144	0.120
+DoddMixMatrix: contacts of females aged 10-17
+0.013	0.151	0.142	0.026	0.017
+0.024	0.282	0.266	0.048	0.032
+DoddMixMatrix: contacts of females aged 18-25
+0.049	0.046	0.092	0.110	0.050
+0.052	0.073	0.269	0.168	0.090
+DoddMixMatrix: contacts of females aged 26-45
+0.051	0.058	0.089	0.145	0.050
+0.058	0.083	0.155	0.238	0.070
+DoddMixMatrix: contacts of females aged 46+
+0.046	0.062	0.130	0.117	0.090
+0.029	0.066	0.162	0.194	0.100
+DoddAgeSexDbn
+0.0587	0.0792	0.1343	0.1188	0.0617
+0.0637	0.0870	0.1682	0.1416	0.0867	
+TBtransmProb 
+0.003856
+RatioMinToBaseInfectivity
+0.48
+PropFastProg 0.05
+0.0903
+Reactivation 0.001
+0.00173
+MortalitySmPos
+0.1074
+MortalitySmNeg
+0.0269
+NaturalRecSmPos
+0.0746
+NaturalRecSmNeg 0.2241
+0.208
+PartialImmunHIVneg
+0.72
+DurSTpostRxRisk
+0.50
+RelapseST
+0.10
+PastTBfactor
+1.50
+RR_TBadultM
+1.20
+RR_TBalcohol
+3.03
+RR_TBdiabetes
+3.59
+RR_TBcurrSmoke
+1.47
+RR_TBsmoke10yr
+1.201
+RR_TBlowBMI
+1.80
+RRsmoking2016
+0.50
+RRlowBMI2016
+0.50
+SmNegInfectiousness 0.22
+0.206
+RifResInfectiousness 0.50
+0.836
+AveCD4HIVneg
+1000
+RR_TBper100CD4increase 0.75
+0.75
+RR_TBtreatedHIV 0.83
+0.70
+RR_TBmortPer50CD4
+0.886
+RR_TBmortTreatedHIV
+0.947
+RR_TBmortPer10yrAge 1.39
+1.35
+RRnatRecPer100CD4increase
+1.20
+RRimmunePer100CD4increase
+1.10
+HealthSeekingTB 1.39
+1.46
+HealthSeekingGen (DHS 1998, 2003)
+1.26
+HealthSeekingTBLS (2011 GHS)
+0.196
+RRhealthSeekingFem (Horton 2016) 1.47
+1.289
+RRhealthSeekingHIV
+9.00
+Cough2wkActiveSmNeg 0.162 (Claassens 2017; Marx 2016)
+0.198
+Cough2wkGen (Claassens 2017)
+0.052
+RRsymptomsSmPos 1.62 (Onozaki) 
+3.03
+RRscreenSymptomsBase (Chihota 2015, Kweza 2018, Claassens 2013) 8.71
+11.10
+RRscreenSymptomsUlt (Chihota 2015, Kweza 2018, Claassens 2013)
+4.417
+EffectScreenRate2
+-4.92
+RRscreenF 0.64
+0.64
+TBtestYear
+2024
+PrivateTBdiagPropn
+0.15
+RecordedTB80sAdj
+0.864
+UltTBsymptomScreen
+0.12
+RatioSymptomToMicroScreen
+5.00
+XpertSe (Horne 2019)
+0.67	0.98
+XpertSeActive (Shapiro 2021 is not stratified by smear status, so same assumps)
+0.67	0.98
+XpertSp (Horne 2019, Parker 2019)
+0.995
+SmearSp (Steingart 2006, Parker 2019)
+0.995
+XpertUltraSe (Zifodya 2021)
+0.77	0.99
+XpertUltraSeActive (no data stratified by smear status, so same assumps)
+0.77	0.99
+XpertUltraSp (Dorman 2018, Parker 2019)
+0.995
+Se_dCXR (Fehr 2021)
+0.83
+Sp_dCXR (Fehr 2021)
+0.63
+AbleSputum
+0.47	0.74
+TongueSwabRelSe
+0.52	0.83
+TongueSwabTested
+0.00
+InitialLTFU (meta-regression)
+0.215	0.176
+EmpiricRx (wild guesses)
+0.0000	0.0021
+0.0001	0.0243
+EmpiricRxNeg (wild guesses)
+0.0000	0.0089
+0.0004	0.2822
+EmpiricRednXpert (Rees 2018, Hermans 2017)
+0.50
+LogEmpiricToMicro
+-0.50
+TBprevHHcontacts (Velen 2021, Thind 2012, Shapiro 2012, Gilpin 1987)
+0.08
+HHcontactsPerCase (Velen 2021, Thind 2012, Shapiro 2012, Gilpin 1987)
+3.00
+HHcontactRxUptake (Shapiro 2012, Johnson 2019 - as for community-based HIV testing)
+0.68
+ProbDSTifFailingRx1, ProbDSTifFailingRx2, ProbDSTifFailingRx3 (previous defaults 0.2, 0.4, 0.7)
+0.125	0.231	0.375
+RR_DSTdropout 0.50
+0.549
+AnnMortTB_Rx (ETR, Osman 2021)
+0.065	0.065
+ExcessMort1stMoTB_Rx
+1.67
+RatioMinToBaseTBmort
+0.68
+RRmortRifRes1st
+7.00
+AnnDropoutTB_Rx 
+0.309	0.237
+RRdefaultDOT (Pasipanodya 2013)
+0.48
+DOTSeffectivenessAdj 
+0.50
+UltTBdefaultAdj
+1.00
+TBfullRxCure
+0.96
+TBpartialRxCure (Marx 2012)
+0.65
+AcquireRifResIfFail 0.08
+0.087
+ORacquireRifRes100CD4 0.79
+0.832
+ORfailureRifRes 15.0
+12.06
+RR_IPTuptakeNoLTBI (wild guess)
+0.50
+RR_IPTuptakePrevTB
+1.00
+RR_IPTuptakeCD4 (van Ginderdeuren 2019)
+0.40	0.50	0.70	1.00
+RR_IPTuptakeARTdur (van Ginderdeuren 2019, with 0.5 to adjust for diagnosed but not in care)
+0.50	7.30	1.20	1.20	1.20	1.20
+IPTdataYr
+2023
+IPTuptakeUlt 
+0.009
+MnthlyTPTdropout
+0.024
+IPTefficacy (Ayele 2015, Rangaka 2014, Churchyard 2014)
+0.52
+Cure3HP
+0.50
+NutritionEfficacy (Bhargava 2023)
+0.40

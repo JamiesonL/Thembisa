@@ -14,35 +14,40 @@ using namespace std;
 //=============================================================================
 
 int StartYear = 1985;
-int ProjectionTerm = 40; // Note that entering term of 10 will give you results in 1994
+int ProjectionTerm = 46; // Note that entering term of 10 will give you results in 1994
 int CurrYear;
 int CurrMonth; // 0 to 11
 
-int FixedUncertainty = 0;
+int FixedUncertainty = 1;
 const int VaryFutureInterventions = 0; // 0 = fix the future rollout at Rollout.txt values
+const int VaryFutureInterventionsTB = 0; // 0 = fix the future rollout at TBrollout.txt values
 const int FixedARTinitiation = 0; // 1 = fix the rates of ART initiation at the values generated in
 								  // the uncertainty analysis (only valid if FixedUncertainty = 1)
-const int InputARTinitiationRates = 1; // 1 = specify rates of ART initiation in Rollout.txt
+const int InputARTinitiationRates = 0; // 1 = specify rates of ART initiation in Rollout.txt
 									   // 0 = specify numbers starting ART in Rollout.txt
 const int PropnalImmART = 1; // 1 if immediate ART start is proportional to later rate of ART start
 const int ExcludeInterrupters = 1; // 1 = exclude temporary ART interrupters when calculating
 								   // numbers currently on ART
 const int UseNumbersTests = 1; // 1 = calculate rates of testing from numbers of HIV tests
-const int ProvModel = 1; // 1 if modelling a province, 0 for national model
-string ProvID = "EC"; // Choose from EC, FS, GT, KZ, LM, MP, NC, NW, WC
-const int UseBrassLogit = 1; // 1 if using Brass relational logit to get non-HIV mort over 1996-2018
+const int ProvModel = 0; // 1 if modelling a province, 0 for national model
+string ProvID = "NW"; // Choose from EC, FS, GT, KZ, LM, MP, NC, NW, WC
+const int UseBrassLogit = 0; // 1 if using Brass relational logit to get non-HIV mort over 1996-2018
 int PrEPorVM = 0; // 1 if allowing for PrEP or vaginal microbicides. Keep set to 0 as default; it
 				  // will automatically get recalculated if there is PrEP/VM rollout.
+const int IncludeTB = 1; // 1 if including TB simulations
+const int IncludeDR_TB = 0; // 1 if including drug-resisant (DR) TB 
+const int FixedTBscreening = 0; // 1 = fix the rates of TB screening at the values generated in
+								// the uncertainty analysis (only valid if FixedUncertainty = 1)
 double RRtestingDiagnosed = 1.0; // Relative rate of consent to testing if individual is diagnosed
 								 // positive (relevant in calibration to HSRC data)
 
 const int CalibPaedPrev = 0;
-const int CalibAdultPrev = 1; // 1 = calibrate to adult HIV prevalence data from HSRC & DHS surveys
-const int CalibANCprev = 1; // 1 = calibrate to HIV prevalence data from antenatal surveys
+const int CalibAdultPrev = 0; // 1 = calibrate to adult HIV prevalence data from HSRC & DHS surveys
+const int CalibANCprev = 0; // 1 = calibrate to HIV prevalence data from antenatal surveys
 const int InclANCpre1997 = 1; // 1 = include ANC prevalence data prior to 1997
 const int InclAS_ANCprov = 1; // 1 = include age-specific ANC prevalence data in prov calibration
-const int CalibFSWprev = 1; // 1 = calibrate to HIV prevalence data from sex worker surveys
-const int CalibMSMprev = 1; // 1 = calibrate to HIV prevalence data from MSM surveys
+const int CalibFSWprev = 0; // 1 = calibrate to HIV prevalence data from sex worker surveys
+const int CalibMSMprev = 0; // 1 = calibrate to HIV prevalence data from MSM surveys
 const int CalibCD4 = 0; // 1 = calibrate to CD4 distributions in household/workforce surveys
 const int CalibCD4ANC = 0; // 1 = calibrate to CD4 distributions in antenatal surveys
 const int CalibHCT_HH = 0; // 1 = calibrate to propn ever tested in HSRC surveys
@@ -51,25 +56,38 @@ const int CalibHCTprev = 0; // 1 = calibrate to HIV prevalence in adults receivi
 const int CalibHCTprevP = 0; // 1 = calibrate to HIV prevalence in children receiving HCT
 const int CalibHCTtotP = 0; // 1 = calibrate to recorded number of kids receiving HCT
 const int CalibHCTageSex = 0; // 1 = calibrate to proportions tested by age/sex and prev by age/sex
-const int CalibDeathsA = 1; // 1 = calibrate to recorded numbers of adult deaths
+const int CalibDeathsA = 0; // 1 = calibrate to recorded numbers of adult deaths
 const int AgeLimitMortCalib = 60; // Death data below this age are used in mort calibration
 								  // Should be multiple of 5 (set to 95 if all ages included)
 const int CalibDeathsP = 0; // 1 = calibrate to recorded numbers of paediatric deaths
 const int CalibAIDStrend = 0; // 1 = calibrate to reported new AIDS cases in adults (1990-4)
 const int CalibAIDSage = 0; // 1 = calibrate to reported new AIDS cases by age and sex (1993-4)
-const int CalibARTtotals = 1; // 1 = calibrate to reported total numbers of ART patients
+const int CalibARTtotals = 0; // 1 = calibrate to reported total numbers of ART patients
 const int CalibARTtotalsP = 0; // 1 = calibrate to reported total numbers of children on ART
 const int CalibCD4atARTstart = 0; // 1 = calibrate to recorded # starting ART by CD4 (WC only)
-const int CalibARTbyAge = 1; // 1 = calibrate to age distribution of adults on ART
+const int CalibARTbyAge = 0; // 1 = calibrate to age distribution of adults on ART
 const int CalibARTbyAgeP = 0; // 1 = calibrate to age distribution of kids starting ART
 const int CalibARTbyAgeP2 = 0; // 1 = calibrate to age distribution of kids on ART
 const int CalibChildPIP = 0; // 1 = calibrate to child deaths in facilities
-const int CalibARTcoverage = 1; // 1 = calibrate to ARV metabolite data
+const int CalibARTcoverage = 0; // 1 = calibrate to ARV metabolite data
 const int CalibMarriageData = 0; // 1 = calibrate to marriage data
 const int CalibANC_ART = 0; // 1 = calibrate to % of HIV+ ANC attenders previously on ART
+const int CalibAHDpaedART = 0; // 1 = calibrate to % of kids starting ART w severe immunodeficiency
+
+const int CalibTBdeathsA = 1; // 1 = calibrate to recorded TB deaths in adults
+const int CalibTBdeathsPLHIV = 1; // 1 = calibrate to expected TB deaths in HIV-pos adults
+const int CalibETRdeathsA = 1; // 1 = calibrate to recorded death rate in treated TB patients
+const int CalibTBcasesA = 1; // 1 = calibrate to recorded # treated TB cases in adults
+const int CalibTBdiagnosesA = 1; // 1 = calibrate to adult TB microbiological tests
+const int CalibHIVprevETR = 1; // 1 = calibrate to HIV prev data in adult TB cases
+const int CalibTBprev = 1; // 1 = calibrate to adult TB prevalence survey data
+const int CalibRifResPropn = 0; // 1 = calibrate to % of TB cases that are rifampicin-resistant
+const int CalibSmPosHH = 0; // 1 = calibrate to TB prevalence survey data on smear-pos propn
+const int CalibRRscreen = 0; // 1 = calibrate to RR screening in TB symptomatic patients
+const int CalibTB_HIV_OR = 1; // 1 = calibrate to odds ratios of HIV-TB associations
 
 //=============================================================================
-// Parameters in the 'Adult assumptions' sheet
+// Parameters in the 'AdultAssumps' file
 //=============================================================================
 
 // Sexual behaviour assumptions
@@ -264,8 +282,10 @@ double CABLAefficacyPreg; // CAB-LA efficacy in pregnant women
 double CondomRednCABLA[2]; // Reduction in condom use if using CAB-LA (M, F)
 double CABLAdur[2]; // Average duration of protection from CAB-LA (years)
 double CABLAdurPreg; // Ave duration of CAB-LA protection if pregnant/breastfeeding 
+double CABLAdataYr; // Last year for which we have data on number initiating CAB-LA
 double UltCABLArateFSW; // Monthly rate at which FSWs start CAB-LA after PrEPdataYr
-double CurrCABLArateFSW; // Current monthly rate at which FSWs start oral PrEP 
+double CurrCABLArateFSW; // Current monthly rate at which FSWs start oral PrEP
+double StoredCABLArateFSW; // monthly rate at which FSWs start CAB-LA in CABLAdataYr
 double MicrobicideEff; // Microbicide efficacy
 double CondomRednVM; // Reduction in condom use if using microbicide
 double FreqHCTinVM; // Frequency of HIV testing (per annum) if receiving microbicide
@@ -297,7 +317,7 @@ double RR_HIV_TGW; // RR of HIV in transgender women to cis-gender MSM
 double PropnTGW; // Proportion of MSM and TGW who are TGW
 
 //=============================================================================
-// Parameters in the 'Paed assumptions' sheet
+// Parameters in the 'PaedAssumps' file
 //=============================================================================
 
 double TransmUntreated; // prob of transm at/before birth if mother is untreated
@@ -398,7 +418,7 @@ double BFbiasAdj; // exponential adjustment to NoBFmortAdj to allow for bias
 double BFadjProv; // Increase in mean duration of BF in undiagnosed HIV+ women in relevant province
 
 //============================================================================
-// Parameters and arrays in the 'Rollout' sheet
+// Parameters and arrays in the 'Rollout' file
 //============================================================================
 
 // VCT assumptions
@@ -478,12 +498,6 @@ double VLsuppressionPaed[86]; // % of children on ART who are virally suppressed
 double ImmART_CSW;
 
 // PrEP assumptions
-/*double PrEP_FSW[86]; // rate of PrEP initiation in FSWs
-double PrEP_MSM[86]; // rate of PrEP initiation in MSM
-double PrEP_15[86][2]; // rate of PrEP initiation in 15-19 yr olds (M, F)
-double PrEP_20[86][2]; // rate of PrEP initiation in 20-24 yr olds (M, F)
-double PrEP_25[86][2]; // rate of PrEP initiation in 25-49 yr olds (M, F)
-double PrEP_50[86][2]; // rate of PrEP initiation in 50+ yr olds (M, F)*/
 double TotStartingPrEP[86]; // Annual PrEP initiations
 double RR_PrEPstartMSM[86]; // RR of PrEP initiation in HR MSM age 20 (relative to FSW)
 double RR_PrEPstartF20[86]; // RR of PrEP initiation in HR fem age 20 (relative to FSW)
@@ -492,6 +506,12 @@ double PrEPeligAGYW[86]; // Proportion of AGYW (fem 15-24) eligible to initiate 
 double PrEPeligOther[86]; // Proportion of other groups eligible to initiate PrEP
 double PrEPpregnant[86]; // prob of oral PrEP initiation in pregnant women
 double PrEPpregnantHigh; // current prob of oral PrEP in high-risk pregnant women
+double TotStartingCABLA[86]; // Annual PrEP initiations
+double RR_CABLAstartMSM[86]; // RR of PrEP initiation in HR MSM age 20 (relative to FSW)
+double RR_CABLAstartF20[86]; // RR of PrEP initiation in HR fem age 20 (relative to FSW)
+double CABLAeligMSM[86]; // Proportion of MSM eligible to initiate PrEP
+double CABLAeligAGYW[86]; // Proportion of AGYW (fem 15-24) eligible to initiate PrEP
+double CABLAeligOther[86]; // Proportion of other groups eligible to initiate PrEP
 double CABLApregnant[86]; // prob of CAB-LA initiation in pregnant women
 double CABLApregnantHigh; // current prob of CAB-LA in high-risk pregnant women
 
@@ -516,8 +536,39 @@ double FSWageMean[86]; // Mean age of FSWs (female sex workers)
 double FSWageSD[86]; // Standard deviation of FSW ages
 
 //============================================================================
-// Parameters and arrays in the 'Results' sheet
+// Parameters and arrays in the 'TBrollout' file
 //============================================================================
+
+double TotPosTBtestsAdult[86]; // # individuals testing positive for TB microbiologically
+double TotPosTBtestsAdult1[86]; // # individuals testing positive for TB microbiologically
+double MicroscopyPropn[86]; // % of TB-tested individuals screened by microscopy (not Xpert)
+double UltraPropn[86]; // % of Xpert-tested individuals screened by Xpert Ultra
+double CultureConfirmSmNeg[86][2]; // % smear-neg suspects sent for culture, by HIV status
+double CultureConfirmXpNeg[86][2]; // % of Xpert-neg suspects sent for culture, by HIV status
+double DSTcoveragePrevTB[86]; // % of previously-treated TB cases who undergo DST
+double DSTcoverageNewTB[86]; // % of newly-treated TB cases who undergo DST
+double MDR_TBproportion[86]; // % of rif-resistant TB cases that are MDR
+double Dur1stLineRxTB[86]; // Duration (in months) of 1st-line Rx for TB
+double Dur2ndLineRxTB[86]; // Duration (in months) of 2nd-line Rx for TB
+double IPTinitiators[86]; // Number of HIV+ adults starting IPT
+double IPTduration[86]; // // Recommended duration of IPT (months)
+double TPTfraction3HP[86]; // Fraction of TPT initiators starting 3HP
+double IPTcontinuePostRx[86]; // % of cured TB patients who continue on IPT post-treatment
+double DOTrollout[86]; // % of TB patients under directly observed treatment (DOT)
+double PropnHHcontactScreened[86]; // % of adult household contacts of TB cases screened
+double PropnHHcontactTUTT[86]; // % of screened HH contacts tested without symptom screen
+double PropnHHcontactTPT[86]; // % of TB-neg HH contacts offered TPT
+double RateART_TBscreened[86]; // Annual rate of TB screening in ART patients
+double PropnART_TB_TUTT[86]; // % of screened ART patients tested without symptom screen
+double RatePrevTBscreened[86]; // Annual rate of screening if treated for TB in last 2 years
+double PropnPrevTB_TUTT[86]; // % of screened previous TB patients tested without symptom screen
+double RateD2Dscreen[86]; // Annual rate of TB symptom screening, door-to-door campaigns
+double PropnD2DdCXR[86]; // % of door-to-door screening that includes digital CXR if asymptomatic
+double NutritionSupportHHcontacts[86]; // % of HH contacts getting nutrition support
+
+//==================================================================================
+// Parameters and arrays in intermediate output calculations (formlery 'Results')
+//==================================================================================
 
 double AdultMortBy5yr[86][16][2]; // Starting from age 15-19, up to 90+
 double NonAIDSmortBy5yr[86][16][2]; // Starting from age 15-19, up to 90+
@@ -554,9 +605,56 @@ double NewPCRdiag24mo;
 double SummaryOutputs[2000][86]; // Means and 95% CIs
 int SummOutRow = 0; // Row ID for SummaryOutputs
 
-//============================================================================
-// Parameters and arrays in the 'Population' sheet
-//============================================================================
+// TB outputs 
+double TBadultMortBy5yr[86][16][2]; // TB deaths by year, age group and sex
+double TBadultMortOnRx[86][2]; // TB deaths in treated adults, by year and sex
+double TBadultMortOnRx1[86][2]; // TB deaths in 1st line treated adults, by year and sex
+double TBadultMortOnRx2[86][2]; // TB deaths in 2nd line treated adults, by year and sex
+double TBadultRxBy5yr[86][16][2]; // True TB Rx initiations by year, age group and sex
+double TBdeathsAdultHIV[86]; // Number of TB deaths in adults living with HIV
+double TBsymptomScreened[86]; // % of symptomatic TB patients screened microbiologically
+							  // if specifically seeking Rx for TB or TB-like symptoms
+double TBsymptomScreened2[86]; // % of patients with TB/TB-like symptoms screened micro-
+							   // biologically if attending health services for other reasons
+double SmPosRxScreen[86]; // # smear-pos TB cases starting Rx after active/intensive case finding
+double TBadultRxSmDiag[86]; // True TB Rx initiations in adults diagnosed by smear
+double SmPosRxDelay[86]; // Average delay (years) until active smear-pos TB is treated
+double TBadultRxHIV[86][2]; // True TB Rx initiations in adults with HIV, by sex
+double ModelTBtests[86]; // Total # adults tested for TB microbiologically
+double TBadultLabDiag[86]; // TB diagnoses based on laboratory testing
+double FalseTBadultLabDiag[86]; // False-positive TB diagnoses based on laboratory testing (passive)
+double LabDiagFalsePosActive[86]; // False-positive TB diagnoses based on laboratory testing (active)
+double TotSmPosTB[86]; // Number of adults with untreated smear-positive TB
+double TotSmNegTB[86]; // Number of adults with untreated smear-negative TB
+double TotSmPosRR_TB[86]; // Number of adults with untreated smear-positive rif-resistant TB
+double TotSmNegRR_TB[86]; // Number of adults with untreated smear-negative rif-resistant TB
+double UntreatedSmPosPropn[86]; // % of untreated TB that is smear-pos
+double PropnNewTBrifRes[86]; // % of new TB that is ref-resistant (transmitted resistance)
+double NewRR_TBnaive[86]; // new rif-resistant TB cases, never previously treated
+double NewRR_TBprevRx[86]; // new rif-resistant TB cases, previously treated
+double NewRS_TBnaive[86]; // new rif-sensitive TB cases, never previously treated
+double NewRS_TBprevRx[86]; // new rif-sensitive TB cases, previously treated
+double RifResFoundPreRx[86];
+double RifResFoundOnRx[86]; // rif-resistant TB cases, either acquired or missed at baseline screen,
+							// who are subsequently diagnosed rif-resistant when failing Rx
+double CultureOrLPAfailing[86]; // # culture/LPA tests in patients failing 1st-line Rx
+double New2ndLineTB_NF[86]; // patients starting 2nd-line Rx (not having failed 1st line)
+double New2ndLineTB_F[86]; // patients starting 2nd-line Rx (having failed 1st line)
+double FailTB_Rx_RS[86]; // number who fail TB Rx but remain rif-susceptible
+double FailTB_Rx_RR[86]; // number who fail TB Rx and are rif-resistant
+double FailTB_RxNewRR[86]; // number who fail TB Rx and are newly rif-resistant
+double PrevTreatedRifRes[86]; // % of rif-resistant Rx initiators who were previously treated
+double BaseIPTuptake[86]; // monthly IPT uptake in HIV-diagnosed pre-ART, CD4 <200
+double OddsTB_HIV[86]; // OR for TB-HIV association, by year
+double HHcontactPropn[86]; // % of adults who are household contacts of people diagnosed in last mo
+double AnnualRiskMTBpaed[86]; // Annual risk of Mtb infection in children aged 0-9 years
+double EmpiricalAdj; // Time-varying adjustment to empirical Rx rate
+double TotTUTTtests; // Total Xpert tests performed under TUTT
+double TotTUTTdiag; // Total diagnoses under TUTT
+
+//==================================================================================
+// Parameters and arrays for age/sex-specific outputs (formerly 'Population' sheet)
+//==================================================================================
 
 double StartingPop[91][2]; // Size of population in 1985, by age and by sex
 double TotalPop[91][2]; // Size of the current population, by age and sex (cols E-F)
@@ -574,9 +672,9 @@ double SumGroupsVM[20][44]; // Sum of virgin male risk groups (cols BK-DB)
 double SumGroupsVF[20][44]; // Sum of virgin female risk groups (cols BK-DB)
 double InitPrevAdj[35][2]; // Adjustments to initial prevalence in women aged 15-49
 
-//============================================================================
-// Parameters and arrays in the 'Sex activity' sheet
-//============================================================================
+//=================================================================================
+// Parameters and arrays for sexual activity calcs (formerly 'Sex activity' sheet)
+//=================================================================================
 
 double MarriageRate[76][2]; // Average rates of marriage (1st row is for age 15)
 double DivorceRate[76][2]; // Rates of divorce in M (1st index) and F (2nd index)
@@ -611,7 +709,7 @@ double GammaParametersMSM[81][2]; // Alpha and beta parameters for MSM partner a
 double AgePrefMSM[81][81]; // Proportion of MSM partners in different age groups
 
 //============================================================================
-// Parameters and arrays in the 'Mixing' sheet
+// Parameters and arrays for sexual mixing (formerly 'Mixing' sheet)
 //============================================================================
 
 double ProbMarriageSE[76][2][2]; // Prob of marriage in sexually experienced adults, by
@@ -625,9 +723,9 @@ double CurrLThigh[2][2]; // Current propn of individuals getting married whose p
 double MaleMarriageAdj; // Balancing factor to make # male marriages = # female marriages
 double CurrSThighMSM[2]; // Current propn of MSM whose partners are high risk
 
-//============================================================================
-// Parameters and arrays in the 'Condoms' and 'PrEP + VM' sheets
-//============================================================================
+//======================================================================================
+// Parameters and arrays for HIV prevention (formerly 'Condoms' and 'PrEP + VM' sheets)
+//======================================================================================
 
 double SexFreqMarital[76][2]; // Monthly frequency of sex in marital relationships
 double MedianBehavChange[3]; // Median time to behaviour change
@@ -643,6 +741,8 @@ double RelativeCSWexit[39]; // Relative rates of exit from sex work by HIV stage
 
 double RR_PrEP_MSM[81][2]; // By age & risk group, relative to high-risk MSM aged 20
 double RR_PrEP_Het[81][2][2]; // By age, risk group & sex, relative to high-risk F20
+double RR_CABLA_MSM[81][2]; // By age & risk group, relative to high-risk MSM aged 20
+double RR_CABLA_Het[81][2][2]; // By age, risk group & sex, relative to high-risk F20
 double JoinPrEP[81][7]; // For HR MSM, LR MSM, HR MSF, LR MSF, FSW, HR F, LR F
 double JoinVM[81][3]; // Rates of initiating VM (FSWs, high-risk F, low-risk F)
 double JoinCABLA[81][7]; // For HR MSM, LR MSM, HR MSF, LR MSF, FSW, HR F, LR F
@@ -651,7 +751,7 @@ double PropnPrEPpreg[40][2]; // % of oral PrEP initiations in pregnancy, by age 
 double PropnCABLApreg[40][2]; // % of CAB-LA initiations in pregnancy, by age & risk
 
 //============================================================================
-// Parameters and arrays in the 'Circumcision' sheet
+// Parameters and arrays for male circumcision (formerly 'Circumcision' sheet)
 //============================================================================
 
 double InitCircumcised[91]; // Initial propn of men circumcised
@@ -665,7 +765,7 @@ double CurrCircProb[81][4]; // Prob of circumcision in current year, by age,
 							// risk group and marital status 
 
 //============================================================================
-// Parameters and arrays in the 'Transmission' sheet
+// Parameters and arrays for HIV transmission (formerly 'Transmission' sheet)
 //============================================================================
 
 double TransmMtoF_ST[81][16]; // See ProbTransm.xlsx workbook for definitions
@@ -676,9 +776,9 @@ double TransmMtoFSW[4]; // No prevention, CABLA, oral PrEP, microbicides
 double TransmFSWtoM[6]; // By client prevention method and MC status
 double EctopyFactor[81][2];
 
-//============================================================================
-// Parameters and arrays in the 'Progression' sheet
-//============================================================================
+//====================================================================================
+// Parameters and arrays for pre-ART HIV progression (formerly 'Progression' sheet)
+//====================================================================================
 
 double MnthlyCD4trans[81][4][2]; // Monthly rates of CD4 transition by age,
 								 // CD4 stage and sex
@@ -689,7 +789,7 @@ double MnthlyAIDSmort[81][2][2]; // Monthly rates of AIDS mortality by age,
 double ProbExitAtEntry[81][5][2]; // Prob of exit in same month as entry
 
 //============================================================================
-// Parameters and arrays in the 'Testing' and 'ART start' sheets
+// Parameters and arrays for HIV testing and ART initiation
 //============================================================================
 
 double TestingRateSE[81][12][2]; // Monthly rates of HIV testing by age (1st index),
@@ -720,7 +820,7 @@ double SelfTestingRateM[81][12][2][6]; // As before, last index referring to mod
 double TotTestingRateSE[81][12][2]; // Self-testing + other testing combined
 
 //============================================================================
-// Parameters and arrays in the 'ART' sheet
+// Parameters and arrays for CD4, mortality and interruptions after ART start 
 //============================================================================
 
 double OnARTbyIntDur[6][2][81]; // Fraction still on ART, by duration, sex, age
@@ -754,7 +854,202 @@ double CumPaedARTearly[11][5]; // Cum ART initiations by age and ART dur, in kid
 double CumPaedARTlate[11][5]; // Cum ART initiations by age and ART dur, in kids (late)
 
 //============================================================================
-// Parameters and arrays in the 'Non-HIV mort' sheet
+// Tuberculosis parameters
+//============================================================================
+
+// Contact rates and mixing
+
+double DoddMixMatrix[5][2][4][2]; // By age & sex of contact, and age & sex of indiv
+double DoddAgeSexDbn[5][2]; // Proportion of Dodd population by age and sex
+double CrudeContact[4][2]; // Daily contacts by age group and sex
+double ContactRednCOVID[3]; // Reduction in crude contact rate in 2020 & 2021 due to COVID
+double RRcontactPre2000; // RR of social contact up to 2000, relative to 2011 (base rate)
+
+// Transmission and natural history
+
+double TBtransmProb; // Prob of transmission per infectious contact (per day)
+double TBtransmProbCurr; // Prob of transmission per infectious contact (per day)
+double RatioMinToBaseInfectivity; // RR smear-pos infectiousness with no Rx delay
+double PropFastProg; // Proportion progressing to active TB soon after infection
+double Reactivation; // Annual reactivation rate in HIV-negative individuals
+double MortalitySmPos; // Mortality rate in untreated smear-positive TB
+double MortalitySmNeg; // Mortality rate in untreated smear-negative TB
+double NaturalRecSmPos; // Natural rate of recovery in smear-positive TB
+double NaturalRecSmNeg; // Natural rate of recovery in smear-negative TB
+double PartialImmunHIVneg; // Reduction in fast progression if reinfected with TB
+double DurSTpostRxRisk; // Duation of increased short-term relapse risk post-TB Rx
+// Inverse of ToLongTermPostTreat in Mmamapudi's original code
+double RelapseST; // Annual rate of relapse in individuals recently cured of TB
+double PastTBfactor; // Increased TB risk if previously had active TB
+double RR_TBadultM; // RR TB incidence in adult males
+double RR_TBalcohol; // RR TB incidence for risky drinkers
+double RR_TBdiabetes; // RR TB incidence for people with HbA1c>6.5 (diabetes)
+double RR_TBcurrSmoke; // RR TB incidence for current smokers
+double RR_TBsmoke10yr; // RR TB incidence per 10-year increase in smoking duration
+double RR_TBlowBMI; // RR TB incidence for people with BMI < 18.5
+double RiskyDrinkingPrev[76][2]; // Prevalence of risky drinking by age and sex
+double DiabetesPrev[76][2]; // Prevalence of HbA1c > 6.5 (diabetes) by age and sex
+double SmokingPrev[76][2]; // Prevalence of smoking by age and sex, in 2016
+double InitAveYrsSmoking[76][2]; // Average # years previous smoking in 1985
+double AveYearsSmoking[76][2]; // Average # years previous smoking in current year
+double ChangeSmokingPrev[76][2]; // Annual change in smoking prevalence, 1998-2022
+double LowBMIprev[76][2]; // Prevalence of low BMI (<18.5) by age and sex, in 2016
+double RRsmoking2016; // RR of smoking in 2016 relative to 1992
+double RRlowBMI2022; // RR of low BMI in 2022 relative to 1998
+double TBincAdjByAgeSex[81][2]; // RR TB incidence by age and sex
+double SmNegInfectiousness; // RR TB transmission from people with smear-neg TB
+double RifResInfectiousness; // RR TB transmission from people with rif-resistant TB
+double AveCD4HIVneg; // Average CD4 count in HIV-negative population
+double RR_TBper100CD4increase; // RR TB per 100 increase in CD4 count if HIV-pos
+double RR_TBtreatedHIV; // RR TB if on ART, after controlling for CD4
+double RR_TBmortPer50CD4; // RR TB death per 50 increase in CD4 if HIV-pos
+double RR_TBmortTreatedHIV; // RR TB death if on ART, after controlling for CD4
+double RR_TBmortPer10yrAge; // RR TB death per 10-year increase in age
+double RRnatRecPer100CD4increase; // RR natural recovery per 100 increase in CD4
+double RRimmunePer100CD4increase; // RR partial innunity per 100 increase in CD4
+
+// TB testing and treatment 
+
+double HealthSeekingTB; // Annual rate of health seeking due to active TB symptoms
+// (in HIV-negative men with smear-negative TB)
+double HealthSeekingGen; // Annual rate of health seeking unrelated to TB symptoms
+// (in HIV-negative men)
+double HealthSeekingTBLS; // Annual rate of health seeking for TB-like symptoms
+double RRhealthSeekingFem; // Relative rate of health seeking in women vs men
+double RRhealthSeekingHIV; // Relative rate of health seeking in HIV+ individuals
+double Cough2wkActiveSmNeg; // Prevalence of cough >2 weeks in smear-neg active TB
+double Cough2wkGen; // Prevalence of cough >2 weeks in general pop (no active TB)
+double RRsymptomsSmPos; // Relative rate of TB symptoms if smear-positive
+double RRscreenSymptoms; // RR of screening if seeking Rx due to TB symptoms
+double RRscreenSymptomsBase; // RR of screening due to symptoms in low-screening scenario 
+double RRscreenSymptomsUlt; // RR of screening due to symptoms in high-screening scenario
+double EffectScreenRate2; // Effect of TB screening rates on RRscreenSymptoms
+double RRscreenF; // RR of microbiologic screening in symptomatic F vs symptomatic M
+int TBtestYear; // Year to which numbers of TB tests are specified
+double PrivateTBdiagPropn; // % of positive diagnoses from the private sector
+double RecordedTB80sAdj; // Ratio of true microbiologically diagnosed TB (1985-90) to recorded
+double UltTBsymptomScreen; // LT % of active TB patients seeking Rx who get screened
+double RatioSymptomToMicroScreen; // % symptom screened / % microbiologically tested
+double XpertSe[2]; // Xpert sensitivity in smear-negative and -positive TB
+double XpertSeActive[2]; // Xpert sensitivity in context of active case finding (HHCs)
+double XpertSp; // Xpert specificity
+double SmearSp; // Smear specificity
+double XpertUltraSe[2]; // Xpert Ultra sensitivity in smear-negative and -positive TB
+double XpertUltraSeActive[2]; // Xpert Ultra sensitivity in active case finding (HHCs)
+double XpertUltraSp; // Xpert Ultra specificity
+double Se_dCXR; // Sensitivity of digital chest X-ray
+double Sp_dCXR; // Specificity of digital chest X-ray
+double AbleSputum[2]; // % of asymptomatic/symptomatic able to provide sputum specimens
+double TongueSwabRelSe[2]; // relative sensitivity of tongue swab test compared to sputum
+double TongueSwabTested; // % of those not providing sputum who are offered tongue swab testing
+double TongueSwabDetected[2]; // % of Xpert-detectable TB detected by swab, not sputum, in D2D
+double InitialLTFU[2]; // % of diagnosed TB cases that never start Rx (smear, Xpert)
+double EmpiricRx[2][2]; // % of TB suspects treated empirically without any testing,
+// by Rx-seeking (1 = TB symptoms, 0 = other) and true TB status 
+double EmpiricRxNeg[2][2]; // % of TB suspects treated empirically after negative test
+double EmpiricRednXpert; // % reduction in empiric Rx in Xpert-tested TB suspects
+double LogEmpiricToMicro; // Ratio of log(empirical Rx rate) to log(microbiological testing rate)
+double RRempiricOtherHealth; // RR of empiric Rx if seeking Rx for other health problems
+double RRempiricNoTB; // RR of empiric Rx if patients doesn't actually have TB
+double TBprevHHcontacts; // TB prevalence in adult contacts of TB cases
+double HHcontactsPerCase; // # household contacts aged 10+, per index TB case
+double HHcontactRxUptake; // % of TB-diagnosed household contacts who link to TB Rx
+double ProbDSTifFailingRx1; // % of people failing Rx who get drug susceptibility testing
+// (excluding those failing Rx due to default) up to 2000
+double ProbDSTifFailingRx2; // Ditto, 2001-2010
+double ProbDSTifFailingRx3; // Ditto, post-2010
+double RR_DSTdropout; // Relative rate of DST if failing Rx and dropping out of care
+double AnnMortTB_Rx[2]; // Annual rate of TB mortality in patients receiving TB Rx (M, F)
+double AnnMortTB_RxCurr[2]; // Current rate of TB mortality in patients receiving TB Rx
+double ExcessMort1stMoTB_Rx; // Ratio of excess mort in 1st mo to monthly mort at >1 mo
+double RatioMinToBaseTBmort; // RR treated TB mortality with no Rx delay
+double RRmortRifRes1st; // RR mortality on 1st-line TB Rx if rif-resistant
+double AnnDropoutTB_Rx[2]; // Annual rate of dropout in patients receiving TB Rx (M, F)
+double RRdefaultDOT; // Relative rate of default if treatment is directly observed
+double DOTSeffectivenessAdj; // Relative rate of DOTS effectiveness in the 'real world'
+double UltTBdefaultAdj; // RR ultimate default, relative to pre-2016
+double TBfullRxCure; // Probability of cure if treatment is completed
+double TBpartialRxCure; // Fraction of TB Rx dropouts who are cured
+double AcquireRifResIfFail; // Prob of acquiring rif resistance if failing treatment
+double ORacquireRifRes100CD4; // Increase in odds of resistance per 100
+double ORfailureRifRes; // OR for 1st-line Rx failure if rif-resistant
+
+// TB/isoniazid preventive therapy (TPT/IPT) and nutrition
+
+double RR_IPTuptakeNoLTBI; // RR IPT uptake in people who are susceptible (no latency)
+double RR_IPTuptakePrevTB; // RR IPT uptake in people who previously had TB
+double RR_IPTuptakeCD4[4]; // RR IPT uptake in by CD4 (500+, 350-499, 200-349, <200)
+double RR_IPTuptakeARTdur[6]; // Index 0 corresonds to ART-naive, 1 = 1st yr of ART
+int IPTdataYr; // Year to which number of IPT initiators are specified
+double IPTuptakeUlt; // Monthly rate of IPT uptake after IPTdataYr
+double MnthlyTPTdropout; // Monthly rate of TPT dropout
+double IPTefficacy; // % reduction in active TB risk while on IPT
+double Cure3HP; // % of people cured after completing 3HP
+double NutritionEfficacy; // % reduction in TB incidence due to nutrition support
+
+// Initalization parameters
+
+double InitialActiveTB[16][2]; // Propn with initial active TB, by age and sex
+double InitActiveTBsmPos[2]; // Propn of active TB that is initially smear-pos
+double InitPreviousTB[6][2]; // History of previously treated TB, by age & sex
+double InitLTBI[2];
+double InitLTBIscaling;
+double InitRR_TBprev; // Initial % of TB cases that are rifampicin-resistant
+
+// Variables/intermediate outputs that are calculated
+
+double SocialMixMatrix[5][2][4][2]; // By age & sex of contact, and age & sex of indiv
+double RateNewTBinfection[91][2]; // Monthly rate of new infection, by age and sex
+double InitPropnSmPos[91][2];
+double InitPropnSmNeg[91][2];
+double InitLTBIprev[91]; // Initial prevalence of latent TB, by age
+double InitTBhistory[91][2];
+double SumTBgroupsM[81][44]; // Population totals by age and HIV stage, in men
+double SumTBgroupsF[81][44]; // Population totals by age and HIV stage, in women
+double SumTB[81][2]; // Population totals by age and sex
+double RatioHIVtoTBpopM[81][44]; // Adjustment to bring TB total in line with HIV model
+double RatioHIVtoTBpopF[81][44]; // Adjustment to bring TB total in line with HIV model
+double HIVeffectTBinc[44];
+double HIVeffectTBmort[44];
+double HIVeffectTBimm[44];
+double HIVeffectTBrecov[44];
+double HIVeffectIPTstart[44];
+double HIVeffectRifRes[44];
+double RR_TBmortByAge[81];
+double TBmortSmPos[81][2]; // Total TB deaths in smear-pos cases, by age & sex
+double TBmortSmNeg[81][2]; // Total TB deaths in smear-neg cases, by age & sex
+double TBmortTreated[81][2]; // Total TB deaths after treatment initiation
+double CurrXpertSe[2]; // Current sensitivity of Xpert/Ultra testing, by smear status
+double CurrXpertSp; // Current specificity of Xpert/Ultra testing
+double CurrSeTB[2][2]; // Current sensitivity of TB testing, by smear status and HIV status
+double CurrSeTB_HHC[2]; // Current sensitivity of TB testing in HH contacts, by smear status
+double CurrSeTB_ART[2]; // Current sensitivity of TB testing in ART patients, by smear status
+double CurrSeTBprev[2]; // Current sensitivity of TB testing in previous TB patients, by smear status
+double CurrSeTB_D2D[2]; // Current sensitivity of TB door-to-door testing, by smear status
+double CurrSpTB; // Current specificity of TB testing
+double CurrDSTcoverageRR; // Current % of rif-res TB cases that get drug sensitivity testing pre-Rx
+double ProbDSTifFailingRx; // % of failing patients who get DST, if continuing treatment
+double CurrInitLTFU; // Current initial LTFU
+double CurrDurTPTprotection; // Current average duration of TPT protection (in months)
+double NewTBreactivation; // # new TB cases due to reactivation
+double NewEmpiricTB[2]; // TB treated in absense of a test, or after a negative test
+double TBindexCasesLastMonth; // New TB cases diagnosed in health facilities last month
+double TBindexCasesLastYr; // New TB cases diagnosed in health facilities last year
+double RelapseTBpropnLastYr; // % of new TB cases last year that were relapses in high-risk period
+double NewRxACF[2]; // New TB cases starting Rx after diagnosis through HHC tracing (by smear status)
+double NewRxART_ICF[2]; // New TB cases starting Rx after intensive case finding in ART patients
+double NewRxTBscreenPrev[2]; // New TB cases starting Rx after screening previous TB patients
+double NewRxTBscreenD2D[2]; // New TB cases starting Rx after door-to-door screening 
+double HHscreeningProb; // Prob of being screened due to living with a TB index case
+double HHscreeningProbNeg; // Prob of being screened if not currently experiencing TB
+double TotARTbyTB[3]; // ART patients with smear-neg TB, smear-pos TB and no TB
+double PrevTBbyCurrTB[3]; // # previous TB cases with smear-neg TB, smear-pos TB and no TB
+double NewIPT_TSTpos; // Adults starting TPT, latently infected
+double NewTPT_HH; // Adults starting TPT, latently infected, as a result of HH contact screening
+double TBincRednNutrition; // Reduction in TB incidence due to nutrition
+
+//============================================================================
+// Parameters and arrays for non-HIV mortality
 //============================================================================
 
 double CurrNonAIDSmortEA[91][2]; // Current non-AIDS mortality prob by EXACT age
@@ -766,13 +1061,13 @@ double RednNonAIDSmort[91][2]; // Non-AIDS mortality reduction factor, post-2007
 double WestLifeExpectP[11][2]; // West level 26 life expectancy for children, undiscounted 
 double WestLifeExpectA[81][2]; // West level 26 life expectancy for adults, undiscounted 
 double IHMEdisab[5]; // Disability weights by untreated CD4 stage (1-4) and ART (5)
-double DisabilityWeights[39];
+double DisabilityWeights[39][2][81]; // IHME disability weights by HIV stage, sex and age
 double DiscountRate; // Discount rate per annume (relevant to DALY calcs, LYs lost)
 double NonHIVmortChange; // Alpha parameter in Brass relational logit model
 						 // (Only relevant if UseBrassLogit = 1)
 
 //============================================================================
-// Parameters and arrays in the 'Fertility' sheet
+// Parameters and arrays for fertility
 //============================================================================
 
 double ObservedFert[35][36]; // Observed fertility rates by age and year up to 2020
@@ -795,7 +1090,7 @@ double MatIncidenceAN; // Anual antenatal HIV incidence in pregnant women
 double MatIncidencePN[36]; // HIV incidence in breastfeeding women, by age of kid (mo)
 
 //============================================================================
-// Parameters and arrays in the 'Migration' sheet
+// Parameters and arrays for migration
 //============================================================================
 
 double MigrationAdj[91][2]; // Migration adjustment factors at end of current yr
@@ -806,17 +1101,17 @@ double RecentIntImmigP; // Proportion of children who moved into SA over last yr
 double PrevRatioIntImmig; // Ratio of HIV prev in international immigrants to local
 
 //=========================================================================
-// Parameters in the 'Births' sheet
+// Variables for mother-to-child transmission (formerly 'Births' sheet)
 //=========================================================================
 
-double PTP; // positive at 1st visit, tested positive
-double PTN; // positive at 1st visit, tested negative
-double PUT; // positive at 1st visit, untested
-double PTNRP; // positive at 1st visit, tested negative, retested positive
-double PTNRN; // positive at 1st visit, tested negative, retested negative
+double PTP; // positive at 1st ANC visit, tested positive
+double PTN; // positive at 1st ANC visit, tested negative
+double PUT; // positive at 1st ANC visit, untested
+double PTNRP; // positive at 1st ANC visit, tested negative, retested positive
+double PTNRN; // positive at 1st ANC visit, tested negative, retested negative
 			  // or not retested
-double PUTLP; // positive at 1st visit, untested, later tested positive
-double PUTLN; // positive at 1st visit, untested, later tested negative or
+double PUTLP; // positive at 1st ANC visit, untested, later tested positive
+double PUTLN; // positive at 1st ANC visit, untested, later tested negative or
 			  // remained untested
 double ARTmothers; // mothers already on HAART prior to 1st ANC visit
 
@@ -840,9 +1135,9 @@ double ChildNegMotherPosKnown; // cell O6
 double ChildNegMotherPosUnknown; // cell O7
 double ChildNegMotherNeg; // cell O8
 
-//=========================================================================
-// Parameters and arrays in the 'Child rates' sheet
-//=========================================================================
+//=============================================================================================
+// Parameters and arrays for age-specific transitions between paed HIV states ('Child rates')
+//=============================================================================================
 
 double AveARTstartLate; // average rate of ART start in last 3 years, for kids with late HIV
 double MortAdjLate[3]; // effect of ART on change in CD4 distribution at CD4 <15%, current year
@@ -870,7 +1165,7 @@ double MnthlyPaedTestToART[132][4]; // Mnthly prob of testing AND starting ART
 double MnthlyPaedDiagNoART[132][4]; // Mnthly prob of being diagnosed but NOT starting ART
 
 //=========================================================================
-// Arrays in the 'Monthly' sheet
+// Intermediate outputs (formerly 'Monthly' sheet)
 //=========================================================================
 
 // Flow variables that are updated monthly
@@ -913,6 +1208,9 @@ double NewSTtoART[6]; // # HIV-pos self-testers who subsequently start ART, by m
 double NewPrEP_AGYW;
 double NewPrEP_FSW;
 double NewPrEP_MSM;
+double NewCABLA_AGYW;
+double NewCABLA_FSW;
+double NewCABLA_MSM;
 
 // Age-specific flow variables that are updated monthly
 
@@ -927,6 +1225,12 @@ double AIDSdeathsMarriedM[76][2][2]; // AIDS deaths in married men
 double AIDSdeathsMarriedF[76][2][2]; // AIDS deaths in married women
 double AdultsNewARTbyAge[4][2]; // Number of adults starting ART by age & sex
 double NewOIdiagnoses[10][2]; // OIs leading to HIV diagnosis, by age and sex
+
+double NewActiveTBbyAgeSex[81][2];
+double NewHIVposTBbyAgeSex[81][2];
+double NewTBonARTbyAgeSex[81][2];
+double NewRecurrentTBbyAgeSex[81][2];
+double NewRelapseTBbyAgeSex[81][2];
 
 // Age-specific flow variables that are calculated from monthly outputs
 
@@ -951,6 +1255,8 @@ double TotalMarried_S[91][2]; // Number of individuals who are married at start 
 // Arrays and variables used in calibration and uncertainty analysis
 //=========================================================================
 
+// HIV data inputs
+
 double ObservedPrev05[12][2]; // HIV prevalence in 2005 HSRC survey by age & sex
 double ObservedPrev08[12][2];
 double ObservedPrev12[12][2];
@@ -966,6 +1272,7 @@ double ObservedPrevHCT[16]; // HIV prevalence in adults tested for HIV 2004-8, 2
 double ObservedPrevHCT_P[8]; // HIV prevalence in kids tested for HIV, 2015-21
 double ObsHCTprevAgeSex[5][4]; // HIV prev in HCT by risk (M 15-24, F 15-24, 25-49, 50, ANC) & yr
 double ObsCoverage[2][3]; // % of HIV-positive M & F (1st index) on ART by survey (2nd index)
+double ObsAHDpaedART[4]; // % of kids starting ART w severe immunodeficiency (DHIS, by year)
 double SEprev05[12][2]; // std error of HIV prevalence estimates in 2005 HSRC survey
 double SEprev08[12][2];
 double SEprev12[12][2];
@@ -980,29 +1287,20 @@ double SEprovANC[26];
 double SEprevHCT[16];
 double SEprevHCT_P[8];
 double SEcoverage[2][3];
+double SE_AHDpaedART[4];
 double RecordedHCT_P[5]; // Recorded numbers of HIV tests in children, 2015-17. Redundant
 double RecordedHCT_P_CoV[5]; // Coefficients of variation for numbers of HIV tests in kids (on log scale)
 double AdultTestsAgeSex[5][4]; // Propn of adult HIV tests by risk (M 15-24, F 15-24, 25-49, 50, ANC), year
-const int nCSWstudies = 4;
+const int nCSWstudies = 35;
 double CSWstudyDetails[nCSWstudies][3];
-const int nMSMstudies = 0;
+const int nMSMstudies = 20;
 double MSMstudyDetails[nMSMstudies+1][4];
 double AgeDbnAdultsOnART[7][9][2]; // % of treated adults in each age group (2nd index) by yr (1st index), sex
 double AgeDbnKidsStartingART[10][2]; // Propn of kids starting ART in <1 and 1-4 age groups (2nd index)
 									// by year (1st index, starting 2004)
 double AgeDbnKidsOnART[8][2]; // Propn of kids on ART in 0-4 & 5-9 age groups (2nd index), since 2011
-// by year (1st index, starting 2004)
-double ModelPrevPaed[3][2][2]; // Prevalence by age (2-4, 5-9, 10-14), sex and year (2005, 2008)
-double ModelPrevPaed2[2][2][3]; // Prevalence by age (0-4, 5-14), sex and year (2012, 2017, 2022)
-double ModelPrevU208; // Prevalence under age 2 in 2008 
-double ModelProvHH[6][2];
-double ModelProvHH_P[5];
-double ModelPrevHCT[16];
-double ModelPrevHCT_P[8];
-double ModelTestsAgeSex[5][4];
-double ModelPosTestsAgeSex[5][4];
-double ModelCoverage[2][3];
-double ModelAgeDbnAdultART[7][9][2];
+							  // by year (1st index, starting 2004)
+
 double ProvANCbias = 0.0; 
 double ANCageWeights[6]; // Propn of births in 15-19, 20-24, 25-29, 30-34, 35-39, 40-49 age groups
 double ANCageW_init[6]; // Initial ANC age weights, up to 2012
@@ -1014,9 +1312,7 @@ double Miscarriage[2]; // Prob of miscarriage/stillbirth in HIV-neg and HIV-posi
 double FractionRecentF[6][81]; // % of F infections acquired in last year, by age (15-19, ..., 40-49)
 
 double RecordedDeathsP[4][22][2]; // Stats SA recorded paed deaths by age, year (1997-2018) & sex
-double ModelDeathsP[4][22][2]; // Model estimates of paed deaths by age, year (1997-2018) & sex
 double RecordedDeathsA[16][22][2]; // Stats SA recorded adult deaths by age, year (1997-2018) & sex
-double ModelDeathsA[16][22][2]; // Model estimates of adult deaths by age, year (1997-2018) & sex
 double AdultCompleteness[16][22][2]; // % of deaths at ages 20+ that get recorded, by age, year & sex
 double PaedCompleteness[4][22][2]; // % of paed deaths that get recorded, by age, year and sex
 double AdjustedCompleteness[22][2]; // completeness adjustment in provincial model, by year and sex
@@ -1034,54 +1330,105 @@ double SEtested12[5][2][2];
 double SEtested16[4][2][2];
 double SEtested17[5][2][2];
 double SEtested22[5][2][2];
-double ModelTested05[5][2][2]; // Model estimate of % ever tested in 2005, by age, sex & HIV status
-double ModelTested08[5][2][2]; // Model estimate of % ever tested in 2008, by age, sex & HIV status
-double ModelTested12[5][2][2]; // Model estimate of % ever tested in 2012, by age, sex & HIV status
-double ModelTested16[4][2][2]; // Model estimate of % ever tested in 2016, by age, sex & HIV status
-double ModelTested17[5][2][2]; // Model estimate of % ever tested in 2017, by age, sex & HIV status
-double ModelTested22[5][2][2]; // Model estimate of % ever tested in 2022, by age, sex & HIV status
 double SeTestingHistory[2]; // Sensitivity of self-reported HIV testing history (HIV-neg & -pos)
 double SpTestingHistory; // Specificity of self-reported HIV testing history 
 
 double ChildPIPdeaths[13][2]; // Total audited deaths 2005-2017, ages 1-4 and 5-9
 double ChildPIPdiag[13][2]; // % of deaths diagnosed HIV-positive, 2005-2017, ages 1-4 and 5-9
 double ChildPIP_ART[13][2]; // % of HIV-diagnosed deaths on ART 2005-2017, ages 1-4 and 5-9
-double ModelPIPdiag[13][2]; 
-double ModelPIP_ART[13][2]; 
 double RRdiagDeathsPIP[2]; // RR of death being recorded in facility if HIV-neg/undiagnosed compared to 
 						   // (a) diagnosed ART-naive, and (b) ART-experienced
 
 double AIDScasesByYr[5]; // Reported new adult AIDS cases, 1990-94
 double AIDScasesProfile[10][2]; // Reported new adult AIDS cases (1993-94) by age (1st index) & sex
-double OIsDiagnosedByYr[5]; // Modelled # OIs leading to HIV diagnosis, 1990-94
-double OIsDiagnosedProfile[10][2]; // Modelled # OIs leading to HIV diagnosis (1993-4), by age & sex
 
 const int ARTdataPoints = 194; // Number of reported ART totals that combine adults and children
-const int ARTdataPointsP = 180; // Number of reported ART totals in children
-const int ARTdataPointsM = 8; // Number of estimates of fraction of adult ART patients who are men
+const int ARTdataPointsP = 137; // Number of reported ART totals in children
+const int ARTdataPointsM = 4; // Number of estimates of fraction of adult ART patients who are men
 double ARTtotals[ARTdataPoints][5]; // Total numbers on ART in public and private sectors
 double ARTtotalsP[ARTdataPointsP][5]; // Total children on ART in public and private sectors
 double ARTmale[ARTdataPointsM][3]; // Proportions of ART patients who are male (year, mean, SE)
 double RecordedARTstart[12][4][2]; // Number starting ART by year, CD4 and sex
-double ARTmodelled[ARTdataPoints][2]; // Modelled total number on ART (current and cumulative)
-double ARTmodelledP[ARTdataPointsP][2]; // Modelled total children on ART (current and cumulative)
-double ARTmodelledM[ARTdataPointsM]; // Modelled % of adult ART patients who are male
 double LastDateCum; // Last date when reported public totals were definitely cumulative
 double AnnSwitchCumToCurr; // Annual rate of switch from reporting cumulative totals to current 
 						   // totals, after LastDateCum
 double AveDurImmART[2]; // Average time spent on ART from outside SA for recent migrants (2017, 2022)
-double BsplineCoef[10]; // B spline coefficients for total numbers starting ART
-double BsplineCoefP[10]; // B spline coefficients for total children starting ART
 double SDchangeBspline; // Std deviation of change in B spline coefficient (sampled from hyperprior)
 double MalePropnART[86]; // Fraction of adult ART initiators who are male (by year)
 double TotBeginART[86]; // Total # patients starting ART (by year)
 double RecordedARTpreConcep[6][5]; // % of HIV+ women in ANC previously on ART, by year and age
 double MarriageData[15][2][4]; // % of adults married by age and sex, in 1996, 2001, 2007, 2016
+
+// HIV model outputs/parameters used in calibration
+
+double ModelPIPdiag[13][2];
+double ModelPIP_ART[13][2];
+
+double OIsDiagnosedByYr[5]; // Modelled # OIs leading to HIV diagnosis, 1990-94
+double OIsDiagnosedProfile[10][2]; // Modelled # OIs leading to HIV diagnosis (1993-4), by age & sex
+
+double ModelPrevPaed[3][2][2]; // Prevalence by age (2-4, 5-9, 10-14), sex and year (2005, 2008)
+double ModelPrevPaed2[2][2][3]; // Prevalence by age (0-4, 5-14), sex and year (2012, 2017, 2022)
+double ModelPrevU208; // Prevalence under age 2 in 2008 
+double ModelProvHH[6][2];
+double ModelProvHH_P[5];
+double ModelPrevHCT[16];
+double ModelPrevHCT_P[8];
+double ModelTestsAgeSex[5][4];
+double ModelPosTestsAgeSex[5][4];
+double ModelCoverage[2][3];
+double ModelAHDpaedART[4];
+
+double ModelDeathsP[4][22][2]; // Model estimates of paed deaths by age, year (1997-2018) & sex
+double ModelDeathsA[16][22][2]; // Model estimates of adult deaths by age, year (1997-2018) & sex
+
+double ModelTested05[5][2][2]; // Model estimate of % ever tested in 2005, by age, sex & HIV status
+double ModelTested08[5][2][2]; // Model estimate of % ever tested in 2008, by age, sex & HIV status
+double ModelTested12[5][2][2]; // Model estimate of % ever tested in 2012, by age, sex & HIV status
+double ModelTested16[4][2][2]; // Model estimate of % ever tested in 2016, by age, sex & HIV status
+double ModelTested17[5][2][2]; // Model estimate of % ever tested in 2017, by age, sex & HIV status
+double ModelTested22[5][2][2]; // Model estimate of % ever tested in 2022, by age, sex & HIV status
+
+double ARTmodelled[ARTdataPoints][2]; // Modelled total number on ART (current and cumulative)
+double ARTmodelledP[ARTdataPointsP][2]; // Modelled total children on ART (current and cumulative)
+double ARTmodelledM[ARTdataPointsM]; // Modelled % of adult ART patients who are male
+double BsplineCoef[10]; // B spline coefficients for total numbers starting ART
+double BsplineCoefP[10]; // B spline coefficients for total children starting ART
+double ModelAgeDbnAdultART[7][9][2];
+
 double ModelMarried[15][2][4]; // % of adults married by age and sex, in 1996, 2001, 2007, 2016
 
+// TB data inputs used in calibration
+
+double RecordedTBdeathsA[16][23][2]; // Stats SA TB deaths by age, year (1997-2016) & sex
+double ExpectedTBdeathsPLHIV[14]; // Expected # TB deaths in HIV+ adults, based on post-mortem studies
+double SE_TBdeathsPLHIV[14]; // Std error for # TB deaths in HIV+ adults, based on post-mortem studies
+double RecordedTBcasesA[16][13][2]; // ETR cases treated by age, year (2004-2016) & sex
+double ETRmortPropn[13][2]; // % of TB cases recorded as dead in ETR, by year (2004-2016) & sex
+double RecordedTBlabA[20]; // Recorded numbers of microbiologically-tested adults (negative & positive)
+double ETR_HIVprev[8]; // HIV prevalence in adult TB patients in ETR
+double TBprevSurvey[2]; // Recorded pulmonary TB prevalence in 2017 survey, by sex
+double TBprevSurveySE[2]; // Std error for recorded pulmonary TB prevalence in 2017 survey, by sex
+double PropnETB[2]; // Proportion of TB that is extrapulmonary, by HIV status
+double DataRifResPrev[2]; // Proportion of TB that is rifampicin-resistant
+double DataRifResSE[2]; // Stanard error for proportion of TB that is rifampicin-resistant
+double TotRifResDiagnosed[11]; // Reported number of diagnosed rifampicin-resistant cases (2010-2020)
+double Recorded2ndLineTB[13]; // Reported # patients starting 2nd-line TB treatment (2007-2019)
+double SmPosStudyDetails[4][3]; // Details of household surveys measuring % of TB that is smear-pos
+double RRscreenStudyDetails[4][3]; // Details of surveys measuring RR screening in symptomatic TB
+double TB_HIV_ORdetails[9][3]; // Details of surveys measuring HIV-TB association
+
+// TB model outputs used in calibration
+
+double ModelTBdeathsA[16][23][2]; // Model estimates of TB deaths by age, year (1997-2016) & sex
+double ModelTBcasesA[16][13][2]; // Model estimates of TB cases treated by age, year (2004-16) & sex
+double TBprev2018[2]; // Modelled pulmonary TB prevalence in 2018, by sex
+
+// Priors and likelihood
+
 double LogLikelihood;
-const int MCMCdim = 18; // Number of parameters in uncertainty analysis
-const int MaxPriors = 144; // Corresponds to the number of rows of data in Priors.txt
+const int MCMCdim = 21; // Number of parameters in uncertainty analysis
+const int MaxPriors = 65; // Number of input rows in Priors file (145 for HIV, 63 for TB)
 int InclPriors[MaxPriors][2]; // Indicator of which priors are included (1st index) and if
 							  // included their index in MCMCdim (2nd index)
 double RandPrior[MCMCdim]; // Random numbers used to sample from prior in current simulation
@@ -1284,6 +1631,34 @@ class Adult
 	void GetFSWcontacts(); // Only relevant to high risk men
 };
 
+class AdultTB
+{
+public:
+
+	int Sex; // 0 = male, 1 = female
+	int RifRes; // 0 = rifampicin-susceptible, 1 = rifampicin-susceptible
+	int SecondLine; // 1 = receiving 2nd-line Rx, 0 otherwise
+
+	// Arrays to represent population profile at START of month
+	double HIVstage[81][44];
+	double Total[81];
+
+	// Arrays to represent population profile at END of month
+	double HIVstage_E[81][44];
+	double Total_E[81];
+
+	// Other variables
+	double NewEntrants[81][44]; // Only necessary for the treatment states
+
+	AdultTB(int Gender, int Rif, int Rx2);
+	void SetStartProfile();
+	void UpdateStartProfile();
+	void UpdateEndProfile();
+	void AdjustPopTotals();
+	void UpdateStartTotal();
+	void UpdateDemog(); // Changes in age, ART duration
+};
+
 class OutputArray
 {
 	public:
@@ -1332,7 +1707,7 @@ class OutputByAge
 // General functions
 //============================================================================
 
-// Input and initialization functions
+// Input functions: HIV
 void ReadPaedAssumps();
 void ReadAdultAssumps();
 void ReadRollout();
@@ -1360,8 +1735,25 @@ void ReadChildPIP();
 void ReadInitPrev();
 void ReadAdultRoot();
 void ReadAllFiles();
+
+// Input files: TB
+void ReadInitTB();
+void ReadTBadultAssumps();
+void ReadTBrollout();
+void ReadTBriskFactorPrev();
+void ReadTBmortData();
+void ReadTB_ETRdata();
+void ReadTBlabDiag();
+void ReadTBprevData();
+void ReadTB_HIV_ORs();
+void ReadTBscreening();
+
+// Initialization functions
 void SetInitialParameters();
 void SetInitSexActivity();
+void InitializeTBprofiles();
+void CalcHIVeffectTB();
+void CalcTBincAdjByAgeSex();
 double GetMarriedPropnAtStart(int Sex, int Age);
 void SetCD4byARTdur(); // Calculations in cols G-S of "ART" sheet
 void CalcInterruptions(); // Calculation of values in row 5 of "ART" sheet
@@ -1369,8 +1761,9 @@ void SetActivityByStage(); // Calculations in cols R-S and AA-AB of "Condoms" sh
 void SetFertByStage(); // Calculations in col AK of "Fertility" sheet
 void SetProgression(int setting); // setting = 0 implies start year, 1 otherwise
 void SetFutureRollout(); // Only gets called if VaryFutureInterventions = 1
+void SetFutureRolloutTB(); // Only gets called if VaryFutureInterventionsTB = 1
 
-// Functions called on a monthly basis
+// Functions called on a monthly basis: HIV
 void GetCurrBehavDbnM(); // Calculations in cols N-Q of 'Sex activity' sheet
 void GetCurrBehavDbnF(); // Calculations in cols N-Q of 'Sex activity' sheet
 void UpdatePop(); // Calculations in cols E-DB of "Population" sheet
@@ -1402,9 +1795,25 @@ void UpdateMonthlyCum();
 void UpdateMonthlySTesting();
 void OneMonth(int im);
 
+// Functions called on a monthly basis: TB
+void CalcTBforceOfInf();
+void UpdateTBsuscep(AdultTB* Suscep, AdultTB* Latent, AdultTB* SmPos, AdultTB* SmNeg, AdultTB* SmPosRR, AdultTB* SmNegRR);
+void UpdateTBlatent(AdultTB* Latent, AdultTB* SmPos, AdultTB* SmNeg, AdultTB* SmPosRR, AdultTB* SmNegRR, AdultTB* IPT, AdultTB* Suscep, int IPTind);
+void UpdateTBactive(AdultTB* Active, AdultTB* Latent, AdultTB* Treated, AdultTB* Treated2, int SmPos);
+void UpdateTBtreated(AdultTB* Treated, AdultTB* Treated2, AdultTB* Active1, AdultTB* Active2, AdultTB* SmPosRR, AdultTB* SmNegRR, AdultTB* PostRx, AdultTB* IPT);
+void UpdateTBrecovST(AdultTB* PostRxST, AdultTB* PostRxLT, AdultTB* Active1, AdultTB* Active2, AdultTB* SmPosRR, AdultTB* SmNegRR, AdultTB* IPT, AdultTB* Suscep, int IPTind);
+void UpdateTBrecovLT(AdultTB* PostRxLT, AdultTB* Active1, AdultTB* Active2, AdultTB* SmPosRR, AdultTB* SmNegRR, AdultTB* IPT, AdultTB* Suscep, int IPTind);
+void CalcTBtransitions();
+void GetHIVtoTBpopRatios();
+void BalanceTBpop();
+void UpdateTBtotStart();
+void GetTBcontactScreenPropns();
+
 // Functions called on an annual basis
 void ResetMonthlyCum(); // Sets to zero the running totals in the Monthly sheet
 void ResultsAtStartOfYr();
+void TBresultsAtStartOfYr();
+void TBresultsAtStartOfYr2();
 void Get2ndLineOutput();
 void CalcVLSstartYr();
 void CalcYLDs();
@@ -1412,13 +1821,17 @@ void GetMarriageForCalib();
 void CalcMultPartners();
 void GetPrEPrateFSW();
 void SetCurrYearParameters();
+void SetCurrYearParametersTB();
+void UpdateSocialMixing();
 void SetAnnPaedParameters();
 void CalcOIsTested(); 
 void CalcPosPartnerProb();
 void CalcSelfTestingRates();
 void GetTotalTesting();
 void CalcHCT1stTime(); // Only relevant if user specifies # HIV tests as model input
-void CalcRRtestVirgin(); 
+void CalcRRtestVirgin();
+void CalcTBscreenPropn();
+void UpdateIPTuptake();
 void UpdateNonAIDSmort();
 void UpdateAIDSmort();
 void UpdateARTmort(); // Calculations in cols V-BS of ART sheet
@@ -1430,11 +1843,14 @@ void GetMarriageAndDivorceRates();
 double SpouseAIDSmort(int ia, int ir1, int ir2, int ig);
 void UpdateMarital(Adult* Single, Adult* MarriedH, Adult* MarriedL);
 void UpdateAllDemog();
+void UpdateAllDemogTB();
 void MoveIntoAdultGroups();
+void MoveIntoAdultTB();
 void UpdateDebut(Adult* Virgin, Adult* SexExp, Adult* SexExp2, int ind); // ind = 0 at month end, 1 at year end
 void UpdateStartTot();
 void ResultsAtEndOfYr();
 void ResultsAtEndOfYr2(); // Mostly for HIV incidence outputs
+void TBresultsAtEndOfYr();
 void OneYear();
 
 // Output functions
@@ -1446,12 +1862,15 @@ void GetSummaryOutputs(char* filout);
 void GetAddedOutputs(char* filout);
 void GetOutputsByAge(char* filout);
 void GetOutputsByAge2(char* filout);
+void GetTBoutputs(char* filout);
+void GetAddedTBoutputs(char* filout);
+void GetTBoutputsByAge(char* filout);
 
 //============================================================================
 // Functions used in uncertainty analysis
 //============================================================================
 
-// SIR
+// SIR and HIV likelihood functions
 
 void CalcLikelihood();
 double CalcPaedPrevLogL();
@@ -1475,6 +1894,7 @@ double CalcAIDSageLogL();
 double CalcARTtotalLogL();
 double CalcMaleARTlogL();
 double CalcARTbyCD4logL();
+double CalcPaedAHDlogL();
 double CalcAgeARTlogL();
 double CalcAgeART_PlogL();
 double CalcAgeART_P2logL();
@@ -1492,7 +1912,22 @@ void GetCurrART();
 void GenerateSample(); // Not yet updated in THEMBISA
 void RunSample();
 
-// IMIS
+// TB likelihood and prior sampling functions
+
+double CalcAdultTBmortLogL();
+double CalcTBmortPLHIVlogL();
+double CalcETRmortLogL();
+double CalcAdultTBcasesLogL();
+double CalcAdultTBlabDiagLogL();
+double CalcHIVprevETRlogL();
+double CalcTBprevLogL();
+double CalcRifResLogL();
+double CalcSmPosHHlogL();
+double CalcRRscreenLogL();
+double CalcTB_HIV_ORlogL();
+void SimulateTBparams();
+
+// IMIS functions
 
 void ReadPriors();
 void ReadImportanceDbns();
@@ -1507,11 +1942,12 @@ double GetPercentile(double values[TotalSimulations], double percentile);
 void runIMIS(double CumSteps);
 void OneIMISstep(double CumSteps);
 void SimulateParameters_IMIS();
+void SimulateTBparamsIMIS();
 double GetParameter(int PriorIndex);
 
 // Nelder-Mead algorithm
 
-double ReturnNegLogL(double ParameterSet[10]);
+double ReturnNegLogL(double ParameterSet[20]);
 void ReadInitSimplex(char* input, double ParameterCombinations[21][20], int Dimension);
 void SaveFinalSimplex(char* filout, double ParameterCombinations[21][20], int Dimension);
 void SaveNegLogL(char* filout, double NegLogL[21]);
@@ -1554,9 +1990,39 @@ Adult FL_ST(1, 2, 0, 0, 0, 0, 0, 0);
 Adult FL_LTH(1, 2, 1, 0, 1, 0, 0, 0);
 Adult FL_LTL(1, 2, 1, 0, 2, 0, 0, 0);
 
+AdultTB TBsuscepM(0, 0, 0);
+AdultTB TBlatentM(0, 0, 0);
+AdultTB TBactiveSmPosM(0, 0, 0);
+AdultTB TBactiveSmNegM(0, 0, 0);
+AdultTB TBactiveSmPosRR_M(0, 1, 0); // RR = rifampicin-resistant
+AdultTB TBactiveSmNegRR_M(0, 1, 0);
+AdultTB TBtreatedM(0, 0, 0);
+AdultTB RR_TBtreated1stM(0, 1, 0); // 1st = 1st-line drug regiment
+AdultTB RR_TBtreated2ndM(0, 1, 1); // 2nd = 2nd-line drug regiment
+AdultTB TBrecoveredST_M(0, 0, 0);
+AdultTB TBrecoveredLT_M(0, 0, 0);
+AdultTB TBlatentIPT_M(0, 0, 0);
+AdultTB TBrecST_IPT_M(0, 0, 0);
+AdultTB TBrecLT_IPT_M(0, 0, 0);
+AdultTB TBsuscepF(1, 0, 0);
+AdultTB TBlatentF(1, 0, 0);
+AdultTB TBactiveSmPosF(1, 0, 0);
+AdultTB TBactiveSmNegF(1, 0, 0);
+AdultTB TBactiveSmPosRR_F(1, 1, 0);
+AdultTB TBactiveSmNegRR_F(1, 1, 0);
+AdultTB TBtreatedF(1, 0, 0);
+AdultTB RR_TBtreated1stF(1, 1, 0);
+AdultTB RR_TBtreated2ndF(1, 1, 1);
+AdultTB TBrecoveredST_F(1, 0, 0);
+AdultTB TBrecoveredLT_F(1, 0, 0);
+AdultTB TBlatentIPT_F(1, 0, 0);
+AdultTB TBrecST_IPT_F(1, 0, 0);
+AdultTB TBrecLT_IPT_F(1, 0, 0);
+
 OutputArray RandomUniform(MCMCdim);
 OutputArray ModelParameters(MCMCdim);
 PostOutputArray FutureInterventions(34);
+PostOutputArray FutureInterventionsTB(30);
 OutputArray LogL(1);
 
 // Prevalence outputs
@@ -1695,32 +2161,38 @@ PostOutputArray IncPrevRatioFtoM(56);
 PostOutputArray IncPrevRatioMtoF(56);
 
 // Mortality outputs
-PostOutputArray Deaths0M(41);
-PostOutputArray Deaths1M(41);
-PostOutputArray Deaths5M(41);
-PostOutputArray Deaths10M(41);
-PostOutputArray Deaths20M(41);
-PostOutputArray Deaths25M(41);
-PostOutputArray Deaths30M(41);
-PostOutputArray Deaths35M(41);
-PostOutputArray Deaths40M(41);
-PostOutputArray Deaths45M(41);
-PostOutputArray Deaths50M(41);
-PostOutputArray Deaths55M(41);
-PostOutputArray Deaths0F(41);
-PostOutputArray Deaths1F(41);
-PostOutputArray Deaths5F(41);
-PostOutputArray Deaths10F(41);
-PostOutputArray Deaths20F(41);
-PostOutputArray Deaths25F(41);
-PostOutputArray Deaths30F(41);
-PostOutputArray Deaths35F(41);
-PostOutputArray Deaths40F(41);
-PostOutputArray Deaths45F(41);
-PostOutputArray Deaths50F(41);
-PostOutputArray Deaths55F(41);
+PostOutputArray TotDeathsM(56);
+PostOutputArray TotDeathsF(56);
+PostOutputArray Deaths0M(56);
+PostOutputArray Deaths1M(56);
+PostOutputArray Deaths5M(56);
+PostOutputArray Deaths10M(56);
+PostOutputArray Deaths15M(56);
+PostOutputArray Deaths20M(56);
+PostOutputArray Deaths25M(56);
+PostOutputArray Deaths30M(56);
+PostOutputArray Deaths35M(56);
+PostOutputArray Deaths40M(56);
+PostOutputArray Deaths45M(56);
+PostOutputArray Deaths50M(56);
+PostOutputArray Deaths55M(56);
+PostOutputArray Deaths0F(56);
+PostOutputArray Deaths1F(56);
+PostOutputArray Deaths5F(56);
+PostOutputArray Deaths10F(56);
+PostOutputArray Deaths15F(56);
+PostOutputArray Deaths20F(56);
+PostOutputArray Deaths25F(56);
+PostOutputArray Deaths30F(56);
+PostOutputArray Deaths35F(56);
+PostOutputArray Deaths40F(56);
+PostOutputArray Deaths45F(56);
+PostOutputArray Deaths50F(56);
+PostOutputArray Deaths55F(56);
 PostOutputArray AIDSdeathsTot(56);
 PostOutputArray AIDSdeathsPaed(56);
+PostOutputArray AIDSdeathsBoys(56);
+PostOutputArray AIDSdeathsGirls(56);
 PostOutputArray AIDSdeathsAdultM(56);
 PostOutputArray AIDSdeathsAdultF(56);
 PostOutputArray AIDSdeaths0(56);
@@ -1744,22 +2216,24 @@ PostOutputArray AIDSdeaths20to59F(31);
 PostOutputArray NonAIDSdeaths2005(16); // Males by age, then females by age
 PostOutputArray NonAIDSdeaths(56);
 PostOutputArray NonAIDSdeathsHIVpos(56);
-PostOutputArray NonAIDSdeaths20M(41);
-PostOutputArray NonAIDSdeaths25M(41);
-PostOutputArray NonAIDSdeaths30M(41);
-PostOutputArray NonAIDSdeaths35M(41);
-PostOutputArray NonAIDSdeaths40M(41);
-PostOutputArray NonAIDSdeaths45M(41);
-PostOutputArray NonAIDSdeaths50M(41);
-PostOutputArray NonAIDSdeaths55M(41);
-PostOutputArray NonAIDSdeaths20F(41);
-PostOutputArray NonAIDSdeaths25F(41);
-PostOutputArray NonAIDSdeaths30F(41);
-PostOutputArray NonAIDSdeaths35F(41);
-PostOutputArray NonAIDSdeaths40F(41);
-PostOutputArray NonAIDSdeaths45F(41);
-PostOutputArray NonAIDSdeaths50F(41);
-PostOutputArray NonAIDSdeaths55F(41);
+PostOutputArray NonAIDSdeaths15M(56);
+PostOutputArray NonAIDSdeaths20M(56);
+PostOutputArray NonAIDSdeaths25M(56);
+PostOutputArray NonAIDSdeaths30M(56);
+PostOutputArray NonAIDSdeaths35M(56);
+PostOutputArray NonAIDSdeaths40M(56);
+PostOutputArray NonAIDSdeaths45M(56);
+PostOutputArray NonAIDSdeaths50M(56);
+PostOutputArray NonAIDSdeaths55M(56);
+PostOutputArray NonAIDSdeaths15F(56);
+PostOutputArray NonAIDSdeaths20F(56);
+PostOutputArray NonAIDSdeaths25F(56);
+PostOutputArray NonAIDSdeaths30F(56);
+PostOutputArray NonAIDSdeaths35F(56);
+PostOutputArray NonAIDSdeaths40F(56);
+PostOutputArray NonAIDSdeaths45F(56);
+PostOutputArray NonAIDSdeaths50F(56);
+PostOutputArray NonAIDSdeaths55F(56);
 PostOutputArray IMR(56);
 PostOutputArray U5MR(56);
 PostOutputArray Tot45q15(56);
@@ -1785,6 +2259,8 @@ PostOutputArray DALY_HIV(86);
 PostOutputArray LYlostAIDSpaed(86);
 PostOutputArray YLD_HIVpaed(86);
 PostOutputArray DALY_HIVpaed(86);
+PostOutputArray YLD_AHD(86);
+PostOutputArray YLD_AHDuntreated(86);
 PostOutputArray CrudeAIDSmort(56);
 PostOutputArray CompletenessPaed(16);
 PostOutputArray CompletenessAdj(2);
@@ -1819,12 +2295,16 @@ PostOutputArray Total50plusM(56);
 PostOutputArray Total50plusF(56);
 PostOutputArray DependencyRatio(56);
 PostOutputArray AgingIndex(56);
+PostOutputArray TotSexWorkers(56);
+PostOutputArray TotalCisMSM(56);
+PostOutputArray TotalTGW(56);
 PostOutputArray MarriedPropn1996(30);
 PostOutputArray MarriedPropn2001(30);
 PostOutputArray MarriedPropn2007(30);
 PostOutputArray MarriedPropn2016(30);
 
 // ART/disease stage outputs
+PostOutputArray AHDnotOnART(56);
 PostOutputArray AdultsUnder200(56);
 PostOutputArray Adults200to349(56);
 PostOutputArray Adults350to499(56);
@@ -2020,7 +2500,7 @@ PostOutputArray PosHIVtests50plusF(56);
 PostOutputArray PregDiag15to24(56);
 PostOutputArray PregDiag25to49(56);
 PostOutputArray FalseNegPropn(56);
-PostOutputArray FirstHIVtestsPos(41);
+PostOutputArray FirstHIVtestsPos(56);
 PostOutputArray NewDiagAtBirth(56);
 PostOutputArray NewDiagInfants(56);
 PostOutputArray NewDiag1yrOlds(56);
@@ -2077,12 +2557,24 @@ PostOutputArray TotOnPrEP(56);
 PostOutputArray FSWonPrEP(56);
 PostOutputArray MSMonPrEP(56);
 PostOutputArray AGYWonPrEP(56);
+PostOutputArray MenOnCABLA(56);
+PostOutputArray WomenOnCABLA(56);
+PostOutputArray TotOnCABLA(56);
+PostOutputArray FSWonCABLA(56);
+PostOutputArray MSMonCABLA(56);
+PostOutputArray AGYWonCABLA(56);
 PostOutputArray NewPrEP_M(56);
 PostOutputArray NewPrEP_F(56);
 PostOutputArray NewPrEPinAGYW(56);
 PostOutputArray NewPrEPinFSW(56);
 PostOutputArray NewPrEPinMSM(56);
 PostOutputArray NewPrEPrateFSW(56);
+PostOutputArray NewCABLA_M(56);
+PostOutputArray NewCABLA_F(56);
+PostOutputArray NewCABLAinAGYW(56);
+PostOutputArray NewCABLAinFSW(56);
+PostOutputArray NewCABLAinMSM(56);
+PostOutputArray NewCABLArateFSW(56);
 PostOutputArray PrEPcoverageFSW(56);
 PostOutputArray PrEPcoverageMSM(56);
 PostOutputArray PrEPcoverageAGYW(56);
@@ -2091,7 +2583,6 @@ PostOutputArray PrEPcoverageAllF(56);
 PostOutputArray PrEPcoverageAll(56);
 PostOutputArray AdolescOnPrEP(51);
 PostOutputArray WomenOnVM(51);
-PostOutputArray TotOnCABLA(56);
 PostOutputArray NewAIDSdiagTrend(5);
 PostOutputArray NewAIDSdiagAge(20);
 PostOutputArray MSMpropn18to24(56);
@@ -2135,6 +2626,157 @@ PostOutputArray NewHIV50(56);
 PostOutputArray NewHIV50M(56);
 PostOutputArray NewHIV50F(56);
 
+// TB outputs : incidence
+PostOutputArray NewActiveTBadult(56);
+PostOutputArray NewActiveTBadultM(56);
+PostOutputArray NewActiveTBadultF(56);
+PostOutputArray NewActiveTB_HIVpos(56);
+PostOutputArray NewActiveTBonART(56);
+PostOutputArray NewActiveTBprevTB(56);
+PostOutputArray NewActiveTBprevTBpropn(56);
+PostOutputArray NewTBrateAdult(56);
+PostOutputArray NewTBrateAdultM(56);
+PostOutputArray NewTBrateAdultF(56);
+PostOutputArray PropnTBreactivation(56);
+PostOutputArray TBincFastProg(56);
+PostOutputArray TBincReactivation(56);
+PostOutputArray AnnMTBriskPaed(56);
+
+// TB outputs : prevalence
+PostOutputArray AdultLTBIprev(56);
+PostOutputArray AdultTBprev(56);
+PostOutputArray AdultTBprevM(56);
+PostOutputArray AdultTBprevF(56);
+PostOutputArray AdultTBprevN(56);
+PostOutputArray AdultPTBprev(56);
+PostOutputArray AdultPTBprevM(56);
+PostOutputArray AdultPTBprevF(56);
+PostOutputArray AdultTBprevHIVpos(56);
+PostOutputArray AdultTBprevHIVneg(56);
+PostOutputArray OR_TB_HIVassociation(56);
+PostOutputArray AdultTBprevART(56);
+PostOutputArray AdultTBprevARTover500(56);
+PostOutputArray AdultTBprevART500(56);
+PostOutputArray AdultTBprevART350(56);
+PostOutputArray AdultTBprevART200(56);
+PostOutputArray TotTBadult(56);
+PostOutputArray TotTBadultM(56);
+PostOutputArray TotTBadultF(56);
+PostOutputArray TotTBadultHIVpos(56);
+PostOutputArray TotTBadultHIVneg(56);
+PostOutputArray DurTBadult(56);
+PostOutputArray DurTBadultM(56);
+PostOutputArray DurTBadultF(56);
+PostOutputArray DurTBadultHIVpos(56);
+PostOutputArray DurTBadultHIVneg(56);
+PostOutputArray EverTBtreatedM(56);
+PostOutputArray EverTBtreatedF(56);
+PostOutputArray UntreatedTBprev(56);
+PostOutputArray UntreatedTBprevM(56);
+PostOutputArray UntreatedTBprevF(56);
+
+// TB outputs: diagnosis and treatment (active + passive case finding combined)
+PostOutputArray TotLabDiagAllTBscreening(56);
+PostOutputArray TotLabDiagAdultFalsePos(56);
+PostOutputArray TotNewRxAdultTB(56);
+PostOutputArray TotNewRxAdultTBfalsePos(56);
+PostOutputArray TotNewRxAdultTBsmPos(56);
+PostOutputArray TBempiricRxAdults(56);
+PostOutputArray TBempiricRxNoLab(56);
+PostOutputArray TBempiricRxNegLab(56);
+PostOutputArray TotLabTestedAllScreening(56);
+PostOutputArray DiagnosisDelay(56);
+PostOutputArray TreatedTBcurr(56);
+PostOutputArray UntreatedTB(56);
+PostOutputArray UntreatedTBsmPos(56);
+PostOutputArray PropnUntreatedSmPos(56);
+PostOutputArray TotNewRxAdultTB_HIV(56);
+PostOutputArray HIVprevNewRxAdultTB(56);
+PostOutputArray HIVprevNewRxTB_M(56);
+PostOutputArray HIVprevNewRxTB_F(56);
+PostOutputArray CaseDetectionRatioT(56);
+PostOutputArray CaseDetectionRatioR(56);
+PostOutputArray LagAdjCaseDetectionRatio(56);
+PostOutputArray TBRxCompletion(56);
+PostOutputArray TBtestingYield(56);
+PostOutputArray ETRbias(5);
+PostOutputArray VRbiasTB(1);
+PostOutputArray TBlogL(10);
+
+// TB outputs: diagnosis and treatment through passive case finding (symptomatic)
+PostOutputArray LabDiagAdultTB(56);
+PostOutputArray LabDiagAdultTBfalsePos(56);
+PostOutputArray NewRxAdultTB(56);
+PostOutputArray NewRxAdultTBfalsePos(56);
+PostOutputArray NewRxAdultTBsmPos(56);
+PostOutputArray NewRxAdultTB_M(56);
+PostOutputArray NewRxAdultTB_F(56);
+PostOutputArray TreatedTB15to24(56);
+PostOutputArray TotTBsymptomChecks(56);
+PostOutputArray TotTBsymptomChecksART(56);
+PostOutputArray TotalScreens(56);
+PostOutputArray CultureConfirmTests(56);
+PostOutputArray PropnScreened(56);
+PostOutputArray PropnScreened2(56);
+PostOutputArray NewRxAdultTB_HIV(56);
+
+// TB outputs: drug-resistant TB
+PostOutputArray PropnPrevTreated(56);
+PostOutputArray PropnPrevTreatedRR(56);
+PostOutputArray PropnPrevTreatedRS(56);
+PostOutputArray TotRifResTB(56);
+PostOutputArray RifResAllTB(56);
+PostOutputArray RifResPrevTB(56);
+PostOutputArray RifResNewTB(56);
+PostOutputArray MDRprevAllTB(56);
+PostOutputArray NewRifResAcquired(56);
+PostOutputArray CultureLPAtestsFailing(56);
+PostOutputArray RifResDetected(56);
+PostOutputArray RifResDetectedFailing(56);
+PostOutputArray New2ndRxAdultTB(56);
+PostOutputArray New2ndRxFailing1st(56);
+PostOutputArray TreatedTBcurr2nd(56);
+PostOutputArray TBRx2Completion(56);
+
+// TB outputs: active case finding approaches and TUTT
+PostOutputArray TotalScreensACF(56);
+PostOutputArray TotalXpertScreensACF(56);
+PostOutputArray NewRxAdultTB_ACF(56);
+PostOutputArray TotalScreensART_ICF(56);
+PostOutputArray TotalXpertScreensART_ICF(56);
+PostOutputArray NewRxAdultTB_ART_ICF(56);
+PostOutputArray TotalScreensPrevTB(56);
+PostOutputArray TotalXpertScreensPrevTB(56);
+PostOutputArray NewRxAdultTBscreenPrev(56);
+PostOutputArray TotalScreensD2D(56);
+PostOutputArray Total_dCXRscreensD2D(56);
+PostOutputArray TotalXpertScreensD2D(56);
+PostOutputArray TotTongueSwabsD2D(56);
+PostOutputArray NewRxAdultTBscreenD2D(56);
+
+// TB outputs: TPT and prevention
+PostOutputArray NewIPTlatent(56);
+PostOutputArray NewTPTinHHcontacts(56);
+PostOutputArray IPTstartRate(56);
+PostOutputArray IPTcoverage(56);
+
+// TB outputs: mortality
+PostOutputArray TotTBdeathsAdult(56);
+PostOutputArray TotTBdeathsM(56);
+PostOutputArray TotTBdeathsF(56);
+PostOutputArray TotTBmortRate(56);
+PostOutputArray TotTBmortRateM(56);
+PostOutputArray TotTBmortRateF(56);
+PostOutputArray TBdeathsOnRx(56);
+PostOutputArray TBdeathsOnRxM(56);
+PostOutputArray TBdeathsOnRxF(56);
+PostOutputArray MortRateTB_RxM(56);
+PostOutputArray MortRateTB_RxF(56);
+PostOutputArray TBdeathsHIV(56);
+PostOutputArray CaseFatalityRatioA(56);
+PostOutputArray CaseFatalityRatioT(56);
+PostOutputArray AdultLYlostTB(56);
+
 // Other outputs
 PostOutputArray MarriedM17to49(51);
 PostOutputArray MarriedF17to49(51);
@@ -2158,7 +2800,6 @@ PostOutputArray BirthsOver500(51);
 PostOutputArray Births350to499(51);
 PostOutputArray Births200to349(51);
 PostOutputArray BirthsUnder200(51);
-PostOutputArray TotSexWorkers(51);
 PostOutputArray SWsexActs(51);
 PostOutputArray SWsexActsProt(51);
 PostOutputArray FSWonART(51);
@@ -2175,7 +2816,7 @@ PostOutputArray DiscARTunder200(51);
 PostOutputArray ChildrenOnExtNVP(51);
 PostOutputArray TotBirthDiagnosed(51);
 
-// Age-specific output tables
+// Age-specific output tables: HIV
 OutputByAge MalePopAS(91, 56);
 OutputByAge FemPopAS(91, 56);
 OutputByAge MaleIncAS(81, 56);
@@ -2208,3 +2849,9 @@ OutputByAge SexExpUnmarriedDiagF(81, 56);
 OutputByAge SexExpMarriedDiagF(81, 56);
 OutputByAge SexExpUnmarriedART_F(81, 56);
 OutputByAge SexExpMarriedART_F(81, 56);*/
+
+// Age-specific output tables: TB
+OutputByAge MaleTBdeathsAS(16, 56);
+OutputByAge FemTBdeathsAS(16, 56);
+OutputByAge MaleTBtreatAS(16, 56);
+OutputByAge FemTBtreatAS(16, 56);

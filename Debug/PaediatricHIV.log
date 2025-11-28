@@ -1,0 +1,294 @@
+﻿  THEMBISA.cpp
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(17,6): warning C4101: 'iy': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(109,9): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(165,9): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(180,14): warning C4101: 'NewNonVertCurrM': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(180,9): warning C4101: 'NVI': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(1427,29): warning C4101: 'RateAcq': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(2432,25): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(2433,25): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(3648,18): warning C4101: 'iy': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(5320,6): warning C4101: 'ia': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(5548,22): warning C4101: 'MarriedPreviousAge': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(5995,15): warning C4101: 'sumxy': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(5993,14): warning C4101: 'AgeIn1992': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(5993,36): warning C4101: 'ia2': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(5993,25): warning C4101: 'AgeIn2016': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(5995,9): warning C4101: 'sumx': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(5994,9): warning C4101: 'Scaling': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(6172,6): warning C4101: 'ia': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(6576,14): warning C4101: 'ig': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(6617,57): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(6625,57): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(6632,57): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(6689,58): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(6612,10): warning C4101: 'ig': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(6741,20): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(6762,20): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(6791,20): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(6712,10): warning C4101: 'ig': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(7238,14): warning C4101: 'ig': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(9150,23): warning C4101: 'ii': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(9564,41): warning C4101: 'TempART': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(9691,14): warning C4101: 'ij': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(10188,14): warning C4101: 'is': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(10188,18): warning C4101: 'ig': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(11477,63): warning C4101: 'TempVL': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(11477,74): warning C4101: 'TempVL2': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(12886,22): warning C4101: 'id': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(12886,10): warning C4101: 'ig': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(12886,26): warning C4101: 'ii': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(13613,10): warning C4101: 'ig': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(14835,18): warning C4101: 'ii': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(14985,59): warning C4101: 'BaseHCT': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(15048,37): warning C4101: 'temp1a': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(15048,61): warning C4101: 'temp2b': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(15048,45): warning C4101: 'temp1b': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(15048,9): warning C4101: 'ScreenTemp': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(15048,53): warning C4101: 'temp2a': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(18978,6): warning C4101: 'ia': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(19132,29): warning C4101: 'SecondDeriv': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(19132,17): warning C4101: 'FirstDeriv': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(19131,23): warning C4101: 'ii': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(19476,31): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(19513,33): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(19548,21): warning C4101: 'SecondDeriv': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(19548,9): warning C4101: 'FirstDeriv': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(19546,14): warning C4101: 'ii': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(19624,20): warning C4101: 'complete1': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(19624,9): warning C4101: 'complete0': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(19623,14): warning C4101: 'ii': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(19721,27): warning C4101: 'HCTbias': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(19928,31): warning C4101: 'ModelError': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(20190,23): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(20456,6): warning C4101: 'ig': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(20646,22): warning C4101: 'Adj1996': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(20645,17): warning C4101: 'MCMCindex': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(21161,14): warning C4101: 's': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(21498,7): warning C4101: 'filout': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(21499,12): warning C4101: 'ia': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(22145,36): warning C4101: 'Temp2': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(22145,19): warning C4101: 'ModelAdj': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(22284,33): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(22313,33): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(22343,34): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(22358,9): warning C4101: 'is': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(22359,15): warning C4101: 'Temp2': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(22358,17): warning C4101: 'MCMCindex': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(22644,14): warning C4101: 'idum': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(22787,22): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(22867,22): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(22884,12): warning C4101: 'y': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(23014,52): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(23034,18): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(23040,8): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(23028,44): warning C4101: 'intpart1': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(23028,25): warning C4101: 'x1': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(23026,7): warning C4101: 'filout': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(23028,29): warning C4101: 'DoubleIntDif1': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(23264,30): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(23265,37): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(23436,22): warning C4101: 'Adj1996': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(23435,25): warning C4101: 'MCMCindex': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(23964,9): warning C4101: 'is': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(23965,15): warning C4101: 'Temp2': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(23964,25): warning C4101: 'MCMCindex': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(24263,6): warning C4101: 'i': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(24366,9): warning C4101: 'sumvertices': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+C:\Users\01364678\Documents\VS projects\THEMBISAv23\THEMBISA.cpp(24432,6): warning C4101: 'offset': unreferenced local variable
+  (compiling source file '/THEMBISA.cpp')
+  
+  AssemblyInfo.obj : MSIL module encountered; incremental linking is disabled for MSIL; performing full link
+  PaediatricHIV.vcxproj -> C:\Users\01364678\Documents\VS projects\THEMBISAv23\Debug\THEMBISA.exe

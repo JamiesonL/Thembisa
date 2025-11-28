@@ -334,7 +334,7 @@ Paed ART totals
 LastDateCum, AnnSwitchingCumToCurr
 2009.080	0.2626
 AveDurImmART
-20.0	25.0
+9.7	16.7
 Paed age distribution starting ART
 0.10	0.09	0.08	0.11	0.12	0.14	0.15	0.16	0.18	0.21
 0.45	0.44	0.40	0.38	0.35	0.35	0.32	0.29	0.30	0.32
@@ -375,3 +375,8 @@ Fraction of adult ART patients who are male (mean, SD)
 2017	0.2961	0.0100
 2018	0.3060	0.0100
 2019	0.2980	0.0100
+Fraction of kids starting ART with severe immune suppression
+2020	0.2579	0.0775
+2021	0.2581	0.0776
+2022	0.2667	0.0802
+2023	0.2600	0.0782

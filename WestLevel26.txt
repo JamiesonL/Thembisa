@@ -93,6 +93,6 @@ West level 26 life expectancy for adults, undiscounted
 89	3.99785	4.67491
 90	3.75659	4.38341
 IHME disability weights
-0.005	0.031	0.092	0.221	0.050
+0.006	0.031	0.096	0.249	0.053
 Discount rate 0.02956
-0.02956
+0.00

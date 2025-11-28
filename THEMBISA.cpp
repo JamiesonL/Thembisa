@@ -20,8 +20,8 @@ int _tmain()
 
 	start = clock();
 	//GenerateSample(); // Not yet updated in THEMBISA
-	//RunSample();	// Remember to set FixedUncertainty = 1 before running this function
-	runIMIS(0.0);
+	RunSample();	// Remember to set FixedUncertainty = 1 before running this function
+	//runIMIS(0.0);
 	//MaximizeLikelihood(0.0000001, "InitialSimplex.txt", "FinalSimplex.txt");
 	/*ReadAllFiles();
 	CurrSim = 1;
@@ -1523,7 +1523,10 @@ void Adult::GetEndProfile()
 					ProbHIVacq[ia][0]);
 				RegPrEP_E[ia] = (NegNoHCT[ia] + NegPastHCT[ia]) * JoinPrEP[ia][Risk - 1] * (1.0 -
 					ProbHIVacq[ia][0]);
-				if (FixedUncertainty == 1){ NewPrEP_MSM += RegPrEP_E[ia]; }
+				if (FixedUncertainty == 1){ 
+					NewPrEP_MSM += RegPrEP_E[ia]; 
+					NewCABLA_MSM += RegHCT_E[ia];
+				}
 			}
 			if(PrEPorVM==1 && Sex==1 && FSWind==0){
 				NegNoHCT_E[ia] *= (1.0 - JoinCABLA[ia][Risk + 4] - JoinPrEP[ia][Risk + 4] - JoinVM[ia][Risk]);
@@ -1534,7 +1537,10 @@ void Adult::GetEndProfile()
 					ProbHIVacq[ia][0]);
 				RegVM_E[ia] = (NegNoHCT[ia] + NegPastHCT[ia]) * JoinVM[ia][Risk] * (1.0 -
 					ProbHIVacq[ia][0]);
-				if (FixedUncertainty == 1 && ia<15){ NewPrEP_AGYW += RegPrEP_E[ia]; }
+				if (FixedUncertainty == 1 && ia<15){ 
+					NewPrEP_AGYW += RegPrEP_E[ia]; 
+					NewCABLA_AGYW += RegHCT_E[ia];
+				}
 			}
 			if(PrEPorVM==1 && FSWind==1){
 				NegNoHCT_E[ia] *= (1.0 - JoinCABLA[ia][4] - JoinPrEP[ia][4] - JoinVM[ia][0]);
@@ -1545,7 +1551,10 @@ void Adult::GetEndProfile()
 					ProbHIVacq[ia][0]);
 				RegVM_E[ia] = (NegNoHCT[ia] + NegPastHCT[ia]) * JoinVM[ia][0] * (1.0 -
 					ProbHIVacq[ia][0]);
-				if (FixedUncertainty == 1){ NewPrEP_FSW += RegPrEP_E[ia]; }
+				if (FixedUncertainty == 1){ 
+					NewPrEP_FSW += RegPrEP_E[ia]; 
+					NewCABLA_FSW += RegHCT_E[ia];
+				}
 			}
 			if(PrEPorVM==1){
 				NegPastHCT_E[ia] += RegHCT[ia] * StopCABLA * (1.0 - ProbHIVacq[ia][1]) + 
@@ -2196,6 +2205,146 @@ void Adult::GetFSWcontacts()
 		FSWcontactsByAge[ia] = Temp * FSWcontactRate[ia];
 		if(MarriedInd==1){
 			FSWcontactsByAge[ia] *= FSWcontactMarried;}
+	}
+}
+
+AdultTB::AdultTB(int Gender, int Rif, int Rx2)
+{
+	Sex = Gender;
+	RifRes = Rif;
+	SecondLine = Rx2;
+}
+
+void AdultTB::SetStartProfile()
+{
+	int ia, is;
+	double HIVtemp;
+
+	for (ia = 0; ia < 81; ia++) {
+		if (ia >= 5 && ia < 40) {
+			HIVtemp = InitFSWprev * InitPrevAdj[ia - 5][Sex] * HighRiskPropn[1];
+			HIVstage[ia][0] = Total[ia] * (1.0 - HIVtemp);
+			for (is = 1; is < 44; is++) { HIVstage[ia][is] = 0.0; }
+			HIVstage[ia][6] = Total[ia] * HIVtemp;
+		}
+		else {
+			HIVstage[ia][0] = Total[ia];
+			for (is = 1; is < 44; is++) { HIVstage[ia][is] = 0.0; }
+		}
+	}
+}
+
+void AdultTB::UpdateStartProfile()
+{
+	int ia, is;
+
+	for (ia = 0; ia < 81; ia++) {
+		for (is = 0; is < 44; is++) {
+			HIVstage[ia][is] = HIVstage_E[ia][is];
+		}
+		//Total[ia] = Total_E[ia];
+	}
+}
+
+void AdultTB::UpdateEndProfile()
+{
+	// This function should only be called as a first step prior to calculating the transitions
+	// between the TB states.
+
+	int ia, is;
+
+	for (ia = 0; ia < 81; ia++) {
+		for (is = 0; is < 44; is++) {
+			HIVstage_E[ia][is] = HIVstage[ia][is];
+		}
+		Total_E[ia] = Total[ia];
+	}
+}
+
+void AdultTB::AdjustPopTotals()
+{
+	// Note that I've NOT used _E here (i.e. different from Mmamapudi's code). This is because
+	// the function gets called at the START of each month and RatioHIVtoTBpop is calculated 
+	// from SumGroupsM and SumGroupsF, which are calculated from the starting values not the ending
+	// values.
+
+	int ia, is;
+
+	for (ia = 0; ia < 81; ia++) {
+		for (is = 0; is < 44; is++) {
+			if (Sex == 0) {
+				if (RatioHIVtoTBpopM[ia][is] >= 0.0) {
+					HIVstage[ia][is] *= RatioHIVtoTBpopM[ia][is];
+				}
+				else {
+					HIVstage[ia][is] = SumGroupsM[ia][is] * Total[ia] /
+						SumTB[ia][0];
+				}
+			}
+			else {
+				if (RatioHIVtoTBpopF[ia][is] >= 0.0) {
+					HIVstage[ia][is] *= RatioHIVtoTBpopF[ia][is];
+				}
+				else {
+					HIVstage[ia][is] = SumGroupsF[ia][is] * Total[ia] /
+						SumTB[ia][1];
+				}
+			}
+		}
+	}
+}
+
+void AdultTB::UpdateStartTotal()
+{
+	int ia, is;
+	double temp;
+
+	for (ia = 0; ia < 81; ia++) {
+		temp = 0.0;
+		for (is = 0; is < 44; is++) {
+			temp += HIVstage[ia][is];
+		}
+		Total[ia] = temp;
+	}
+}
+
+void AdultTB::UpdateDemog()
+{
+	int ia, ib, is, id;
+
+	// Ages 90+
+	for (is = 0; is < 20; is++) {
+		HIVstage[80][is] = HIVstage[80][is] + HIVstage[79][is];
+	}
+	for (is = 0; is < 4; is++) {
+		HIVstage[80][24 + is * 5] = HIVstage[80][24 + is * 5] + HIVstage[79][24 + is * 5] +
+			HIVstage[80][23 + is * 5] + HIVstage[79][23 + is * 5];
+		for (id = 1; id < 4; id++) {
+			HIVstage[80][20 + is * 5 + id] = HIVstage[80][19 + is * 5 + id] + HIVstage[79][19 + is * 5 + id];
+		}
+		HIVstage[80][20 + is * 5] = 0.0;
+		HIVstage[80][40 + is] = HIVstage[80][40 + is] + HIVstage[79][40 + is];
+	}
+
+	// Ages 11-89
+	for (ia = 0; ia < 79; ia++) {
+		ib = 79 - ia;
+		for (is = 0; is < 20; is++) {
+			HIVstage[ib][is] = HIVstage[ib - 1][is];
+		}
+		for (is = 0; is < 4; is++) {
+			HIVstage[ib][24 + is * 5] = HIVstage[ib - 1][24 + is * 5] + HIVstage[ib - 1][23 + is * 5];
+			for (id = 1; id < 4; id++) {
+				HIVstage[ib][20 + is * 5 + id] = HIVstage[ib - 1][19 + is * 5 + id];
+			}
+			HIVstage[ib][20 + is * 5] = 0.0;
+			HIVstage[ib][40 + is] = HIVstage[ib - 1][40 + is];
+		}
+	}
+
+	// 10-year olds are handled in MoveIntoAdultTB, but set to 0 here for simplicity.
+	for (is = 0; is < 44; is++) {
+		HIVstage[0][is] = 0.0;
 	}
 }
 
@@ -3051,6 +3200,9 @@ void ReadAdultAssumps()
 	file >> CABLAdurPreg;
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
+	file >> CABLAdataYr;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
 	file >> UltCABLArateFSW;
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
@@ -3338,6 +3490,30 @@ void ReadRollout()
 	file.ignore(255,'\n');
 	for(iy=0; iy<86; iy++){
 		file>>PrEPpregnant[iy];}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy<86; iy++){
+		file >> TotStartingCABLA[iy];}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy<86; iy++){
+		file >> RR_CABLAstartMSM[iy];}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy<86; iy++){
+		file >> RR_CABLAstartF20[iy];}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy<86; iy++){
+		file >> CABLAeligMSM[iy];}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy<86; iy++){
+		file >> CABLAeligAGYW[iy];}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy<86; iy++){
+		file >> CABLAeligOther[iy];}
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	for (iy = 0; iy<86; iy++){
@@ -3701,7 +3877,8 @@ void ReadCalibData()
 	if (ProvModel == 1 && (CalibANCprev == 1 || CalibAdultPrev == 1 || CalibPaedPrev == 1)){
 		ReadProvHIV();}
 	if (CalibARTtotals == 1 || CalibARTtotalsP == 1 || CalibARTbyAgeP == 1 || CalibARTbyAgeP2 == 1 || 
-		CalibARTbyAge == 1 || CalibARTcoverage == 1 || CalibCD4atARTstart == 1 || CalibANC_ART == 1){
+		CalibARTbyAge == 1 || CalibARTcoverage == 1 || CalibCD4atARTstart == 1 || CalibANC_ART == 1 ||
+		CalibAHDpaedART == 1){
 		ReadARTtotals();}
 	if (CalibChildPIP == 1){
 		ReadChildPIP();}
@@ -4227,7 +4404,7 @@ void ReadAIDScases()
 
 void ReadARTtotals()
 {
-	int iy, ic, ig, ia;
+	int iy, ic, ig, ia, idum;
 	ifstream file;
 	string InputFile;
 
@@ -4304,6 +4481,11 @@ void ReadARTtotals()
 	file.ignore(255, '\n');
 	for (iy = 0; iy < ARTdataPointsM; iy++){
 		file >> ARTmale[iy][0] >> ARTmale[iy][1] >> ARTmale[iy][2];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 4; iy++){
+		file >> idum >> ObsAHDpaedART[iy] >> SE_AHDpaedART[iy];
 	}
 	if (ProvModel == 1){
 		if (CalibCD4atARTstart == 1 || CalibANC_ART == 1){
@@ -4416,6 +4598,827 @@ void ReadAllFiles()
 	ReadCalibData();
 	ReadInitPrev();
 	if (FixedARTinitiation == 1 && FixedUncertainty == 1){ ReadAdultRoot(); }
+	if (IncludeTB == 1) {
+		ReadInitTB();
+		ReadTBadultAssumps();
+		ReadTBrollout();
+		ReadTBriskFactorPrev();
+		ReadTBmortData();
+		ReadTB_ETRdata();
+		ReadTBlabDiag();
+		ReadTBprevData();
+		if (CalibTB_HIV_OR == 1) { ReadTB_HIV_ORs(); }
+		if (FixedTBscreening == 1 && FixedUncertainty == 1) { ReadTBscreening(); }
+	}
+}
+
+void ReadInitTB()
+{
+	int ia;
+	ifstream file;
+	string InputFile;
+
+	InputFile = "InitTBprev.txt";
+
+	file.open(InputFile);
+	if (file.fail()) {
+		cerr << "Could not open InitTBprev.txt\n";
+		exit(1);
+	}
+
+	file.ignore(255, '\n');
+	for (ia = 0; ia < 16; ia++) {
+		file >> InitialActiveTB[ia][0] >> InitialActiveTB[ia][1];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> InitActiveTBsmPos[0] >> InitActiveTBsmPos[1];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ia = 0; ia < 6; ia++) {
+		file >> InitPreviousTB[ia][0] >> InitPreviousTB[ia][1];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> InitLTBI[0] >> InitLTBI[1];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> InitLTBIscaling;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> InitRR_TBprev;
+	file.close();
+}
+
+void ReadTBadultAssumps()
+{
+	int ia, ig, ii;
+	ifstream file;
+	string InputFile;
+
+	InputFile = "TBadultAssumps.txt";
+
+	file.open(InputFile);
+	if (file.fail()) {
+		cerr << "Could not open TBadultAssumps.txt\n";
+		exit(1);
+	}
+
+	file.ignore(255, '\n');
+	for (ia = 0; ia < 4; ia++) {
+		file >> CrudeContact[ia][0] >> CrudeContact[ia][1];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> ContactRednCOVID[0] >> ContactRednCOVID[1] >> ContactRednCOVID[2];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ig = 0; ig < 2; ig++) {
+		for (ia = 0; ia < 5; ia++) {
+			file >> DoddMixMatrix[ia][ig][0][0];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ig = 0; ig < 2; ig++) {
+		for (ia = 0; ia < 5; ia++) {
+			file >> DoddMixMatrix[ia][ig][1][0];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ig = 0; ig < 2; ig++) {
+		for (ia = 0; ia < 5; ia++) {
+			file >> DoddMixMatrix[ia][ig][2][0];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ig = 0; ig < 2; ig++) {
+		for (ia = 0; ia < 5; ia++) {
+			file >> DoddMixMatrix[ia][ig][3][0];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ig = 0; ig < 2; ig++) {
+		for (ia = 0; ia < 5; ia++) {
+			file >> DoddMixMatrix[ia][ig][0][1];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ig = 0; ig < 2; ig++) {
+		for (ia = 0; ia < 5; ia++) {
+			file >> DoddMixMatrix[ia][ig][1][1];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ig = 0; ig < 2; ig++) {
+		for (ia = 0; ia < 5; ia++) {
+			file >> DoddMixMatrix[ia][ig][2][1];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ig = 0; ig < 2; ig++) {
+		for (ia = 0; ia < 5; ia++) {
+			file >> DoddMixMatrix[ia][ig][3][1];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ig = 0; ig < 2; ig++) {
+		for (ia = 0; ia < 5; ia++) {
+			file >> DoddAgeSexDbn[ia][ig];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> TBtransmProb;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RatioMinToBaseInfectivity;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> PropFastProg;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> Reactivation;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> MortalitySmPos;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> MortalitySmNeg;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> NaturalRecSmPos;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> NaturalRecSmNeg;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> PartialImmunHIVneg;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> DurSTpostRxRisk;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RelapseST;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> PastTBfactor;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RR_TBadultM;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RR_TBalcohol;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RR_TBdiabetes;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RR_TBcurrSmoke;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RR_TBsmoke10yr;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RR_TBlowBMI;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RRsmoking2016;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RRlowBMI2022;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> SmNegInfectiousness;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RifResInfectiousness;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> AveCD4HIVneg;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RR_TBper100CD4increase;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RR_TBtreatedHIV;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RR_TBmortPer50CD4;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RR_TBmortTreatedHIV;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RR_TBmortPer10yrAge;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RRnatRecPer100CD4increase;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RRimmunePer100CD4increase;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> HealthSeekingTB;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> HealthSeekingGen;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> HealthSeekingTBLS;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RRhealthSeekingFem;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RRhealthSeekingHIV;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> Cough2wkActiveSmNeg;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> Cough2wkGen;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RRsymptomsSmPos;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RRscreenSymptomsBase;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RRscreenSymptomsUlt;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> EffectScreenRate2;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RRscreenF;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> TBtestYear;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> PrivateTBdiagPropn;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RecordedTB80sAdj;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> UltTBsymptomScreen;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RatioSymptomToMicroScreen;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> XpertSe[0] >> XpertSe[1];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> XpertSeActive[0] >> XpertSeActive[1];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> XpertSp;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> SmearSp;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> XpertUltraSe[0] >> XpertUltraSe[1];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> XpertUltraSeActive[0] >> XpertUltraSeActive[1];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> XpertUltraSp;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> Se_dCXR;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> Sp_dCXR;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> AbleSputum[0] >> AbleSputum[1];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> TongueSwabRelSe[0] >> TongueSwabRelSe[1];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> TongueSwabTested;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> InitialLTFU[0] >> InitialLTFU[1];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ii = 0; ii < 2; ii++) {
+		file >> EmpiricRx[ii][0] >> EmpiricRx[ii][1];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ii = 0; ii < 2; ii++) {
+		file >> EmpiricRxNeg[ii][0] >> EmpiricRxNeg[ii][1];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> EmpiricRednXpert;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> LogEmpiricToMicro;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> TBprevHHcontacts;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> HHcontactsPerCase;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> HHcontactRxUptake;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> ProbDSTifFailingRx1 >> ProbDSTifFailingRx2 >> ProbDSTifFailingRx3;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RR_DSTdropout;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> AnnMortTB_Rx[0] >> AnnMortTB_Rx[1];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> ExcessMort1stMoTB_Rx;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RatioMinToBaseTBmort;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RRmortRifRes1st;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> AnnDropoutTB_Rx[0] >> AnnDropoutTB_Rx[1];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RRdefaultDOT;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> DOTSeffectivenessAdj;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> UltTBdefaultAdj;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> TBfullRxCure;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> TBpartialRxCure;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> AcquireRifResIfFail;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> ORacquireRifRes100CD4;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> ORfailureRifRes;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RR_IPTuptakeNoLTBI;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RR_IPTuptakePrevTB;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ii = 0; ii < 4; ii++) {
+		file >> RR_IPTuptakeCD4[ii];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ii = 0; ii < 6; ii++) {
+		file >> RR_IPTuptakeARTdur[ii];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> IPTdataYr;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> IPTuptakeUlt;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> MnthlyTPTdropout;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> IPTefficacy;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> Cure3HP;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> NutritionEfficacy;
+	file.close();
+
+	// Calculate TongeSwabDetected
+	for (ii = 0; ii < 2; ii++) {
+		TongueSwabDetected[ii] = (1.0 - AbleSputum[ii]) * TongueSwabTested * TongueSwabRelSe[ii] /
+			(AbleSputum[ii] + (1.0 - AbleSputum[ii]) * TongueSwabTested * TongueSwabRelSe[ii]);
+	}
+
+	// Counterfactual with same contact and mixing parameters for males and females
+	/*for (ia = 0; ia < 5; ia++){
+		for (ig = 0; ig < 2; ig++){
+			for (ii = 0; ii < 4; ii++){
+				SocialMixMatrix[ia][ig][ii][0] = 0.5 * (SocialMixMatrix[ia][ig][ii][0] +
+					SocialMixMatrix[ia][ig][ii][1]);
+				SocialMixMatrix[ia][ig][ii][1] = SocialMixMatrix[ia][ig][ii][0];
+			}
+		}
+	}
+	for (ia = 0; ia < 4; ia++){
+		CrudeContact[ia][0] = 0.5 * (CrudeContact[ia][0] + CrudeContact[ia][1]);
+		CrudeContact[ia][1] = CrudeContact[ia][0];
+	}*/
+}
+
+void ReadTBrollout()
+{
+	int iy, is;
+	ifstream file;
+	string InputFile = "TBrollout.txt";
+
+	if (ProvModel == 1) { InputFile = "TBrollout" + ProvID + ".txt"; }
+	file.open(InputFile);
+	if (file.fail()) {
+		cerr << "Could not open TBrollout.txt\n";
+		exit(1);
+	}
+
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> TotPosTBtestsAdult1[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> MicroscopyPropn[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> UltraPropn[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (is = 0; is < 2; is++) {
+		for (iy = 0; iy < 86; iy++) {
+			file >> CultureConfirmSmNeg[iy][is];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (is = 0; is < 2; is++) {
+		for (iy = 0; iy < 86; iy++) {
+			file >> CultureConfirmXpNeg[iy][is];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> DSTcoveragePrevTB[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> DSTcoverageNewTB[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> MDR_TBproportion[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> Dur1stLineRxTB[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> Dur2ndLineRxTB[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> IPTinitiators[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> IPTduration[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> TPTfraction3HP[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> IPTcontinuePostRx[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> DOTrollout[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> PropnHHcontactScreened[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> PropnHHcontactTUTT[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> PropnHHcontactTPT[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> RateART_TBscreened[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> PropnART_TB_TUTT[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> RatePrevTBscreened[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> PropnPrevTB_TUTT[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> RateD2Dscreen[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> PropnD2DdCXR[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> NutritionSupportHHcontacts[iy];
+	}
+	file.close();
+
+	// Adjustments to get total number of positive TB tests
+	for (iy = 0; iy <= TBtestYear - StartYear; iy++) {
+		TotPosTBtestsAdult[iy] = TotPosTBtestsAdult1[iy] * 0.85 / (1.0 - PrivateTBdiagPropn);
+	}
+	for (iy = 0; iy < 5; iy++) {
+		TotPosTBtestsAdult[iy] *= RecordedTB80sAdj;
+	}
+	for (iy = 5; iy <= 10; iy++) {
+		TotPosTBtestsAdult[iy] = TotPosTBtestsAdult[4] + (TotPosTBtestsAdult[11] -
+			TotPosTBtestsAdult[4]) * (iy - 4.0) / 7.0;
+	}
+}
+
+void ReadTBriskFactorPrev()
+{
+	int ia;
+	ifstream file;
+	string InputFile = "TBriskFactorPrev.txt";
+
+	if (ProvModel == 1) { InputFile = "TBriskFactorPrev" + ProvID + ".txt"; }
+	file.open(InputFile);
+	if (file.fail()) {
+		cerr << "Could not open TBriskFactorPrev.txt\n";
+		exit(1);
+	}
+
+	file.ignore(255, '\n');
+	for (ia = 0; ia < 76; ia++) {
+		file >> RiskyDrinkingPrev[ia][0] >> RiskyDrinkingPrev[ia][1];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ia = 0; ia < 76; ia++) {
+		file >> DiabetesPrev[ia][0] >> DiabetesPrev[ia][1];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ia = 0; ia < 76; ia++) {
+		file >> SmokingPrev[ia][0] >> SmokingPrev[ia][1];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ia = 0; ia < 76; ia++) {
+		file >> LowBMIprev[ia][0] >> LowBMIprev[ia][1];
+	}
+	file.close();
+}
+
+void ReadTBmortData()
+{
+	int ia, iy;
+	ifstream file;
+	string InputFile;
+
+	InputFile = "TB_MortData.txt";
+
+	file.open(InputFile);
+	if (file.fail()) {
+		cerr << "Could not open TB_MortData.txt\n";
+		exit(1);
+	}
+
+	file.ignore(255, '\n');
+	for (ia = 0; ia < 16; ia++) {
+		for (iy = 0; iy < 23; iy++) {
+			file >> RecordedTBdeathsA[ia][iy][0];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ia = 0; ia < 16; ia++) {
+		for (iy = 0; iy < 23; iy++) {
+			file >> RecordedTBdeathsA[ia][iy][1];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 14; iy++) { file >> ExpectedTBdeathsPLHIV[iy]; }
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 14; iy++) { file >> SE_TBdeathsPLHIV[iy]; }
+	file.close();
+}
+
+void ReadTB_ETRdata()
+{
+	int ia, iy, ig;
+	ifstream file;
+	string InputFile = "TB_ETRdata.txt";
+
+	if (ProvModel == 1) { InputFile = "TB_ETRdata" + ProvID + ".txt"; }
+	file.open(InputFile);
+	if (file.fail()) {
+		cerr << "Could not open TB_ETRdata.txt\n";
+		exit(1);
+	}
+
+	file.ignore(255, '\n');
+	for (ia = 0; ia < 16; ia++) {
+		for (iy = 0; iy < 13; iy++) {
+			file >> RecordedTBcasesA[ia][iy][0];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ia = 0; ia < 16; ia++) {
+		for (iy = 0; iy < 13; iy++) {
+			file >> RecordedTBcasesA[ia][iy][1];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ig = 0; ig < 2; ig++) {
+		for (iy = 0; iy < 13; iy++) {
+			file >> ETRmortPropn[iy][ig];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 8; iy++) {
+		file >> ETR_HIVprev[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 13; iy++) {
+		file >> Recorded2ndLineTB[iy];
+	}
+	file.close();
+}
+
+void ReadTBlabDiag()
+{
+	int ia, iy;
+	ifstream file;
+	string InputFile = "TBlabTests.txt";
+
+	if (ProvModel == 1) { InputFile = "TBlabTests" + ProvID + ".txt"; }
+	file.open(InputFile);
+	if (file.fail()) {
+		cerr << "Could not open TBlabTests.txt\n";
+		exit(1);
+	}
+
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 20; iy++) {
+		file >> RecordedTBlabA[iy];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 11; iy++) {
+		file >> TotRifResDiagnosed[iy];
+	}
+	file.close();
+}
+
+void ReadTBprevData()
+{
+	int ic;
+	ifstream file;
+	string InputFile = "TBprevData.txt";
+
+	file.open(InputFile);
+	if (file.fail()) {
+		cerr << "Could not open TBprevData.txt\n";
+		exit(1);
+	}
+
+	file.ignore(255, '\n');
+	file >> TBprevSurvey[0] >> TBprevSurvey[1];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> TBprevSurveySE[0] >> TBprevSurveySE[1];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> PropnETB[0] >> PropnETB[1];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ic = 0; ic < 2; ic++) {
+		file >> DataRifResPrev[ic] >> DataRifResSE[ic];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ic = 0; ic < 4; ic++) {
+		file >> SmPosStudyDetails[ic][0] >> SmPosStudyDetails[ic][1] >> SmPosStudyDetails[ic][2];
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (ic = 0; ic < 4; ic++) {
+		file >> RRscreenStudyDetails[ic][0] >> RRscreenStudyDetails[ic][1] >> RRscreenStudyDetails[ic][2];
+	}
+	file.close();
+}
+
+void ReadTB_HIV_ORs()
+{
+	int ic;
+	ifstream file;
+	string InputFile = "TB_HIVoddsRatios.txt";
+
+	file.open(InputFile);
+	if (file.fail()) {
+		cerr << "Could not open TB_HIVoddsRatios.txt\n";
+		exit(1);
+	}
+
+	for (ic = 0; ic < 9; ic++) {
+		file >> TB_HIV_ORdetails[ic][0] >> TB_HIV_ORdetails[ic][1] >> TB_HIV_ORdetails[ic][2];
+	}
+	file.close();
+}
+
+void ReadTBscreening()
+{
+	int ir, ic, dummy;
+	ifstream file;
+	ifstream file2;
+
+	file.open("PropnScreened.txt");
+	for (ir = 0; ir < ResampleSize; ir++) {
+		file >> dummy >> dummy;
+		for (ic = 0; ic < 56; ic++) {
+			file >> PropnScreened.out[ir][ic];
+		}
+	}
+	file.close();
+
+	file2.open("PropnScreened2.txt");
+	for (ir = 0; ir < ResampleSize; ir++) {
+		file2 >> dummy >> dummy;
+		for (ic = 0; ic < 56; ic++) {
+			file2 >> PropnScreened2.out[ir][ic];
+		}
+	}
+	file2.close();
 }
 
 void SetInitialParameters()
@@ -4525,6 +5528,14 @@ void SetInitialParameters()
 			CumPaedARTearly[ia][ib] = 0.0;
 			CumPaedARTlate[ia][ib] = 0.0;
 		}
+	}
+
+	// TB parameters
+	if (IncludeTB == 1) {
+		for (ia = 0; ia < 81; ia++) {
+			RR_TBmortByAge[ia] = pow(RR_TBmortPer10yrAge, (ia - 30.0) / 10.0);
+		}
+		BaseIPTuptake[0] = 0.0;
 	}
 }
 
@@ -4662,14 +5673,14 @@ void SetInitSexActivity()
 		PartnerAcqF[ia] = pow((ia + 0.5)/10.0, Temp - 1) * exp(-(ia - 9.5) * Temp2);}
 
 	// Get male rates of visiting sex workers
+	FSWcontactLambda = (FSWcontactMean - 10.0) / (FSWcontactSD * FSWcontactSD);
+	FSWcontactAlpha = (FSWcontactMean - 10.0) * FSWcontactLambda;
 	for(ia=0; ia<81; ia++){
 		FSWcontactRate[ia] = FSWcontactAge21 * pow((ia + 0.5)/11.5, 
 			FSWcontactAlpha - 1.0) * exp(-FSWcontactLambda * (ia - 11.0));
 	}
 
 	// Get age-specific male rates of FSW contact and female sex worker age dbn
-	FSWcontactLambda = (FSWcontactMean - 10.0) / (FSWcontactSD * FSWcontactSD);
-	FSWcontactAlpha = (FSWcontactMean - 10.0) * FSWcontactLambda;
 	FSWageLambda = (FSWageMean[0] - 10.0) / (FSWageSD[0] * FSWageSD[0]);
 	FSWageAlpha = (FSWageMean[0] - 10.0) * FSWageLambda;
 	ind = 1;
@@ -4747,6 +5758,380 @@ void SetInitSexActivity()
 		DebutProb[20][0][ig] = 1.0;
 		DebutProb[20][1][ig] = 1.0;
 	}
+}
+
+void InitializeTBprofiles()
+{
+	int ia, ig, ii, c, d;
+	double RifFraction;
+
+	// Set InitLTBIprev
+	for (ia = 0; ia < 91; ia++) {
+		InitLTBIprev[ia] = InitLTBIscaling * InitLTBI[0] * (1.0 - exp(-InitLTBI[1] * ia));
+	}
+
+	// Set InitPropnSmPos and InitPropnSmNeg (active TB)
+	for (ig = 0; ig < 2; ig++) {
+		for (ia = 0; ia < 15; ia++) {
+			c = ia * 5;
+			d = (ia + 1) * 5;
+			for (ii = c; ii < d; ii++) {
+				InitPropnSmPos[ii][ig] = InitialActiveTB[ia][ig] * InitActiveTBsmPos[0];
+				InitPropnSmNeg[ii][ig] = InitialActiveTB[ia][ig] * (1.0 - InitActiveTBsmPos[0]);
+			}
+		}
+		for (ii = 75; ii < 91; ii++) {
+			InitPropnSmPos[ii][ig] = InitialActiveTB[15][ig] * InitActiveTBsmPos[0];
+			InitPropnSmNeg[ii][ig] = InitialActiveTB[15][ig] * (1.0 - InitActiveTBsmPos[0]);
+		}
+	}
+
+	// Set InitTBhistory
+	for (ig = 0; ig < 2; ig++) {
+		for (ii = 0; ii < 15; ii++) { InitTBhistory[ii][ig] = 0.0; }
+		for (ia = 0; ia < 5; ia++) {
+			c = ia * 5 + 15;
+			d = (ia + 1) * 10 + 15;
+			for (ii = c; ii < d; ii++) {
+				InitTBhistory[ii][ig] = InitPreviousTB[ia][ig];
+			}
+		}
+		for (ii = 65; ii < 91; ii++) {
+			InitTBhistory[ii][ig] = InitPreviousTB[5][ig];
+		}
+	}
+
+	// Set initial totals in each TB state
+	if (IncludeDR_TB == 1) { RifFraction = InitRR_TBprev; }
+	else { RifFraction = 0.0; }
+	for (ia = 0; ia < 81; ia++) {
+		TBsuscepM.Total[ia] = StartingPop[ia + 10][0] * (1.0 - InitLTBIprev[ia + 10]);
+		TBsuscepF.Total[ia] = StartingPop[ia + 10][1] * (1.0 - InitLTBIprev[ia + 10]);
+		TBactiveSmPosM.Total[ia] = StartingPop[ia + 10][0] * InitPropnSmPos[ia + 10][0] * (1.0 - RifFraction);
+		TBactiveSmPosF.Total[ia] = StartingPop[ia + 10][1] * InitPropnSmPos[ia + 10][1] * (1.0 - RifFraction);
+		TBactiveSmNegM.Total[ia] = StartingPop[ia + 10][0] * InitPropnSmNeg[ia + 10][0] * (1.0 - RifFraction);
+		TBactiveSmNegF.Total[ia] = StartingPop[ia + 10][1] * InitPropnSmNeg[ia + 10][1] * (1.0 - RifFraction);
+		TBrecoveredLT_M.Total[ia] = StartingPop[ia + 10][0] * InitTBhistory[ia + 10][0];
+		TBrecoveredLT_F.Total[ia] = StartingPop[ia + 10][1] * InitTBhistory[ia + 10][1];
+		TBlatentM.Total[ia] = StartingPop[ia + 10][0] * (InitLTBIprev[ia + 10] -
+			InitPropnSmPos[ia + 10][0] - InitPropnSmPos[ia + 10][0] - InitTBhistory[ia + 10][0]);
+		TBlatentF.Total[ia] = StartingPop[ia + 10][1] * (InitLTBIprev[ia + 10] -
+			InitPropnSmPos[ia + 10][1] - InitPropnSmPos[ia + 10][1] - InitTBhistory[ia + 10][1]);
+		TBtreatedM.Total[ia] = 0.0;
+		TBtreatedF.Total[ia] = 0.0;
+		TBrecoveredST_M.Total[ia] = 0.0;
+		TBrecoveredST_F.Total[ia] = 0.0;
+		TBlatentIPT_M.Total[ia] = 0.0;
+		TBlatentIPT_F.Total[ia] = 0.0;
+		TBrecST_IPT_M.Total[ia] = 0.0;
+		TBrecST_IPT_F.Total[ia] = 0.0;
+		TBrecLT_IPT_M.Total[ia] = 0.0;
+		TBrecLT_IPT_F.Total[ia] = 0.0;
+		if (IncludeDR_TB == 1) {
+			TBactiveSmPosRR_M.Total[ia] = StartingPop[ia + 10][0] * InitPropnSmPos[ia + 10][0] * RifFraction;
+			TBactiveSmPosRR_F.Total[ia] = StartingPop[ia + 10][1] * InitPropnSmPos[ia + 10][1] * RifFraction;
+			TBactiveSmNegRR_M.Total[ia] = StartingPop[ia + 10][0] * InitPropnSmNeg[ia + 10][0] * RifFraction;
+			TBactiveSmNegRR_F.Total[ia] = StartingPop[ia + 10][1] * InitPropnSmNeg[ia + 10][1] * RifFraction;
+		}
+		else {
+			TBactiveSmPosRR_M.Total[ia] = 0.0;
+			TBactiveSmPosRR_F.Total[ia] = 0.0;
+			TBactiveSmNegRR_M.Total[ia] = 0.0;
+			TBactiveSmNegRR_F.Total[ia] = 0.0;
+		}
+		RR_TBtreated1stM.Total[ia] = 0.0;
+		RR_TBtreated1stF.Total[ia] = 0.0;
+		RR_TBtreated2ndM.Total[ia] = 0.0;
+		RR_TBtreated2ndF.Total[ia] = 0.0;
+	}
+
+	// Split totals across initial HIV states
+	TBsuscepM.SetStartProfile();
+	TBsuscepF.SetStartProfile();
+	TBactiveSmPosM.SetStartProfile();
+	TBactiveSmPosF.SetStartProfile();
+	TBactiveSmNegM.SetStartProfile();
+	TBactiveSmNegF.SetStartProfile();
+	TBrecoveredLT_M.SetStartProfile();
+	TBrecoveredLT_F.SetStartProfile();
+	TBlatentM.SetStartProfile();
+	TBlatentF.SetStartProfile();
+	TBtreatedM.SetStartProfile();
+	TBtreatedF.SetStartProfile();
+	TBrecoveredST_M.SetStartProfile();
+	TBrecoveredST_F.SetStartProfile();
+	TBlatentIPT_M.SetStartProfile();
+	TBlatentIPT_F.SetStartProfile();
+	TBrecST_IPT_M.SetStartProfile();
+	TBrecST_IPT_F.SetStartProfile();
+	TBrecLT_IPT_M.SetStartProfile();
+	TBrecLT_IPT_F.SetStartProfile();
+	//if (IncludeDR_TB == 1){
+	TBactiveSmPosRR_M.SetStartProfile();
+	TBactiveSmPosRR_F.SetStartProfile();
+	TBactiveSmNegRR_M.SetStartProfile();
+	TBactiveSmNegRR_F.SetStartProfile();
+	RR_TBtreated1stM.SetStartProfile();
+	RR_TBtreated1stF.SetStartProfile();
+	RR_TBtreated2ndM.SetStartProfile();
+	RR_TBtreated2ndF.SetStartProfile();
+	//}
+
+	// Set numbers treated in previous month to zero
+	TBindexCasesLastMonth = 0.0;
+
+	// Set household contacts to zero
+	for (ii = 0; ii < 86; ii++) { HHcontactPropn[ii] = 0.0; }
+}
+
+void CalcHIVeffectTB()
+{
+	// Similar to TB_HIVeffectOnIncidence and TB_HIVeffectOnMortality functions in
+	// Mmamapudi's code
+
+	int is, ii, id, ic, iy;
+	double tempCD4, Temp1;
+
+	iy = CurrYear - StartYear;
+
+	// HIV-negative states
+	for (ii = 0; ii < 5; ii++) {
+		HIVeffectTBinc[ii] = 1.0;
+		HIVeffectTBmort[ii] = 1.0;
+		HIVeffectTBimm[ii] = 1.0;
+		HIVeffectTBrecov[ii] = 1.0;
+		HIVeffectIPTstart[ii] = 0.0;
+		HIVeffectRifRes[ii] = 1.0;
+	}
+
+	// HIV-positive, ART-naive states
+	for (is = 0; is < 5; is++) {
+		if (is == 0) { tempCD4 = 0.5 * (AveCD4HIVneg + AveCD4byARTdur[3][0]); }
+		else { tempCD4 = AveCD4byARTdur[4 - is][0]; }
+		if (tempCD4 > AveCD4HIVneg) { tempCD4 = AveCD4HIVneg; }
+		for (ii = 1; ii < 4; ii++) { // ii = testing history
+			HIVeffectTBinc[ii * 5 + is] = pow(RR_TBper100CD4increase, (tempCD4 - AveCD4HIVneg) / 100.0) /
+				RR_TBtreatedHIV;
+			HIVeffectTBmort[ii * 5 + is] = pow(RR_TBmortPer50CD4, (tempCD4 - AveCD4HIVneg) / 50.0) /
+				RR_TBmortTreatedHIV;
+			HIVeffectTBimm[ii * 5 + is] = pow(RRimmunePer100CD4increase, (tempCD4 - AveCD4HIVneg) / 100.0);
+			HIVeffectTBrecov[ii * 5 + is] = pow(RRnatRecPer100CD4increase, (tempCD4 - AveCD4HIVneg) / 100.0);
+			if (is == 0 || ii < 3) { HIVeffectIPTstart[ii * 5 + is] = 0.0; }
+			else if (iy >= 0 && iy< 31) { // Assuming zero pre-ART IPT after 2016
+				HIVeffectIPTstart[ii * 5 + is] = RR_IPTuptakeCD4[is - 1] * RR_IPTuptakeARTdur[0];
+				if (is == 1) { HIVeffectIPTstart[ii * 5 + is] *= (1.0 - EligibleAsymPre500[iy]); }
+				if (is == 2) { HIVeffectIPTstart[ii * 5 + is] *= (1.0 - EligibleAsym500[iy]); }
+				if (is == 3) { HIVeffectIPTstart[ii * 5 + is] *= (1.0 - EligibleAsym350[iy]); }
+				if (is == 4) { HIVeffectIPTstart[ii * 5 + is] = 0.0; }
+			}
+			HIVeffectRifRes[ii * 5 + is] = pow(ORacquireRifRes100CD4, (tempCD4 - AveCD4HIVneg) / 100.0);
+		}
+	}
+
+	// ART-experienced states
+	// For now I'm using OnARTbyIntDur for females, but we may need to adapt this code if ART
+	// interruption rates are different for males.
+	for (is = 0; is < 4; is++) {
+		for (id = 0; id < 5; id++) {
+			tempCD4 = AveCD4byARTdur[3 - is][id];
+			if (tempCD4 > AveCD4HIVneg) { tempCD4 = AveCD4HIVneg; }
+			if (id == 0) {
+				//HIVeffectTBinc[20 + is * 5] = OnARThalfIntDur[id][1] * pow(RR_TBper100CD4increase,
+				//	(tempCD4 - AveCD4HIVneg) / 100.0) + (1.0 - OnARThalfIntDur[id][1]) * HIVeffectTBinc[6 + is];
+				HIVeffectTBinc[20 + is * 5] = pow(RR_TBper100CD4increase, (tempCD4 - AveCD4HIVneg) / 100.0);
+				//HIVeffectTBmort[20 + is * 5] = OnARThalfIntDur[id][1] * pow(RR_TBmortPer50CD4,
+				//	(tempCD4 - AveCD4HIVneg) / 50.0) + (1.0 - OnARThalfIntDur[id][1]) * HIVeffectTBmort[6 + is];
+				HIVeffectTBmort[20 + is * 5] = pow(RR_TBmortPer50CD4, (tempCD4 - AveCD4HIVneg) / 50.0);
+				//HIVeffectTBimm[20 + is * 5] = OnARThalfIntDur[id][1] * pow(RRimmunePer100CD4increase,
+				//	(tempCD4 - AveCD4HIVneg) / 100.0) + (1.0 - OnARThalfIntDur[id][1]) * HIVeffectTBimm[6 + is];
+				HIVeffectTBimm[20 + is * 5] = pow(RRimmunePer100CD4increase, (tempCD4 - AveCD4HIVneg) / 100.0);
+				//HIVeffectTBrecov[20 + is * 5] = OnARThalfIntDur[id][1] * pow(RRnatRecPer100CD4increase,
+				//	(tempCD4 - AveCD4HIVneg) / 100.0) + (1.0 - OnARThalfIntDur[id][1]) * HIVeffectTBrecov[6 + is];
+				HIVeffectTBrecov[20 + is * 5] = pow(RRnatRecPer100CD4increase, (tempCD4 - AveCD4HIVneg) / 100.0);
+			}
+			else {
+				//HIVeffectTBinc[20 + is * 5 + id] = OnARTbyIntDur[id][1] * pow(RR_TBper100CD4increase, 
+				//	(tempCD4 - AveCD4HIVneg) / 100.0) + (1.0 - OnARTbyIntDur[id][1]) * HIVeffectTBinc[6 + is];
+				HIVeffectTBinc[20 + is * 5 + id] = pow(RR_TBper100CD4increase, (tempCD4 - AveCD4HIVneg) / 100.0);
+				//HIVeffectTBmort[20 + is * 5 + id] = OnARTbyIntDur[id][1] * pow(RR_TBmortPer50CD4,
+				//	(tempCD4 - AveCD4HIVneg) / 50.0) + (1.0 - OnARTbyIntDur[id][1]) * HIVeffectTBmort[6 + is];
+				HIVeffectTBmort[20 + is * 5 + id] = pow(RR_TBmortPer50CD4, (tempCD4 - AveCD4HIVneg) / 50.0);
+				//HIVeffectTBimm[20 + is * 5 + id] = OnARTbyIntDur[id][1] * pow(RRimmunePer100CD4increase,
+				//	(tempCD4 - AveCD4HIVneg) / 100.0) + (1.0 - OnARTbyIntDur[id][1]) * HIVeffectTBimm[6 + is];
+				HIVeffectTBimm[20 + is * 5 + id] = pow(RRimmunePer100CD4increase, (tempCD4 - AveCD4HIVneg) / 100.0);
+				//HIVeffectTBrecov[20 + is * 5 + id] = OnARTbyIntDur[id][1] * pow(RRnatRecPer100CD4increase,
+				//	(tempCD4 - AveCD4HIVneg) / 100.0) + (1.0 - OnARTbyIntDur[id][1]) * HIVeffectTBrecov[6 + is];
+				HIVeffectTBrecov[20 + is * 5 + id] = pow(RRnatRecPer100CD4increase, (tempCD4 - AveCD4HIVneg) / 100.0);
+			}
+		}
+		HIVeffectTBinc[40 + is] = HIVeffectTBinc[6 + is];
+		HIVeffectTBmort[40 + is] = HIVeffectTBmort[6 + is];
+		HIVeffectTBimm[40 + is] = HIVeffectTBimm[6 + is];
+		HIVeffectTBrecov[40 + is] = HIVeffectTBrecov[6 + is];
+	}
+	for (is = 0; is < 4; is++) { // baseline CD4
+		for (id = 0; id < 5; id++) { // ART duration
+			Temp1 = 0.0;
+			for (ic = 0; ic < 4; ic++) { // current CD4
+				if (id == 0) {
+					Temp1 += RR_IPTuptakeCD4[ic] * CD4dbnNonIntDur[ic][3 - is][0] * RR_IPTuptakeARTdur[1];
+				}
+				else {
+					Temp1 += RR_IPTuptakeCD4[ic] * CD4dbnByARTdur[ic][3 - is][id] * 0.5 *
+						(RR_IPTuptakeARTdur[id] + RR_IPTuptakeARTdur[id + 1]);
+				}
+			}
+			HIVeffectIPTstart[20 + 5 * is + id] = Temp1;
+			// Previously (version 2.0), we adjusted HIVeffectIPTstart to take into account ART interruptions.
+		}
+		HIVeffectIPTstart[39 + is] = 0.0;
+	}
+}
+
+void CalcTBincAdjByAgeSex()
+{
+	int ia, ig, AgeIn1992, AgeIn2016, ia2;
+	double Scaling, YearAdjBMI, YearAdjSmoke, YearAdjDiabetes, YearAdjBinge;
+	double sumx, sumxy, PrevYrAdjSmoke;
+
+	// At ages 10-14, no adjustment
+	if (CurrYear == StartYear) {
+		for (ig = 0; ig < 2; ig++) {
+			for (ia = 0; ia < 5; ia++) { TBincAdjByAgeSex[ia][ig] = 1.0; }
+		}
+	}
+
+	// Get time trend in smoking and low BMI
+	YearAdjBMI = (2022.0 - 1998.0) / (6.0 + 18.0 * RRlowBMI2022);
+	YearAdjSmoke = 1.0 / RRsmoking2016;
+	YearAdjDiabetes = 1.0;
+	YearAdjBinge = 1.0;
+	if (CurrYear > 1998 && CurrYear <= 2022) {
+		YearAdjBMI *= (RRlowBMI2022 * (CurrYear - 1998.0) + (2022.0 - CurrYear)) / 24.0;
+	}
+	else if (CurrYear > 2022) {
+		YearAdjBMI *= RRlowBMI2022;
+	}
+	if (CurrYear > 1992 && CurrYear <= 2016) {
+		YearAdjSmoke *= (RRsmoking2016 * (CurrYear - 1992.0) + (2016.0 - CurrYear)) / 24.0;
+	}
+	else if (CurrYear > 2016) {
+		YearAdjSmoke *= RRsmoking2016;
+	}
+	if (VaryFutureInterventionsTB == 1) {
+		if (CurrYear >= 2027) {
+			YearAdjBMI *= FutureInterventionsTB.out[CurrSim - 1][5];
+			YearAdjDiabetes *= FutureInterventionsTB.out[CurrSim - 1][6];
+			YearAdjSmoke *= FutureInterventionsTB.out[CurrSim - 1][7];
+			YearAdjBinge *= FutureInterventionsTB.out[CurrSim - 1][8];
+		}
+		else if (CurrYear >= 2023) {
+			YearAdjBMI *= 0.2 * ((2027 - CurrYear) + FutureInterventionsTB.out[CurrSim - 1][5] * (CurrYear - 2022));
+			YearAdjDiabetes *= 0.2 * ((2027 - CurrYear) + FutureInterventionsTB.out[CurrSim - 1][6] * (CurrYear - 2022));
+			YearAdjSmoke *= 0.2 * ((2027 - CurrYear) + FutureInterventionsTB.out[CurrSim - 1][7] * (CurrYear - 2022));
+			YearAdjBinge *= 0.2 * ((2027 - CurrYear) + FutureInterventionsTB.out[CurrSim - 1][8] * (CurrYear - 2022));
+		}
+	}
+
+	// Calculate initial smoking parameters at the start of the simulation
+	if (CurrYear == StartYear) {
+		for (ig = 0; ig < 2; ig++) {
+			for (ia = 0; ia < 76; ia++) {
+				if (ia == 0) { InitAveYrsSmoking[ia][ig] = 0.0; }
+				else {
+					InitAveYrsSmoking[ia][ig] = SmokingPrev[ia - 1][ig] * YearAdjSmoke +
+						InitAveYrsSmoking[ia - 1][ig];
+				}
+				ChangeSmokingPrev[ia][ig] = SmokingPrev[ia][ig] * YearAdjSmoke *
+					(1.0 - RRsmoking2016) / 24.0;
+			}
+		}
+	}
+
+	// Calculate AveYearsSmoking
+	AveYearsSmoking[0][0] = 0.0;
+	AveYearsSmoking[0][1] = 0.0;
+	/*for (ia = 1; ia < 76; ia++){
+		AgeIn1992 = ia - (CurrYear - 1992);
+		if (AgeIn1992 < 0){ AgeIn1992 = 0; }
+		AgeIn2016 = ia - (CurrYear - 2016);
+		if (AgeIn2016 < 0){ AgeIn2016 = 0; }
+		if (CurrYear <= 2016){ AgeIn2016 = ia; }
+		for (ig = 0; ig < 2; ig++){
+			AveYearsSmoking[ia][ig] = InitAveYrsSmoking[ia][ig];
+			if (CurrYear > 1992){
+				sumx = 0.0;
+				sumxy = 0.0;
+				for (ia2 = AgeIn1992; ia2 < AgeIn2016; ia2++){
+					sumx += ChangeSmokingPrev[ia2][ig];
+					sumxy += ChangeSmokingPrev[ia2][ig] * ia2;
+				}
+				AveYearsSmoking[ia][ig] = AveYearsSmoking[ia][ig] - sumxy + sumx *
+					(ia - (CurrYear - 1992));
+			}
+			if (CurrYear > 2016){
+				sumx = 0.0;
+				for (ia2 = AgeIn2016; ia2 < ia; ia2++){ sumx += ChangeSmokingPrev[ia2][ig]; }
+				AveYearsSmoking[ia][ig] = AveYearsSmoking[ia][ig] - sumx * (2016 - 1992);
+			}
+		}
+	}*/
+	if (CurrYear > StartYear) {
+		PrevYrAdjSmoke = 1.0 / RRsmoking2016;
+		if (CurrYear > 1993 && CurrYear <= 2017) {
+			PrevYrAdjSmoke *= (RRsmoking2016 * (CurrYear - 1993.0) + (2017.0 - CurrYear)) / 24.0;
+		}
+		else if (CurrYear > 2017) {
+			PrevYrAdjSmoke *= RRsmoking2016;
+		}
+		if (VaryFutureInterventionsTB == 1 && CurrYear > 2023) {
+			if (CurrYear > 2027) { PrevYrAdjSmoke *= FutureInterventionsTB.out[CurrSim - 1][7]; }
+			else { PrevYrAdjSmoke *= 0.2 * ((2028 - CurrYear) + FutureInterventionsTB.out[CurrSim - 1][7] * (CurrYear - 2023)); }
+		}
+		for (ig = 0; ig < 2; ig++) {
+			for (ia = 1; ia < 76; ia++) {
+				AveYearsSmoking[76 - ia][ig] = AveYearsSmoking[75 - ia][ig] + SmokingPrev[75 - ia][ig] * PrevYrAdjSmoke;
+			}
+		}
+	}
+	else {
+		for (ig = 0; ig < 2; ig++) {
+			for (ia = 1; ia < 76; ia++) {
+				AveYearsSmoking[ia][ig] = InitAveYrsSmoking[ia][ig];
+			}
+		}
+	}
+
+	for (ig = 0; ig < 2; ig++) {
+		for (ia = 0; ia < 76; ia++) {
+			// Previous crude approximation to AveYearsSmoking
+			//if (ia == 0){ AveYearsSmoking[ia][ig] = SmokingPrev[ia][ig] * YearAdjSmoke; }
+			//else{ AveYearsSmoking[ia][ig] = SmokingPrev[ia][ig] * YearAdjSmoke + AveYearsSmoking[ia-1][ig]; }
+			TBincAdjByAgeSex[ia + 5][ig] = (1.0 + RiskyDrinkingPrev[ia][ig] * YearAdjBinge * (RR_TBalcohol - 1.0)) *
+				(1.0 + DiabetesPrev[ia][ig] * YearAdjDiabetes * (RR_TBdiabetes - 1.0)) *
+				(1.0 + LowBMIprev[ia][ig] * YearAdjBMI * (RR_TBlowBMI - 1.0)) *
+				(1.0 + SmokingPrev[ia][ig] * YearAdjSmoke * (RR_TBcurrSmoke - 1.0)) *
+				pow(RR_TBsmoke10yr, AveYearsSmoking[ia][ig] / 10.0);
+		}
+	}
+
+	// Nutritional support intervention
+	if (NutritionSupportHHcontacts[CurrYear - StartYear] > 0.0) {
+		for (ig = 0; ig < 2; ig++) {
+			for (ia = 0; ia < 81; ia++) {
+				TBincAdjByAgeSex[ia][ig] *= (1.0 - TBincRednNutrition);
+			}
+		}
+	}
+
+	// Rescale adjustment so that RR of 1 corresponds to females aged 15.
+	/*Scaling = TBincAdjByAgeSex[5][1];
+	for (ig = 0; ig < 2; ig++){
+		for (ia = 0; ia < 81; ia++){
+			if (ia < 5){ TBincAdjByAgeSex[ia][ig] = 1.0; }
+			else{ TBincAdjByAgeSex[ia][ig] = TBincAdjByAgeSex[ia][ig] / Scaling; }
+		}
+	}*/
 }
 
 double GetMarriedPropnAtStart(int Sex, int Age)
@@ -5322,6 +6707,99 @@ void SetFutureRollout()
 	}*/
 }
 
+void SetFutureRolloutTB()
+{
+	int iy, ig, ii, StartRollout;
+	double Multiplier;
+
+	// TB transmission parameters
+	ContactRednCOVID[2] = FutureInterventionsTB.out[CurrSim - 1][0] * ContactRednCOVID[1];
+	// See the CalcTBforceOfInf function for the effects of AIPC (parameter 1).
+
+	// TB risk factor parameters
+	UltARTdelay[0] = 36.0 * FutureInterventionsTB.out[CurrSim - 1][2]; // 36 mo is Thembisa 4.3 default
+	UltARTdelay[1] = 20.0 * FutureInterventionsTB.out[CurrSim - 1][2]; // 20 mo is Thembisa 4.3 default
+	RiskCompensation = FutureInterventionsTB.out[CurrSim - 1][3];
+	for (iy = 38; iy < 42; iy++) { // 0.29 is average for 5 years to mid-2023
+		HCT1stTimeF25[iy] = 0.2 * ((42 - iy) * 0.29 + (iy - 37) * FutureInterventionsTB.out[CurrSim - 1][4]);
+	}
+	for (iy = 42; iy < 86; iy++) {
+		HCT1stTimeF25[iy] = FutureInterventionsTB.out[CurrSim - 1][4];
+	}
+	// See the CalcTBincAdjByAgeSex function for the effects of BMI, diabetes, smoking, and
+	// binge drinking (parameters 5-8).
+
+	// TB prevention
+	IPTuptakeUlt = 1.0 - pow(1.0 - FutureInterventionsTB.out[CurrSim - 1][9], 1.0 / 6.0);
+	Cure3HP = FutureInterventionsTB.out[CurrSim - 1][10];
+	for (iy = 38; iy < 42; iy++) {
+		PropnHHcontactTPT[iy] = 0.2 * (iy - 37) * FutureInterventionsTB.out[CurrSim - 1][11];
+	}
+	for (iy = 42; iy < 86; iy++) {
+		PropnHHcontactTPT[iy] = FutureInterventionsTB.out[CurrSim - 1][11];
+	}
+	StartRollout = 40 + FutureInterventionsTB.out[CurrSim - 1][12];
+	if (StartRollout > 85) { StartRollout = 86; }
+	for (iy = 39; iy < StartRollout; iy++) {
+		NutritionSupportHHcontacts[iy] = 0.0;
+	}
+	for (iy = StartRollout; iy < 86; iy++) {
+		NutritionSupportHHcontacts[iy] = 0.8;
+	}
+	NutritionEfficacy = FutureInterventionsTB.out[CurrSim - 1][13];
+
+	// TB testing and diagnosis
+	UltTBsymptomScreen = FutureInterventionsTB.out[CurrSim - 1][14];
+	for (iy = 40; iy < 44; iy++) { PropnHHcontactScreened[iy] = FutureInterventionsTB.out[CurrSim - 1][15] * (iy - 39) / 5.0; }
+	for (iy = 44; iy < 86; iy++) { PropnHHcontactScreened[iy] = FutureInterventionsTB.out[CurrSim - 1][15]; }
+	for (iy = 39; iy < 86; iy++) { PropnHHcontactTUTT[iy] = FutureInterventionsTB.out[CurrSim - 1][16]; } // Assuming TUTT rollout from 2024
+	for (iy = 39; iy < 43; iy++) { RateART_TBscreened[iy] = FutureInterventionsTB.out[CurrSim - 1][17] * (iy - 38) / 5.0; }
+	for (iy = 43; iy < 86; iy++) { RateART_TBscreened[iy] = FutureInterventionsTB.out[CurrSim - 1][17]; }
+	for (iy = 39; iy < 86; iy++) { PropnART_TB_TUTT[iy] = 1.0; }
+	for (iy = 39; iy < 43; iy++) { RatePrevTBscreened[iy] = FutureInterventionsTB.out[CurrSim - 1][18] * (iy - 38) / 5.0; }
+	for (iy = 43; iy < 86; iy++) { RatePrevTBscreened[iy] = FutureInterventionsTB.out[CurrSim - 1][18]; }
+	for (iy = 39; iy < 86; iy++) { PropnPrevTB_TUTT[iy] = 1.0; }
+	StartRollout = 40 + FutureInterventionsTB.out[CurrSim - 1][19];
+	if (StartRollout > 85) { StartRollout = 86; }
+	for (iy = 39; iy < StartRollout; iy++) {
+		RateD2Dscreen[iy] = 0.0;
+		PropnD2DdCXR[iy] = 0.0;
+	}
+	for (iy = StartRollout; iy < 86; iy++) {
+		RateD2Dscreen[iy] = FutureInterventionsTB.out[CurrSim - 1][20];
+		PropnD2DdCXR[iy] = FutureInterventionsTB.out[CurrSim - 1][21];
+	}
+	TongueSwabTested = FutureInterventionsTB.out[CurrSim - 1][22];
+	for (iy = 39; iy < 43; iy++) {
+		Multiplier = 0.2 * ((43 - iy) + FutureInterventionsTB.out[CurrSim - 1][23] * (iy - 38));
+		for (ii = 0; ii < 2; ii++) {
+			CultureConfirmSmNeg[iy][ii] = CultureConfirmSmNeg[38][ii] * Multiplier;
+			CultureConfirmXpNeg[iy][ii] = CultureConfirmXpNeg[38][ii] * Multiplier;
+		}
+	}
+	for (iy = 43; iy < 86; iy++) {
+		for (ii = 0; ii < 2; ii++) {
+			CultureConfirmSmNeg[iy][ii] = CultureConfirmSmNeg[38][ii] * FutureInterventionsTB.out[CurrSim - 1][23];
+			CultureConfirmXpNeg[iy][ii] = CultureConfirmXpNeg[38][ii] * FutureInterventionsTB.out[CurrSim - 1][23];
+		}
+	}
+	// See the SetCurrYearParametersTB function for the adjustment to RRscreenSymptoms (parameter 24)
+
+	// TB treatment and outcomes
+	// See the SetCurrYearParametersTB function for the adjustment to CurrInitLTFU (parameter 25)
+	HHcontactRxUptake = FutureInterventionsTB.out[CurrSim - 1][26];
+	StartRollout = 40 + FutureInterventionsTB.out[CurrSim - 1][27];
+	if (StartRollout > 85) { StartRollout = 86; }
+	for (iy = 39; iy < StartRollout; iy++) {
+		Dur1stLineRxTB[iy] = 6.0;
+	}
+	for (iy = StartRollout; iy < 86; iy++) {
+		Dur1stLineRxTB[iy] = 4.0;
+	}
+	UltTBdefaultAdj = FutureInterventionsTB.out[CurrSim - 1][28];
+	// See the UpdateTBtreated function for the adjustments to the cure proportions (parameter 29)
+}
+
 void GetCurrBehavDbnM()
 {
 	int ia;
@@ -5356,8 +6834,10 @@ void GetCurrBehavDbnF()
 
 void UpdatePop()
 {
-	int ia, im, is, id;
+	int ia, im, is, id, iy;
 	double Temp1, Temp2;
+
+	iy = CurrYear - StartYear;
 
 	for(ia=0; ia<10; ia++){
 		Temp1 = 0.0;
@@ -5667,6 +7147,22 @@ void UpdatePop()
 			SumGroupsVM[ia][40+is] = MHU_virgin.StoppedART[ia][is] + MHC_virgin.StoppedART[ia][is] + 
 				MLU_virgin.StoppedART[ia][is] + MLC_virgin.StoppedART[ia][is];
 			SumGroupsVF[ia][40+is] = FH_virgin.StoppedART[ia][is] + FL_virgin.StoppedART[ia][is];
+		}
+	}
+
+	// Update TB states
+	if (IncludeTB == 1) {
+		UpdateTBtotStart();
+		GetHIVtoTBpopRatios();
+		BalanceTBpop();
+		UpdateTBtotStart(); // Recalculate totals after rebalancing to match HIV totals
+		if (PropnHHcontactScreened[iy] > 0.0 || NutritionSupportHHcontacts[iy + 1] > 0.0) {
+			GetTBcontactScreenPropns();
+		}
+		else {
+			HHscreeningProb = 0.0;
+			HHscreeningProbNeg = 0.0;
+			TBincRednNutrition = 0.0;
 		}
 	}
 }
@@ -6556,12 +8052,13 @@ void UpdatePrEPandVM()
 
 	// Calculate RR of oral PrEP initiation, required for estimating PrEP initiation rates
 	iy = CurrYear - StartYear;
-	if (TotStartingPrEP[iy] > 0 && CurrMonth == 0){
+	if (CurrMonth == 0){
 		for (ia = 0; ia < 81; ia++){
 			for (ii = 0; ii < 2; ii++){
 				// MSM calculations
 				RR_PrEP_MSM[ia][ii] = PartnerAcqM[ia];
 				if (ii == 1){ RR_PrEP_MSM[ia][ii] *= RRpartnerLow[0]; }
+				RR_CABLA_MSM[ia][ii] = RR_PrEP_MSM[ia][ii];
 				PartnerHIV = 1.0 - (MHU_STM.NegNoHCT[ia] + MHU_STM.NegPastHCT[ia] + MHU_STM.RegHCT[ia] +
 					MHU_STM.RegPrEP[ia] + MHC_STM.NegNoHCT[ia] + MHC_STM.NegPastHCT[ia] + MHC_STM.RegHCT[ia] +
 					MHC_STM.RegPrEP[ia] + MLU_STM.NegNoHCT[ia] + MLU_STM.NegPastHCT[ia] + MLU_STM.RegHCT[ia] +
@@ -6569,9 +8066,12 @@ void UpdatePrEPandVM()
 					MLC_STM.RegPrEP[ia]) / (MHU_STM.Total[ia] + MHC_STM.Total[ia] + MLU_STM.Total[ia] +
 					MLC_STM.Total[ia]);
 				RR_PrEP_MSM[ia][ii] *= PartnerHIV * PrEPeligMSM[iy];
+				RR_CABLA_MSM[ia][ii] *= PartnerHIV * CABLAeligMSM[iy];
 				// Heterosexual calculations
 				RR_PrEP_Het[ia][ii][0] = PartnerAcqM[ia];
 				RR_PrEP_Het[ia][ii][1] = PartnerRate20F * PartnerAcqF[ia];
+				RR_CABLA_Het[ia][ii][0] = RR_PrEP_Het[ia][ii][0];
+				RR_CABLA_Het[ia][ii][1] = RR_PrEP_Het[ia][ii][1];
 				for (ig = 0; ig < 2; ig++){
 					married = TotalMarried[ia + 10][ig] / TotalSexuallyExp[ia + 10][ig];
 					if (ii == 0){ MarriedAdj = RRpartnerMarried[ig]; }
@@ -6583,12 +8083,18 @@ void UpdatePrEPandVM()
 					else if (ig == 1 && ia<78){ PartnerHIV = TotalPositive[ia + 13][0] / TotalPop[ia + 13][0]; }
 					else{ PartnerHIV = 0.0; }
 					RR_PrEP_Het[ia][ii][ig] *= PartnerHIV;
-					if (ig == 1 && ia < 15){ RR_PrEP_Het[ia][ii][ig] *= PrEPeligAGYW[iy]; }
-					else{ RR_PrEP_Het[ia][ii][ig] *= PrEPeligOther[iy]; }
+					if (ig == 1 && ia < 15){ 
+						RR_CABLA_Het[ia][ii][ig] = RR_PrEP_Het[ia][ii][ig] * CABLAeligAGYW[iy];
+						RR_PrEP_Het[ia][ii][ig] *= PrEPeligAGYW[iy];
+					}
+					else{ 
+						RR_CABLA_Het[ia][ii][ig] = RR_PrEP_Het[ia][ii][ig] * CABLAeligOther[iy];
+						RR_PrEP_Het[ia][ii][ig] *= PrEPeligOther[iy];
+					}
 				}
 			}
 		}
-		// Standardize to age 20, high risk
+		// Standardize to age 20, high risk (oral PrEP)
 		Temp = RR_PrEP_MSM[10][0] / PrEPeligMSM[iy];
 		Temp2 = RR_PrEP_Het[10][0][1] / PrEPeligAGYW[iy];
 		for (ia = 0; ia < 81; ia++){
@@ -6599,17 +8105,39 @@ void UpdatePrEPandVM()
 				}
 			}
 		}
+		// Standardize to age 20, high risk (CAB-LA)
+		Temp = RR_CABLA_MSM[10][0] / CABLAeligMSM[iy];
+		Temp2 = RR_CABLA_Het[10][0][1] / CABLAeligAGYW[iy];
+		for (ia = 0; ia < 81; ia++){
+			for (ii = 0; ii < 2; ii++){
+				if (Temp > 0.0){ RR_CABLA_MSM[ia][ii] *= 1.0 / Temp; }
+				for (ig = 0; ig < 2; ig++){
+					if (Temp2 > 0.0){ RR_CABLA_Het[ia][ii][ig] *= 1.0 / Temp2; }
+				}
+			}
+		}
 	}
-	else if (CurrYear > PrEPdataYr + 5){ CurrPrEPrateFSW = UltPrEPrateFSW; }
-	else if (CurrYear > PrEPdataYr){ CurrPrEPrateFSW = StoredPrEPrateFSW + (UltPrEPrateFSW - StoredPrEPrateFSW) *
-		(CurrYear - PrEPdataYr) / 5.0; }
-	else if(CurrMonth == 0){ CurrPrEPrateFSW = 0.0; }
-	if ((TotStartingPrEP[iy] > 0 || (FixedUncertainty == 1 && CurrYear > PrEPdataYr)) && CurrMonth == 0){
-		GetPrEPrateFSW();
+	// Set CurrPrEPrateFSW if there's no data
+	if (TotStartingPrEP[iy] == 0 && CurrMonth == 0){
+		if (CurrYear > PrEPdataYr + 5){ CurrPrEPrateFSW = UltPrEPrateFSW; }
+		else if (CurrYear > PrEPdataYr){
+			CurrPrEPrateFSW = StoredPrEPrateFSW + (UltPrEPrateFSW - StoredPrEPrateFSW) * (CurrYear - PrEPdataYr) / 5.0;
+		}
+		else{ CurrPrEPrateFSW = 0.0; }
 	}
-	// CAB-LA initiation (preliminary, assuming no CAB-LA included in previously reported numbers)
-	if (CurrYear <= PrEPdataYr){ CurrCABLArateFSW = 0.0; }
-	else{ CurrCABLArateFSW = UltCABLArateFSW; }
+	// Set CurrCABLArateFSW if there's no data
+	if (TotStartingCABLA[iy] == 0 && CurrMonth == 0){
+		if (CurrYear > CABLAdataYr + 5){ CurrCABLArateFSW = UltCABLArateFSW; }
+		else if (CurrYear > CABLAdataYr){
+			CurrCABLArateFSW = StoredCABLArateFSW + (UltCABLArateFSW - StoredCABLArateFSW) * (CurrYear - CABLAdataYr) / 5.0;
+		}
+		else{ CurrCABLArateFSW = 0.0; }
+	}
+	// Set CurrPrEPrateFSW and CurrCABLArateFSW if there is data, or if we need coverage outputs
+	if ((TotStartingPrEP[iy] > 0 || TotStartingCABLA[iy] > 0 || (FixedUncertainty == 1 && (CurrYear > PrEPdataYr || 
+		CurrYear > CABLAdataYr))) && CurrMonth == 0){
+			GetPrEPrateFSW();
+	}
 
 	// Oral PrEP initiation rates
 	for (ia = 0; ia < 81; ia++){
@@ -6646,10 +8174,10 @@ void UpdatePrEPandVM()
 	// CAB-LA initiation rates (same structure as for oral PrEP)
 	for (ia = 0; ia < 81; ia++){
 		for (ii = 0; ii < 2; ii++){
-			CABLArates[ia][ii] = CurrCABLArateFSW * RR_PrEPstartMSM[iy] * RR_PrEP_MSM[ia][ii];
-			CABLArates[ia][ii + 2] = CurrCABLArateFSW * RR_PrEPstartF20[iy] * RR_PrEP_Het[ia][ii][0];
+			CABLArates[ia][ii] = CurrCABLArateFSW * RR_CABLAstartMSM[iy] * RR_CABLA_MSM[ia][ii];
+			CABLArates[ia][ii + 2] = CurrCABLArateFSW * RR_CABLAstartF20[iy] * RR_CABLA_Het[ia][ii][0];
 			CABLArates[ia][4] = CurrCABLArateFSW;
-			CABLArates[ia][ii + 5] = CurrCABLArateFSW * RR_PrEPstartF20[iy] * RR_PrEP_Het[ia][ii][1];
+			CABLArates[ia][ii + 5] = CurrCABLArateFSW * RR_CABLAstartF20[iy] * RR_CABLA_Het[ia][ii][1];
 		}
 	}
 	// Pregnancy adjustment in women
@@ -7357,6 +8885,40 @@ void CopyEndToStart()
 	FL_ST.UpdateStartProfile();
 	FL_LTH.UpdateStartProfile();
 	FL_LTL.UpdateStartProfile();
+
+	// TB transitions
+	if (IncludeTB == 1) {
+		TBsuscepM.UpdateStartProfile();
+		TBsuscepF.UpdateStartProfile();
+		TBlatentM.UpdateStartProfile();
+		TBlatentF.UpdateStartProfile();
+		TBactiveSmPosM.UpdateStartProfile();
+		TBactiveSmPosF.UpdateStartProfile();
+		TBactiveSmNegM.UpdateStartProfile();
+		TBactiveSmNegF.UpdateStartProfile();
+		TBtreatedM.UpdateStartProfile();
+		TBtreatedF.UpdateStartProfile();
+		TBrecoveredST_M.UpdateStartProfile();
+		TBrecoveredST_F.UpdateStartProfile();
+		TBrecoveredLT_M.UpdateStartProfile();
+		TBrecoveredLT_F.UpdateStartProfile();
+		TBlatentIPT_M.UpdateStartProfile();
+		TBlatentIPT_F.UpdateStartProfile();
+		TBrecST_IPT_M.UpdateStartProfile();
+		TBrecST_IPT_F.UpdateStartProfile();
+		TBrecLT_IPT_M.UpdateStartProfile();
+		TBrecLT_IPT_F.UpdateStartProfile();
+		if (IncludeDR_TB == 1) {
+			TBactiveSmPosRR_M.UpdateStartProfile();
+			TBactiveSmPosRR_F.UpdateStartProfile();
+			TBactiveSmNegRR_M.UpdateStartProfile();
+			TBactiveSmNegRR_F.UpdateStartProfile();
+			RR_TBtreated1stM.UpdateStartProfile();
+			RR_TBtreated1stF.UpdateStartProfile();
+			RR_TBtreated2ndM.UpdateStartProfile();
+			RR_TBtreated2ndF.UpdateStartProfile();
+		}
+	}
 }
 
 void SetARTinitiation()
@@ -8703,16 +10265,17 @@ void OneMonth(int im)
 		SetActivityByStage();
 	}
 
-	// Handle operations in child sheets
+	// Handle operations in children
 	SetMnthlyPaedParameters();
 	MaleChild.GetEndProfile();
 	FemChild.GetEndProfile();
 	MaleChild.UpdateStartProfile();
 	FemChild.UpdateStartProfile();
 
-	// Handle operations in adult risk group sheets
+	// Handle operations in adult risk groups
 	UpdateTransmProbs();
 	CalcHIVtransitions();
+	if (IncludeTB == 1) { CalcTBtransitions(); }
 	UpdateMonthlyCum();
 	CopyEndToStart();
 
@@ -8737,6 +10300,940 @@ void OneMonth(int im)
 	// call the functions for doing the monthly parameter updates.
 	// Note that the same functions have to be called at the START of the year, so there is
 	// some redundancy, and some of this redundancy we will remove in the revised model.
+}
+
+void CalcTBforceOfInf()
+{
+	int ia;
+	int ia1; // age group of infectious individual (10-17, 18-25, 26-45, 46+)
+	int ia2; // age group of susceptible individual (0-4, 5-12, 13-25, 26-45, 46+)
+	int ig1; // sex of the infectious individual
+	int ig2; // sex of the susceptible individual
+	double TotPop2[5][2]; // Total population by susceptible age group
+	// Equivalent to N in Mmamapudi's equation
+	double InfectiousSmPos[4][2]; // Smear-positive
+	double InfectiousSmNeg[4][2]; // Smear-negative
+	double ForceOfInf[5][2]; // Equivalent to lambda in Mmmamapudi's equation
+	double CurrYearAdj;
+
+	CurrYearAdj = 1.0;
+	if (CurrYear > 2000 && CurrYear < 2011) {
+		CurrYearAdj = 1.0 + (RRcontactPre2000 - 1.0) * (2011 - CurrYear) / 11.0;
+	}
+
+	for (ig2 = 0; ig2 < 2; ig2++) {
+		for (ia2 = 0; ia2 < 5; ia2++) {
+			TotPop2[ia2][ig2] = 0.0;
+		}
+		for (ia = 0; ia < 5; ia++) { TotPop2[0][ig2] += TotalPop[ia][ig2]; }
+		for (ia = 5; ia < 13; ia++) { TotPop2[1][ig2] += TotalPop[ia][ig2]; }
+		for (ia = 13; ia < 26; ia++) { TotPop2[2][ig2] += TotalPop[ia][ig2]; }
+		for (ia = 26; ia < 46; ia++) { TotPop2[3][ig2] += TotalPop[ia][ig2]; }
+		for (ia = 46; ia < 91; ia++) { TotPop2[4][ig2] += TotalPop[ia][ig2]; }
+	}
+
+	for (ig1 = 0; ig1 < 2; ig1++) {
+		for (ia1 = 0; ia1 < 4; ia1++) {
+			InfectiousSmPos[ia1][ig1] = 0.0;
+			InfectiousSmNeg[ia1][ig1] = 0.0;
+		}
+	}
+	for (ia = 0; ia <= 7; ia++) {
+		InfectiousSmPos[0][0] += TBactiveSmPosM.Total[ia];
+		InfectiousSmPos[0][1] += TBactiveSmPosF.Total[ia];
+		InfectiousSmNeg[0][0] += TBactiveSmNegM.Total[ia];
+		InfectiousSmNeg[0][1] += TBactiveSmNegF.Total[ia];
+	}
+	for (ia = 8; ia <= 15; ia++) {
+		InfectiousSmPos[1][0] += TBactiveSmPosM.Total[ia];
+		InfectiousSmPos[1][1] += TBactiveSmPosF.Total[ia];
+		InfectiousSmNeg[1][0] += TBactiveSmNegM.Total[ia];
+		InfectiousSmNeg[1][1] += TBactiveSmNegF.Total[ia];
+	}
+	for (ia = 16; ia <= 35; ia++) {
+		InfectiousSmPos[2][0] += TBactiveSmPosM.Total[ia];
+		InfectiousSmPos[2][1] += TBactiveSmPosF.Total[ia];
+		InfectiousSmNeg[2][0] += TBactiveSmNegM.Total[ia];
+		InfectiousSmNeg[2][1] += TBactiveSmNegF.Total[ia];
+	}
+	for (ia = 36; ia < 81; ia++) {
+		InfectiousSmPos[3][0] += TBactiveSmPosM.Total[ia];
+		InfectiousSmPos[3][1] += TBactiveSmPosF.Total[ia];
+		InfectiousSmNeg[3][0] += TBactiveSmNegM.Total[ia];
+		InfectiousSmNeg[3][1] += TBactiveSmNegF.Total[ia];
+	}
+	if (IncludeDR_TB == 1) {
+		for (ia = 0; ia <= 7; ia++) {
+			InfectiousSmPos[0][0] += TBactiveSmPosRR_M.Total[ia];
+			InfectiousSmPos[0][1] += TBactiveSmPosRR_F.Total[ia];
+			InfectiousSmNeg[0][0] += TBactiveSmNegRR_M.Total[ia];
+			InfectiousSmNeg[0][1] += TBactiveSmNegRR_F.Total[ia];
+		}
+		for (ia = 8; ia <= 15; ia++) {
+			InfectiousSmPos[1][0] += TBactiveSmPosRR_M.Total[ia];
+			InfectiousSmPos[1][1] += TBactiveSmPosRR_F.Total[ia];
+			InfectiousSmNeg[1][0] += TBactiveSmNegRR_M.Total[ia];
+			InfectiousSmNeg[1][1] += TBactiveSmNegRR_F.Total[ia];
+		}
+		for (ia = 16; ia <= 35; ia++) {
+			InfectiousSmPos[2][0] += TBactiveSmPosRR_M.Total[ia];
+			InfectiousSmPos[2][1] += TBactiveSmPosRR_F.Total[ia];
+			InfectiousSmNeg[2][0] += TBactiveSmNegRR_M.Total[ia];
+			InfectiousSmNeg[2][1] += TBactiveSmNegRR_F.Total[ia];
+		}
+		for (ia = 36; ia < 81; ia++) {
+			InfectiousSmPos[3][0] += TBactiveSmPosRR_M.Total[ia];
+			InfectiousSmPos[3][1] += TBactiveSmPosRR_F.Total[ia];
+			InfectiousSmNeg[3][0] += TBactiveSmNegRR_M.Total[ia];
+			InfectiousSmNeg[3][1] += TBactiveSmNegRR_F.Total[ia];
+		}
+	}
+	for (ig2 = 0; ig2 < 2; ig2++) {
+		for (ia2 = 0; ia2 < 5; ia2++) {
+			ForceOfInf[ia2][ig2] = 0.0;
+			for (ig1 = 0; ig1 < 2; ig1++) {
+				for (ia1 = 0; ia1 < 4; ia1++) {
+					ForceOfInf[ia2][ig2] += (InfectiousSmPos[ia1][ig1] + InfectiousSmNeg[ia1][ig1] *
+						SmNegInfectiousness) * CrudeContact[ia1][ig1] * SocialMixMatrix[ia2][ig2][ia1][ig1];
+				}
+			}
+			ForceOfInf[ia2][ig2] *= 30.0 * TBtransmProbCurr / TotPop2[ia2][ig2];
+			if (ig2 == 0) { ForceOfInf[ia2][ig2] *= RR_TBadultM; }
+			if (CurrYear == 2020 || (CurrYear == 2019 && CurrMonth >= 9)) {
+				ForceOfInf[ia2][ig2] *= (1.0 - ContactRednCOVID[0]);
+			}
+			if (CurrYear == 2021) { ForceOfInf[ia2][ig2] *= (1.0 - ContactRednCOVID[1]); }
+			if (CurrYear > 2021) { ForceOfInf[ia2][ig2] *= (1.0 - ContactRednCOVID[2]); }
+			if (CurrYear <= 2000) { ForceOfInf[ia2][ig2] *= RRcontactPre2000; }
+			else if(CurrYear<2011){ ForceOfInf[ia2][ig2] *= CurrYearAdj; }
+			if (VaryFutureInterventionsTB == 1 && CurrYear > 2024) {
+				if (CurrYear >= 2029) { ForceOfInf[ia2][ig2] *= (1.0 - FutureInterventionsTB.out[CurrSim - 1][1]); }
+				else {
+					ForceOfInf[ia2][ig2] *= (1.0 - FutureInterventionsTB.out[CurrSim - 1][1] * (CurrYear - 2024) / 5.0);
+				}
+			}
+			// Arbitrary upper limit to avoid susceptibles rapidly running to 0.
+			if (ForceOfInf[ia2][ig2] > 0.10) { ForceOfInf[ia2][ig2] = 0.10; }
+		}
+	}
+	for (ig2 = 0; ig2 < 2; ig2++) {
+		for (ia = 10; ia < 13; ia++) { RateNewTBinfection[ia][ig2] = ForceOfInf[1][ig2]; }
+		for (ia = 13; ia < 26; ia++) { RateNewTBinfection[ia][ig2] = ForceOfInf[2][ig2]; }
+		for (ia = 26; ia < 46; ia++) { RateNewTBinfection[ia][ig2] = ForceOfInf[3][ig2]; }
+		for (ia = 46; ia < 91; ia++) { RateNewTBinfection[ia][ig2] = ForceOfInf[4][ig2]; }
+	}
+	AnnualRiskMTBpaed[CurrYear - StartYear] += 0.5 * (ForceOfInf[0][0] + ForceOfInf[0][1]);
+
+	/*if (CurrYear == 1985 && CurrMonth==0){
+		for (ia = 0; ia < 90; ia++){
+			RateNewTBinfection[ia][0] = 1.0 - pow((1.0 - InitLTBIprev[ia + 1]) /
+				(1.0 - InitLTBIprev[ia]), 1.0 / 12.0);
+			RateNewTBinfection[ia][1] = RateNewTBinfection[ia][0];
+		}
+		RateNewTBinfection[90][0] = RateNewTBinfection[89][0];
+		RateNewTBinfection[90][1] = RateNewTBinfection[89][1];
+	}*/
+}
+
+void UpdateTBsuscep(AdultTB* Suscep, AdultTB* Latent, AdultTB* SmPos, AdultTB* SmNeg, AdultTB* SmPosRR, AdultTB* SmNegRR)
+{
+	// Similar to TB_SusceptilesTransitions and TB_LatentTransitions functions
+
+	int ia, is, ig;
+	double temp, temp2, newTBactive, RifPropn;
+
+	ig = Suscep->Sex;
+	RifPropn = PropnNewTBrifRes[CurrYear - StartYear];
+	for (ia = 0; ia < 81; ia++) {
+		for (is = 0; is < 44; is++) {
+			if (is < 5) { temp2 = InitActiveTBsmPos[0]; }
+			else { temp2 = InitActiveTBsmPos[1]; }
+			temp = Suscep->HIVstage[ia][is] * RateNewTBinfection[ia + 10][ig];
+			Suscep->HIVstage_E[ia][is] = Suscep->HIVstage_E[ia][is] - temp;
+			newTBactive = PropFastProg * HIVeffectTBinc[is] * TBincAdjByAgeSex[ia][ig];
+			if (newTBactive > 1.0) { newTBactive = 1.0; }
+			Latent->HIVstage_E[ia][is] += temp * (1.0 - newTBactive);
+			SmPos->HIVstage_E[ia][is] += temp * newTBactive * temp2 * (1.0 - RifPropn);
+			SmNeg->HIVstage_E[ia][is] += temp * newTBactive * (1.0 - temp2) * (1.0 - RifPropn);
+			if (IncludeDR_TB == 1) {
+				SmPosRR->HIVstage_E[ia][is] += temp * newTBactive * temp2 * RifPropn;
+				SmNegRR->HIVstage_E[ia][is] += temp * newTBactive * (1.0 - temp2) * RifPropn;
+				NewRS_TBnaive[CurrYear - StartYear] += temp * newTBactive * (1.0 - RifPropn);
+				NewRR_TBnaive[CurrYear - StartYear] += temp * newTBactive * RifPropn;
+			}
+			if (FixedUncertainty == 1) {
+				NewActiveTBbyAgeSex[ia][ig] += temp * newTBactive;
+				if (is >= 5) { NewHIVposTBbyAgeSex[ia][ig] += temp * newTBactive; }
+				if (is >= 20) { NewTBonARTbyAgeSex[ia][ig] += temp * newTBactive; }
+			}
+		}
+	}
+}
+
+void UpdateTBlatent(AdultTB* Latent, AdultTB* SmPos, AdultTB* SmNeg, AdultTB* SmPosRR, AdultTB* SmNegRR, AdultTB* IPT, AdultTB* Suscep, int IPTind)
+{
+	// Similar to TB_LatentTransitions function in Mmamapudi's code
+	// IPTind = 0 for the group that's not currently on IPT, 1 for the group that is on IPT
+
+	int ia, is, ig, iy;
+	double temp, temp2, temp3, temp3b, newTBactive, TBincidence, ReactivationRate, IPTswitch, CurePropn;
+
+	iy = CurrYear - StartYear;
+	ig = Latent->Sex;
+	ReactivationRate = Reactivation;
+	if (IPTind == 1) { ReactivationRate *= (1.0 - IPTefficacy); }
+	if (IPTind == 1) { CurePropn = TPTfraction3HP[iy] * Cure3HP * 0.333 / (0.333 + MnthlyTPTdropout); }
+	else { CurePropn = 0.0; }
+	IPTswitch = 0.0;
+	if (IPTind == 1 && IPTduration[iy] > 0.0) { IPTswitch = 1.0 / CurrDurTPTprotection; }
+	if (IPTind == 0 && BaseIPTuptake[iy] > 0.0) { IPTswitch = BaseIPTuptake[iy]; }
+	for (ia = 0; ia < 81; ia++) {
+		for (is = 0; is < 44; is++) {
+			if (is < 5) { temp2 = InitActiveTBsmPos[0]; }
+			else { temp2 = InitActiveTBsmPos[1]; }
+			newTBactive = PropFastProg * HIVeffectTBinc[is] * TBincAdjByAgeSex[ia][ig];
+			if (newTBactive > 1.0) { newTBactive = 1.0; }
+			if (IPTind == 1) { newTBactive *= (1.0 - IPTefficacy); }
+			TBincidence = RateNewTBinfection[ia + 10][ig] * (1.0 - PartialImmunHIVneg *
+				HIVeffectTBimm[is]) * newTBactive + ReactivationRate * HIVeffectTBinc[is] * TBincAdjByAgeSex[ia][ig] / 12.0;
+			if (TBincidence > 1.0) { TBincidence = 1.0; }
+			temp = Latent->HIVstage[ia][is] * TBincidence;
+			if (IPTswitch > 0 && IPTind == 1) { temp3 = Latent->HIVstage_E[ia][is] * IPTswitch; }
+			else if (IPTswitch > 0 && IPTind == 0 && is > 15) {
+				temp3 = Latent->HIVstage_E[ia][is] * IPTswitch * HIVeffectIPTstart[is];
+				if (IPTswitch * HIVeffectIPTstart[is] > 1.0) { temp3 = Latent->HIVstage_E[ia][is]; }
+			}
+			else { temp3 = 0.0; }
+			if (IPTind == 0 && PropnHHcontactTPT[iy] > 0) {
+				temp3 += Latent->HIVstage[ia][is] * HHscreeningProbNeg * PropnHHcontactTPT[iy];
+				temp3b = Latent->HIVstage[ia][is] * HHscreeningProbNeg * PropnHHcontactTPT[iy];
+			}
+			Latent->HIVstage_E[ia][is] = Latent->HIVstage_E[ia][is] - temp - temp3;
+			SmPos->HIVstage_E[ia][is] += temp * temp2 * (1.0 - PropnNewTBrifRes[iy]);
+			SmNeg->HIVstage_E[ia][is] += temp * (1.0 - temp2) * (1.0 - PropnNewTBrifRes[iy]);
+			if (IncludeDR_TB == 1) {
+				SmPosRR->HIVstage_E[ia][is] += temp * temp2 * PropnNewTBrifRes[iy];
+				SmNegRR->HIVstage_E[ia][is] += temp * (1.0 - temp2) * PropnNewTBrifRes[iy];
+				NewRS_TBnaive[iy] += temp * (1.0 - PropnNewTBrifRes[iy]);
+				NewRR_TBnaive[iy] += temp * PropnNewTBrifRes[iy];
+			}
+			if (IPTind == 1 && CurePropn > 0) {
+				Suscep->HIVstage_E[ia][is] += temp3 * CurePropn;
+				IPT->HIVstage_E[ia][is] += temp3 * (1.0 - CurePropn);
+			}
+			else { IPT->HIVstage_E[ia][is] += temp3; }
+			if (FixedUncertainty == 1) {
+				NewActiveTBbyAgeSex[ia][ig] += temp;
+				if (is >= 5) { NewHIVposTBbyAgeSex[ia][ig] += temp; }
+				if (is >= 20) { NewTBonARTbyAgeSex[ia][ig] += temp; }
+				if (ia >= 5) {
+					NewTBreactivation += Latent->HIVstage[ia][is] * ReactivationRate * HIVeffectTBinc[is] *
+						TBincAdjByAgeSex[ia][ig] / 12.0;
+				}
+				if (IPTind == 0) {
+					NewIPT_TSTpos += temp3;
+					NewTPT_HH += temp3b;
+				}
+			}
+		}
+	}
+}
+
+void UpdateTBactive(AdultTB* Active, AdultTB* Latent, AdultTB* Treated, AdultTB* Treated2, int SmPos)
+{
+	// I'm still undecided about whether to move the natural recoveries back to the latent state
+	// or move them to the recently recovered state. Currently we do the former.
+
+	int ia, is, iy, ig, id, CD4stage;
+	double ScreenTemp[2], RxRate, RxRate1, RxRate2, RxRate3, MortRate, RecoveryRate, AdjF;
+	double temp1, temp1b, temp1c, temp1d, temp1e, temp2, temp3, temp4;
+
+	iy = CurrYear - StartYear;
+	ig = Active->Sex;
+	if (SmPos == 0) {
+		MortRate = MortalitySmNeg / 12.0;
+		RecoveryRate = NaturalRecSmNeg / 12.0;
+	}
+	else {
+		MortRate = MortalitySmPos / 12.0;
+		RecoveryRate = NaturalRecSmPos / 12.0;
+	}
+	// Adjustment for improving mortality as diagnosis rates increase
+	if (CurrYear >= 2000) { MortRate *= AnnMortTB_RxCurr[0] / AnnMortTB_Rx[0]; }
+
+	AdjF = 1.0;
+	ScreenTemp[0] = HealthSeekingGen * Cough2wkActiveSmNeg * (TBsymptomScreened[iy] /
+		RRscreenSymptoms) / 12.0;
+	ScreenTemp[1] = HealthSeekingTB * TBsymptomScreened[iy] / 12.0;
+	if (SmPos == 1) {
+		ScreenTemp[0] *= RRsymptomsSmPos;
+		ScreenTemp[1] *= RRsymptomsSmPos;
+	}
+	if (ig == 1) {
+		AdjF = RRscreenF;
+		ScreenTemp[0] *= RRhealthSeekingFem * RRscreenF;
+		ScreenTemp[1] *= RRhealthSeekingFem * RRscreenF;
+	}
+	for (ia = 0; ia < 81; ia++) {
+		for (is = 0; is < 44; is++) {
+			if (is < 5) {
+				RxRate1 = (ScreenTemp[0] + ScreenTemp[1]) * CurrSeTB[SmPos][0];
+				RxRate2 = (HealthSeekingGen * Cough2wkActiveSmNeg * (1.0 - TBsymptomScreened[iy] * AdjF /
+					RRscreenSymptoms) * EmpiricRx[0][1] + HealthSeekingTB * (1.0 - TBsymptomScreened[iy] *
+					AdjF) * EmpiricRx[1][1]) * pow(RRhealthSeekingFem, ig) * pow(RRsymptomsSmPos, SmPos) *
+					EmpiricalAdj / 12.0;
+				// The formula below was previously used (incorrectly).
+				//RxRate2 = (HealthSeekingGen * Cough2wkActiveSmNeg * (1.0 - TBsymptomScreened[iy] * AdjF /
+				//	RRscreenSymptoms) * EmpiricRx[0][1] + HealthSeekingTB * (1.0 - TBsymptomScreened[iy] *
+				//	AdjF) * EmpiricRx[1][1]) / 12.0;
+				RxRate3 = (ScreenTemp[0] * EmpiricRxNeg[0][1] + ScreenTemp[1] * EmpiricRxNeg[1][1]) *
+					(1.0 - EmpiricRednXpert * (1.0 - MicroscopyPropn[iy])) * (1.0 - CurrSeTB[SmPos][0]) *
+					EmpiricalAdj;
+			}
+			else {
+				RxRate1 = (ScreenTemp[0] + ScreenTemp[1]) * RRhealthSeekingHIV * CurrSeTB[SmPos][1];
+				RxRate2 = (HealthSeekingGen * Cough2wkActiveSmNeg * (1.0 - TBsymptomScreened[iy] * AdjF /
+					RRscreenSymptoms) * EmpiricRx[0][1] + HealthSeekingTB * (1.0 - TBsymptomScreened[iy] *
+					AdjF) * EmpiricRx[1][1]) * RRhealthSeekingHIV * pow(RRhealthSeekingFem, ig) *
+					pow(RRsymptomsSmPos, SmPos) * EmpiricalAdj / 12.0;
+				// The formula below was previously used (incorrectly).
+				//RxRate2 = (HealthSeekingGen * Cough2wkActiveSmNeg * (1.0 - TBsymptomScreened[iy] * AdjF /
+				//	RRscreenSymptoms) * EmpiricRx[0][1] + HealthSeekingTB * (1.0 - TBsymptomScreened[iy] *
+				//	AdjF) * EmpiricRx[1][1]) * RRhealthSeekingHIV / 12.0;
+				RxRate3 = (ScreenTemp[0] * EmpiricRxNeg[0][1] + ScreenTemp[1] * EmpiricRxNeg[1][1]) *
+					(1.0 - EmpiricRednXpert * (1.0 - MicroscopyPropn[iy])) * RRhealthSeekingHIV *
+					(1.0 - CurrSeTB[SmPos][1]) * EmpiricalAdj;
+			}
+			if (SmPos == 1) { TBadultRxSmDiag[iy] += Active->HIVstage[ia][is] * RxRate1; }
+			RxRate = RxRate1 * (1.0 - CurrInitLTFU) + RxRate2 + RxRate3;
+			if ((FixedUncertainty == 1 || CalibTBdiagnosesA == 1 || CalibTBcasesA == 1 ||
+				CalibETRdeathsA == 1 || CalibHIVprevETR == 1 || CalibRifResPropn == 1) && ia >= 5) {
+				TBadultLabDiag[iy] += Active->HIVstage[ia][is] * RxRate1;
+				if (is >= 5) { TBadultRxHIV[iy][ig] += Active->HIVstage[ia][is] * RxRate; }
+				TBadultRxBy5yr[iy][ia / 5 - 1][ig] += Active->HIVstage[ia][is] * RxRate;
+				NewEmpiricTB[0] += Active->HIVstage[ia][is] * RxRate2;
+				NewEmpiricTB[1] += Active->HIVstage[ia][is] * RxRate3;
+			}
+			temp1 = Active->HIVstage[ia][is] * RxRate;
+			if (PropnHHcontactScreened[iy] > 0.0) {
+				temp1b = Active->HIVstage[ia][is] * HHscreeningProb * CurrSeTB_HHC[SmPos] *
+					(1.0 - CurrInitLTFU) * HHcontactRxUptake;
+			}
+			else { temp1b = 0.0; }
+			if (RateART_TBscreened[iy] > 0.0 && is >= 20 && is < 40) {
+				CD4stage = (is - 20) / 5;
+				id = is - 20 - CD4stage * 5;
+				temp1c = Active->HIVstage[ia][is] * OnARTbyIntDur[id][ig][ia] * (RateART_TBscreened[iy] / 12.0) *
+					CurrSeTB_ART[SmPos] * (1.0 - CurrInitLTFU);
+			}
+			else { temp1c = 0.0; }
+			if (RatePrevTBscreened[iy] > 0.0) {
+				temp1d = Active->HIVstage[ia][is] * RelapseTBpropnLastYr * (RatePrevTBscreened[iy] / 12.0) *
+					CurrSeTBprev[SmPos] * (1.0 - CurrInitLTFU);
+			}
+			else { temp1d = 0.0; }
+			if (RateD2Dscreen[iy] > 0.0) {
+				temp1e = Active->HIVstage[ia][is] * (RateD2Dscreen[iy] / 12.0) *
+					CurrSeTB_D2D[SmPos] * (1.0 - CurrInitLTFU) * HHcontactRxUptake;
+			}
+			else { temp1e = 0.0; }
+			if (SmPos == 1) { SmPosRxScreen[iy] += temp1b + temp1c + temp1d + temp1e; }
+			temp2 = Active->HIVstage[ia][is] * RecoveryRate * HIVeffectTBrecov[is];
+			temp3 = Active->HIVstage[ia][is] * MortRate * RR_TBmortByAge[ia] * HIVeffectTBmort[is];
+			temp4 = temp1 + temp1b + temp1c + temp1d + temp1e + temp2 + temp3;
+			if (temp4 > Active->HIVstage[ia][is]) {
+				temp1 *= Active->HIVstage[ia][is] / temp4;
+				temp1b *= Active->HIVstage[ia][is] / temp4;
+				temp1c *= Active->HIVstage[ia][is] / temp4;
+				temp1d *= Active->HIVstage[ia][is] / temp4;
+				temp1e *= Active->HIVstage[ia][is] / temp4;
+				temp2 *= Active->HIVstage[ia][is] / temp4;
+				temp3 *= Active->HIVstage[ia][is] / temp4;
+			}
+			if (((PropnHHcontactScreened[iy + 1] > 0.0 || NutritionSupportHHcontacts[iy + 1] > 0.0) && CurrMonth == 11) ||
+				PropnHHcontactScreened[iy] > 0.0) {
+				TBindexCasesLastMonth += temp1;
+			}
+			Active->HIVstage_E[ia][is] = Active->HIVstage_E[ia][is] - (temp1 + temp1b + temp1c +
+				temp1d + temp1e + temp2 + temp3);
+			Latent->HIVstage_E[ia][is] += temp2;
+			if (Active->RifRes == 0) {
+				Treated->HIVstage_E[ia][is] += temp1 + temp1b + temp1c + temp1d + temp1e;
+				Treated->NewEntrants[ia][is] += temp1 + temp1b + temp1c + temp1d + temp1e;
+			}
+			else {
+				Treated2->HIVstage_E[ia][is] += (temp1 * (1.0 - (RxRate2 + RxRate3) / RxRate) + temp1b + temp1c +
+					temp1d + temp1e) * CurrDSTcoverageRR;
+				Treated->HIVstage_E[ia][is] += (temp1 * (1.0 - (RxRate2 + RxRate3) / RxRate) + temp1b + temp1c +
+					temp1d + temp1e) * (1.0 - CurrDSTcoverageRR) + temp1 * (RxRate2 + RxRate3) / RxRate;
+				Treated2->NewEntrants[ia][is] += (temp1 * (1.0 - (RxRate2 + RxRate3) / RxRate) + temp1b + temp1c +
+					temp1d + temp1e) * CurrDSTcoverageRR;
+				Treated->NewEntrants[ia][is] += (temp1 * (1.0 - (RxRate2 + RxRate3) / RxRate) + temp1b + temp1c +
+					temp1d + temp1e) * (1.0 - CurrDSTcoverageRR) + temp1 * (RxRate2 + RxRate3) / RxRate;
+				if (IncludeDR_TB == 1) {
+					New2ndLineTB_NF[iy] += (temp1 * (1.0 - (RxRate2 + RxRate3) / RxRate) + temp1b + temp1c +
+						temp1d + temp1e) * CurrDSTcoverageRR;
+					RifResFoundPreRx[iy] += (temp1 * ((RxRate1 + RxRate2 + RxRate3) / RxRate) + temp1b + temp1c +
+						temp1d + temp1e) * CurrDSTcoverageRR;
+				}
+			}
+			if ((FixedUncertainty == 1 || CalibTBdeathsA == 1) && ia >= 5) {
+				TBadultMortBy5yr[iy][ia / 5 - 1][ig] += temp3;
+			}
+			if (FixedUncertainty == 1) {
+				if (SmPos == 0) { TBmortSmNeg[ia][ig] += temp3; }
+				if (SmPos == 1) { TBmortSmPos[ia][ig] += temp3; }
+			}
+			if (FixedUncertainty == 1) {
+				NewRxACF[SmPos] += temp1b;
+				NewRxART_ICF[SmPos] += temp1c;
+				NewRxTBscreenPrev[SmPos] += temp1d;
+				NewRxTBscreenD2D[SmPos] += temp1e;
+			}
+			if (ia >= 5 && is >= 5) {
+				TBdeathsAdultHIV[iy] += temp3;
+			}
+		}
+	}
+}
+
+void UpdateTBtreated(AdultTB* Treated, AdultTB* Treated2, AdultTB* Active1, AdultTB* Active2, AdultTB* SmPosRR, AdultTB* SmNegRR, AdultTB* PostRx, AdultTB* IPT)
+{
+	int ia, is, ig, iy;
+	double MortRate, DropoutRate, CureRate, ReturnToActive, GetDST, GetDST2, RifPropn[44], OddsFail[2];
+	double temp, temp1, temp2, temp3, temp3b, temp4, temp4b, temp5, InitMortPropn, FullCure, PartialCure;
+
+	ig = Treated->Sex;
+	iy = CurrYear - StartYear;
+
+	DropoutRate = (DOTrollout[iy] + (1.0 - DOTrollout[iy]) / (RRdefaultDOT + (1.0 - RRdefaultDOT) *
+		(1.0 - DOTSeffectivenessAdj))) * AnnDropoutTB_Rx[ig] / 12.0;
+	if (CurrYear > 2021) { DropoutRate *= UltTBdefaultAdj; }
+	else if (CurrYear > 2016) { DropoutRate *= 0.2 * ((2021 - CurrYear) + UltTBdefaultAdj * (CurrYear - 2016)); }
+	//if (CurrYear >= 2023){ DropoutRate *= 0.5; }
+	FullCure = TBfullRxCure;
+	PartialCure = TBpartialRxCure;
+	if (VaryFutureInterventionsTB == 1 && CurrYear >= 2024) {
+		FullCure = 1.0 / (1.0 + (1.0 - TBfullRxCure) / (TBfullRxCure * FutureInterventionsTB.out[CurrSim - 1][29]));
+		PartialCure = 1.0 / (1.0 + (1.0 - TBpartialRxCure) / (TBpartialRxCure * FutureInterventionsTB.out[CurrSim - 1][29]));
+		if (CurrYear < 2028) {
+			FullCure = 0.2 * (TBfullRxCure * (2028 - CurrYear) + FullCure * (CurrYear - 2023));
+			PartialCure = 0.2 * (TBpartialRxCure * (2028 - CurrYear) + PartialCure * (CurrYear - 2023));
+		}
+	}
+	GetDST = 0.0;
+	GetDST2 = 0.0;
+	if (Treated->RifRes == 0) {
+		CureRate = PartialCure * DropoutRate + FullCure * (1.0 / Dur1stLineRxTB[iy]);
+		ReturnToActive = (1.0 - PartialCure) * DropoutRate + (1.0 - FullCure) * (1.0 / Dur1stLineRxTB[iy]);
+		if (IncludeDR_TB == 1) {
+			GetDST = (1.0 - FullCure) * (1.0 / Dur1stLineRxTB[iy]) * ProbDSTifFailingRx;
+			GetDST2 = (1.0 - PartialCure) * DropoutRate * ProbDSTifFailingRx * RR_DSTdropout;
+		}
+	}
+	else if (Treated->SecondLine == 0) {
+		OddsFail[0] = ((1.0 - PartialCure) / PartialCure) * ORfailureRifRes;
+		OddsFail[1] = ((1.0 - FullCure) / FullCure) * ORfailureRifRes;
+		CureRate = (1.0 / (1.0 + OddsFail[0])) * DropoutRate + (1.0 / (1.0 + OddsFail[1])) * (1.0 / Dur1stLineRxTB[iy]);
+		ReturnToActive = (OddsFail[0] / (1.0 + OddsFail[0])) * DropoutRate + (OddsFail[1] /
+			(1.0 + OddsFail[1])) * (1.0 / Dur1stLineRxTB[iy]);
+		GetDST = (OddsFail[1] / (1.0 + OddsFail[1])) * (1.0 / 2.0) * ProbDSTifFailingRx;
+		GetDST2 = (OddsFail[0] / (1.0 + OddsFail[0])) * DropoutRate * ProbDSTifFailingRx * RR_DSTdropout;
+	}
+	else {
+		CureRate = PartialCure * DropoutRate + FullCure * (1.0 / Dur2ndLineRxTB[iy]);
+		ReturnToActive = (1.0 - PartialCure) * DropoutRate + (1.0 - FullCure) * (1.0 / Dur2ndLineRxTB[iy]);
+	}
+	if (IncludeDR_TB == 0) {
+		for (is = 0; is < 44; is++) { RifPropn[is] = 0.0; }
+	}
+	else {
+		if (Treated->RifRes == 1) {
+			for (is = 0; is < 44; is++) { RifPropn[is] = 1.0; }
+		}
+		else {
+			for (is = 0; is < 44; is++) {
+				RifPropn[is] = (AcquireRifResIfFail / (1.0 - AcquireRifResIfFail)) * HIVeffectRifRes[is];
+				RifPropn[is] = RifPropn[is] / (1.0 + RifPropn[is]);
+			}
+		}
+	}
+	for (ia = 0; ia < 81; ia++) {
+		for (is = 0; is < 44; is++) {
+			if (is < 5) { temp = InitActiveTBsmPos[0]; }
+			else { temp = InitActiveTBsmPos[1]; }
+			MortRate = (AnnMortTB_RxCurr[ig] / 12.0) * RR_TBmortByAge[ia] * HIVeffectTBmort[is];
+			if (Dur1stLineRxTB[iy] == 4) { MortRate *= 1.25; }
+			if (Treated->RifRes == 1 && Treated->SecondLine == 0) { MortRate *= RRmortRifRes1st; }
+			InitMortPropn = MortRate * ExcessMort1stMoTB_Rx;
+			temp1 = Treated->HIVstage[ia][is] * MortRate + Treated->NewEntrants[ia][is] * InitMortPropn;
+			if (IncludeDR_TB == 0 || Treated->SecondLine == 1) {
+				temp2 = Treated->HIVstage[ia][is] * ReturnToActive * temp;
+				temp3 = Treated->HIVstage[ia][is] * ReturnToActive * (1.0 - temp);
+				temp3b = 0.0;
+			}
+			else if (Treated->RifRes == 0) {
+				// If resistance is acquired, assume it's only detected at end of 6 months
+				temp2 = Treated->HIVstage[ia][is] * (ReturnToActive - GetDST * RifPropn[is]) * temp;
+				temp3 = Treated->HIVstage[ia][is] * (ReturnToActive - GetDST * RifPropn[is]) * (1.0 - temp);
+				temp3b = Treated->HIVstage[ia][is] * GetDST * RifPropn[is];
+			}
+			else {
+				// But if resistance was already present before Rx initiation, assume it can be picked
+				// up at 2-monthly screening for Rx failure
+				temp2 = Treated->HIVstage[ia][is] * ReturnToActive * temp;
+				temp3 = Treated->HIVstage[ia][is] * ReturnToActive * (1.0 - temp);
+				temp3b = Treated->HIVstage[ia][is] * GetDST;
+			}
+			temp4 = Treated->HIVstage[ia][is] * CureRate;
+			temp4b = Treated->HIVstage[ia][is] * FullCure * (1.0 / 6.0) * IPTcontinuePostRx[iy];
+			temp4 = temp4 - temp4b;
+			temp5 = temp1 + temp2 + temp3 + temp3b + temp4 + temp4b;
+			if (temp5 > Treated->HIVstage_E[ia][is]) {
+				temp1 *= Treated->HIVstage_E[ia][is] / temp5;
+				temp2 *= Treated->HIVstage_E[ia][is] / temp5;
+				temp3 *= Treated->HIVstage_E[ia][is] / temp5;
+				temp3b *= Treated->HIVstage_E[ia][is] / temp5;
+				temp4 *= Treated->HIVstage_E[ia][is] / temp5;
+				temp4b *= Treated->HIVstage_E[ia][is] / temp5;
+			}
+			Treated->HIVstage_E[ia][is] = Treated->HIVstage_E[ia][is] - (temp1 + temp2 + temp3 + temp3b +
+				temp4 + temp4b);
+			Active1->HIVstage_E[ia][is] += temp2 * (1.0 - RifPropn[is]);
+			Active2->HIVstage_E[ia][is] += temp3 * (1.0 - RifPropn[is]);
+			PostRx->HIVstage_E[ia][is] += temp4;
+			IPT->HIVstage_E[ia][is] += temp4b;
+			if (IncludeDR_TB == 1) {
+				SmPosRR->HIVstage_E[ia][is] += temp2 * RifPropn[is];
+				SmNegRR->HIVstage_E[ia][is] += temp3 * RifPropn[is];
+				Treated2->HIVstage_E[ia][is] += temp3b;
+				RifResFoundOnRx[iy] += temp3b + Treated->HIVstage[ia][is] * GetDST2 * RifPropn[is];
+				New2ndLineTB_F[iy] += temp3b;
+				if (FixedUncertainty == 1) {
+					CultureOrLPAfailing[iy] += Treated->HIVstage[ia][is] * (GetDST + GetDST2);
+				}
+				FailTB_Rx_RS[iy] += (temp2 + temp3) * (1.0 - RifPropn[is]);
+				FailTB_Rx_RR[iy] += (temp2 + temp3) * RifPropn[is];
+				if (Treated->RifRes == 0) { FailTB_Rx_RR[iy] = FailTB_Rx_RR[iy] - temp3b; }
+				if (Treated->RifRes == 0 && FixedUncertainty == 1) {
+					FailTB_RxNewRR[iy] += (temp2 + temp3) * RifPropn[is];
+				}
+			}
+			if (ia >= 5) {
+				TBadultMortOnRx[iy][ig] += temp1;
+				if (IncludeDR_TB == 1) {
+					if (Treated->SecondLine == 0) { TBadultMortOnRx1[iy][ig] += temp1; }
+					else { TBadultMortOnRx2[iy][ig] += temp1; }
+				}
+			}
+			if ((FixedUncertainty == 1 || CalibTBdeathsA == 1) && ia >= 5) {
+				TBadultMortBy5yr[iy][ia / 5 - 1][ig] += temp1;
+			}
+			if (ia >= 5 && is >= 5) {
+				TBdeathsAdultHIV[iy] += temp1;
+			}
+			if (FixedUncertainty == 1) { TBmortTreated[ia][ig] += temp1; }
+			if (FixedUncertainty == 1) { NewIPT_TSTpos += temp4b; }
+		}
+	}
+}
+
+void UpdateTBrecovST(AdultTB* PostRxST, AdultTB* PostRxLT, AdultTB* Active1, AdultTB* Active2, AdultTB* SmPosRR, AdultTB* SmNegRR, AdultTB* IPT, AdultTB* Suscep, int IPTind)
+{
+	// IPTind = 0 for the group that's not currently on IPT, 1 for the group that is on IPT
+
+	int ia, is, ig, iy;
+	double RelapseRate, TransitionToLT, newTBactive, TBincidence, TransitionToActive;
+	double temp, temp1, temp2, temp3, temp4, temp4b, IPTswitch, CurePropn;
+	// 'Relapse' here is synonymous with reactivation in the UpdateTBrecovLT function.
+
+	iy = CurrYear - StartYear;
+	ig = PostRxST->Sex;
+	RelapseRate = RelapseST / 12.0;
+	if (IPTind == 1) { RelapseRate *= (1.0 - IPTefficacy); }
+	if (IPTind == 1) { CurePropn = TPTfraction3HP[iy] * Cure3HP * 0.333 / (0.333 + MnthlyTPTdropout); }
+	else { CurePropn = 0.0; }
+	TransitionToLT = (1.0 / DurSTpostRxRisk) / 12.0;
+	IPTswitch = 0.0;
+	if (IPTind == 1 && IPTduration[iy] > 0.0) { IPTswitch = 1.0 / CurrDurTPTprotection; }
+	if (IPTind == 0 && BaseIPTuptake[iy] > 0.0) { IPTswitch = BaseIPTuptake[iy]; }
+	for (ia = 0; ia < 81; ia++) {
+		for (is = 0; is < 44; is++) {
+			if (is < 5) { temp = InitActiveTBsmPos[0]; }
+			else { temp = InitActiveTBsmPos[1]; }
+			newTBactive = PropFastProg * HIVeffectTBinc[is] * TBincAdjByAgeSex[ia][ig];
+			if (IPTind == 1) { newTBactive *= (1.0 - IPTefficacy); }
+			if (newTBactive > 1.0) { newTBactive = 1.0; }
+			TBincidence = RateNewTBinfection[ia + 10][ig] * PastTBfactor * (1.0 -
+				PartialImmunHIVneg * HIVeffectTBimm[is]) * newTBactive + RelapseRate;
+			if (TBincidence > 1.0) { TBincidence = 1.0; }
+			TransitionToActive = PostRxST->HIVstage[ia][is] * TBincidence;
+			temp1 = PostRxST->HIVstage[ia][is] * TransitionToLT;
+			temp2 = TransitionToActive * temp;
+			temp3 = TransitionToActive * (1.0 - temp);
+			if (IPTswitch > 0 && IPTind == 1) { temp4 = PostRxST->HIVstage_E[ia][is] * IPTswitch; }
+			else if (IPTswitch > 0 && IPTind == 0 && is > 15) {
+				temp4 = PostRxST->HIVstage_E[ia][is] * IPTswitch * HIVeffectIPTstart[is];
+				if (IPTswitch * HIVeffectIPTstart[is] > 1.0) { temp4 = PostRxST->HIVstage_E[ia][is]; }
+			}
+			else { temp4 = 0.0; }
+			if (IPTind == 0 && PropnHHcontactTPT[iy] > 0) {
+				temp4 += PostRxST->HIVstage[ia][is] * HHscreeningProbNeg * PropnHHcontactTPT[iy];
+				temp4b = PostRxST->HIVstage[ia][is] * HHscreeningProbNeg * PropnHHcontactTPT[iy];
+			}
+			PostRxST->HIVstage_E[ia][is] = PostRxST->HIVstage_E[ia][is] - (temp1 + temp2 + temp3 + temp4);
+			PostRxLT->HIVstage_E[ia][is] += temp1;
+			Active1->HIVstage_E[ia][is] += temp2 * (1.0 - PropnNewTBrifRes[iy]);
+			Active2->HIVstage_E[ia][is] += temp3 * (1.0 - PropnNewTBrifRes[iy]);
+			if (IncludeDR_TB == 1) {
+				SmPosRR->HIVstage_E[ia][is] += temp2 * PropnNewTBrifRes[iy];
+				SmNegRR->HIVstage_E[ia][is] += temp3 * PropnNewTBrifRes[iy];
+				NewRS_TBprevRx[iy] += TransitionToActive * (1.0 - PropnNewTBrifRes[iy]);
+				NewRR_TBprevRx[iy] += TransitionToActive * PropnNewTBrifRes[iy];
+			}
+			if (IPTind == 1 && CurePropn > 0) {
+				Suscep->HIVstage_E[ia][is] += temp4 * CurePropn;
+				IPT->HIVstage_E[ia][is] += temp4 * (1.0 - CurePropn);
+			}
+			else { IPT->HIVstage_E[ia][is] += temp4; }
+			if (FixedUncertainty == 1) {
+				NewActiveTBbyAgeSex[ia][ig] += TransitionToActive;
+				NewRecurrentTBbyAgeSex[ia][ig] += TransitionToActive;
+				NewRelapseTBbyAgeSex[ia][ig] += TransitionToActive;
+				if (is >= 5) { NewHIVposTBbyAgeSex[ia][ig] += TransitionToActive; }
+				if (is >= 20) { NewTBonARTbyAgeSex[ia][ig] += TransitionToActive; }
+				if (ia >= 5) {
+					NewTBreactivation += PostRxST->HIVstage[ia][is] * RelapseRate;
+				}
+				if (IPTind == 0) {
+					NewIPT_TSTpos += temp4;
+					NewTPT_HH += temp4b;
+				}
+			}
+		}
+	}
+}
+
+void UpdateTBrecovLT(AdultTB* PostRxLT, AdultTB* Active1, AdultTB* Active2, AdultTB* SmPosRR, AdultTB* SmNegRR, AdultTB* IPT, AdultTB* Suscep, int IPTind)
+{
+	// IPTind = 0 for the group that's not currently on IPT, 1 for the group that is on IPT
+
+	int ia, is, ig, iy;
+	double ReactivationRate, newTBactive, TBincidence, TransitionToActive;
+	double temp, temp2, temp3, temp4, temp4b, IPTswitch, CurePropn;
+
+	iy = CurrYear - StartYear;
+	ig = PostRxLT->Sex;
+	ReactivationRate = Reactivation * PastTBfactor / 12.0;
+	if (IPTind == 1) { ReactivationRate *= (1.0 - IPTefficacy); }
+	if (IPTind == 1) { CurePropn = TPTfraction3HP[iy] * Cure3HP * 0.333 / (0.333 + MnthlyTPTdropout); }
+	else { CurePropn = 0.0; }
+	IPTswitch = 0.0;
+	if (IPTind == 1 && IPTduration[iy] > 0.0) { IPTswitch = 1.0 / CurrDurTPTprotection; }
+	if (IPTind == 0 && BaseIPTuptake[iy] > 0.0) { IPTswitch = BaseIPTuptake[iy]; }
+	for (ia = 0; ia < 81; ia++) {
+		for (is = 0; is < 44; is++) {
+			if (is < 5) { temp = InitActiveTBsmPos[0]; }
+			else { temp = InitActiveTBsmPos[1]; }
+			newTBactive = PropFastProg * HIVeffectTBinc[is] * TBincAdjByAgeSex[ia][ig];
+			if (IPTind == 1) { newTBactive *= (1.0 - IPTefficacy); }
+			if (newTBactive > 1.0) { newTBactive = 1.0; }
+			TBincidence = RateNewTBinfection[ia + 10][ig] * PastTBfactor * (1.0 - PartialImmunHIVneg * HIVeffectTBimm[is]) *
+				newTBactive + ReactivationRate * HIVeffectTBinc[is] * TBincAdjByAgeSex[ia][ig];
+			if (TBincidence > 1.0) { TBincidence = 1.0; }
+			TransitionToActive = PostRxLT->HIVstage[ia][is] * TBincidence;
+			temp2 = TransitionToActive * temp;
+			temp3 = TransitionToActive * (1.0 - temp);
+			if (IPTswitch > 0 && IPTind == 1) { temp4 = PostRxLT->HIVstage_E[ia][is] * IPTswitch; }
+			else if (IPTswitch > 0 && IPTind == 0 && is > 15) {
+				temp4 = PostRxLT->HIVstage_E[ia][is] * IPTswitch * HIVeffectIPTstart[is];
+				if (IPTswitch * HIVeffectIPTstart[is] > 1.0) { temp4 = PostRxLT->HIVstage_E[ia][is]; }
+			}
+			else { temp4 = 0.0; }
+			if (IPTind == 0 && PropnHHcontactTPT[iy] > 0) {
+				temp4 += PostRxLT->HIVstage[ia][is] * HHscreeningProbNeg * PropnHHcontactTPT[iy];
+				temp4b = PostRxLT->HIVstage[ia][is] * HHscreeningProbNeg * PropnHHcontactTPT[iy];
+			}
+			PostRxLT->HIVstage_E[ia][is] = PostRxLT->HIVstage_E[ia][is] - (temp2 + temp3 + temp4);
+			Active1->HIVstage_E[ia][is] += temp2 * (1.0 - PropnNewTBrifRes[iy]);
+			Active2->HIVstage_E[ia][is] += temp3 * (1.0 - PropnNewTBrifRes[iy]);
+			if (IncludeDR_TB == 1) {
+				SmPosRR->HIVstage_E[ia][is] += temp2 * PropnNewTBrifRes[iy];
+				SmNegRR->HIVstage_E[ia][is] += temp3 * PropnNewTBrifRes[iy];
+				NewRS_TBprevRx[iy] += TransitionToActive * (1.0 - PropnNewTBrifRes[iy]);
+				NewRR_TBprevRx[iy] += TransitionToActive * PropnNewTBrifRes[iy];
+			}
+			if (IPTind == 1 && CurePropn > 0) {
+				Suscep->HIVstage_E[ia][is] += temp4 * CurePropn;
+				IPT->HIVstage_E[ia][is] += temp4 * (1.0 - CurePropn);
+			}
+			else { IPT->HIVstage_E[ia][is] += temp4; }
+			if (FixedUncertainty == 1) {
+				NewActiveTBbyAgeSex[ia][ig] += TransitionToActive;
+				NewRecurrentTBbyAgeSex[ia][ig] += TransitionToActive;
+				if (is >= 5) { NewHIVposTBbyAgeSex[ia][ig] += TransitionToActive; }
+				if (is >= 20) { NewTBonARTbyAgeSex[ia][ig] += TransitionToActive; }
+				if (ia >= 5) {
+					NewTBreactivation += PostRxLT->HIVstage[ia][is] * ReactivationRate * HIVeffectTBinc[is] * TBincAdjByAgeSex[ia][ig];
+				}
+				if (IPTind == 0) {
+					NewIPT_TSTpos += temp4;
+					NewTPT_HH += temp4b;
+				}
+			}
+		}
+	}
+}
+
+void CalcTBtransitions()
+{
+	int ia, is;
+
+	// Reset NewEntrants to zero
+	for (ia = 0; ia < 81; ia++) {
+		for (is = 0; is < 44; is++) {
+			TBtreatedM.NewEntrants[ia][is] = 0.0;
+			TBtreatedF.NewEntrants[ia][is] = 0.0;
+			if (IncludeDR_TB == 1) {
+				RR_TBtreated1stM.NewEntrants[ia][is] = 0.0;
+				RR_TBtreated2ndM.NewEntrants[ia][is] = 0.0;
+				RR_TBtreated1stF.NewEntrants[ia][is] = 0.0;
+				RR_TBtreated2ndF.NewEntrants[ia][is] = 0.0;
+			}
+		}
+	}
+
+	CalcTBforceOfInf();
+	TBsuscepM.UpdateEndProfile();
+	TBlatentM.UpdateEndProfile();
+	TBactiveSmPosM.UpdateEndProfile();
+	TBactiveSmNegM.UpdateEndProfile();
+	TBtreatedM.UpdateEndProfile();
+	TBrecoveredST_M.UpdateEndProfile();
+	TBrecoveredLT_M.UpdateEndProfile();
+	TBlatentIPT_M.UpdateEndProfile();
+	TBrecST_IPT_M.UpdateEndProfile();
+	TBrecLT_IPT_M.UpdateEndProfile();
+	TBsuscepF.UpdateEndProfile();
+	TBlatentF.UpdateEndProfile();
+	TBactiveSmPosF.UpdateEndProfile();
+	TBactiveSmNegF.UpdateEndProfile();
+	TBtreatedF.UpdateEndProfile();
+	TBrecoveredST_F.UpdateEndProfile();
+	TBrecoveredLT_F.UpdateEndProfile();
+	TBlatentIPT_F.UpdateEndProfile();
+	TBrecST_IPT_F.UpdateEndProfile();
+	TBrecLT_IPT_F.UpdateEndProfile();
+	if (IncludeDR_TB == 1) {
+		TBactiveSmPosRR_M.UpdateEndProfile();
+		TBactiveSmNegRR_M.UpdateEndProfile();
+		RR_TBtreated1stM.UpdateEndProfile();
+		RR_TBtreated2ndM.UpdateEndProfile();
+		TBactiveSmPosRR_F.UpdateEndProfile();
+		TBactiveSmNegRR_F.UpdateEndProfile();
+		RR_TBtreated1stF.UpdateEndProfile();
+		RR_TBtreated2ndF.UpdateEndProfile();
+	}
+
+	UpdateTBsuscep(&TBsuscepM, &TBlatentM, &TBactiveSmPosM, &TBactiveSmNegM, &TBactiveSmPosRR_M, &TBactiveSmNegRR_M);
+	UpdateTBsuscep(&TBsuscepF, &TBlatentF, &TBactiveSmPosF, &TBactiveSmNegF, &TBactiveSmPosRR_F, &TBactiveSmNegRR_F);
+	UpdateTBlatent(&TBlatentM, &TBactiveSmPosM, &TBactiveSmNegM, &TBactiveSmPosRR_M, &TBactiveSmNegRR_M, &TBlatentIPT_M, &TBsuscepM, 0);
+	UpdateTBlatent(&TBlatentF, &TBactiveSmPosF, &TBactiveSmNegF, &TBactiveSmPosRR_F, &TBactiveSmNegRR_F, &TBlatentIPT_F, &TBsuscepF, 0);
+	UpdateTBactive(&TBactiveSmPosM, &TBlatentM, &TBtreatedM, &RR_TBtreated2ndM, 1);
+	UpdateTBactive(&TBactiveSmPosF, &TBlatentF, &TBtreatedF, &RR_TBtreated2ndF, 1);
+	UpdateTBactive(&TBactiveSmNegM, &TBlatentM, &TBtreatedM, &RR_TBtreated2ndM, 0);
+	UpdateTBactive(&TBactiveSmNegF, &TBlatentF, &TBtreatedF, &RR_TBtreated2ndF, 0);
+	UpdateTBtreated(&TBtreatedM, &RR_TBtreated2ndM, &TBactiveSmPosM, &TBactiveSmNegM, &TBactiveSmPosRR_M, &TBactiveSmNegRR_M, &TBrecoveredST_M, &TBrecST_IPT_M);
+	UpdateTBtreated(&TBtreatedF, &RR_TBtreated2ndF, &TBactiveSmPosF, &TBactiveSmNegF, &TBactiveSmPosRR_F, &TBactiveSmNegRR_F, &TBrecoveredST_F, &TBrecST_IPT_F);
+	UpdateTBrecovST(&TBrecoveredST_M, &TBrecoveredLT_M, &TBactiveSmPosM, &TBactiveSmNegM, &TBactiveSmPosRR_M, &TBactiveSmNegRR_M, &TBrecST_IPT_M, &TBsuscepM, 0);
+	UpdateTBrecovST(&TBrecoveredST_F, &TBrecoveredLT_F, &TBactiveSmPosF, &TBactiveSmNegF, &TBactiveSmPosRR_F, &TBactiveSmNegRR_F, &TBrecST_IPT_F, &TBsuscepF, 0);
+	UpdateTBrecovLT(&TBrecoveredLT_M, &TBactiveSmPosM, &TBactiveSmNegM, &TBactiveSmPosRR_M, &TBactiveSmNegRR_M, &TBrecLT_IPT_M, &TBsuscepM, 0);
+	UpdateTBrecovLT(&TBrecoveredLT_F, &TBactiveSmPosF, &TBactiveSmNegF, &TBactiveSmPosRR_F, &TBactiveSmNegRR_F, &TBrecLT_IPT_F, &TBsuscepF, 0);
+	if (BaseIPTuptake[CurrYear - StartYear] > 0.0) {
+		UpdateTBlatent(&TBlatentIPT_M, &TBactiveSmPosM, &TBactiveSmNegM, &TBactiveSmPosRR_M, &TBactiveSmNegRR_M, &TBlatentM, &TBsuscepM, 1);
+		UpdateTBlatent(&TBlatentIPT_F, &TBactiveSmPosF, &TBactiveSmNegF, &TBactiveSmPosRR_F, &TBactiveSmNegRR_F, &TBlatentF, &TBsuscepF, 1);
+		UpdateTBrecovST(&TBrecST_IPT_M, &TBrecoveredLT_M, &TBactiveSmPosM, &TBactiveSmNegM, &TBactiveSmPosRR_M, &TBactiveSmNegRR_M, &TBrecoveredST_M, &TBsuscepM, 1);
+		UpdateTBrecovST(&TBrecST_IPT_F, &TBrecoveredLT_F, &TBactiveSmPosF, &TBactiveSmNegF, &TBactiveSmPosRR_F, &TBactiveSmNegRR_F, &TBrecoveredST_F, &TBsuscepF, 1);
+		UpdateTBrecovLT(&TBrecLT_IPT_M, &TBactiveSmPosM, &TBactiveSmNegM, &TBactiveSmPosRR_M, &TBactiveSmNegRR_M, &TBrecoveredLT_M, &TBsuscepM, 1);
+		UpdateTBrecovLT(&TBrecLT_IPT_F, &TBactiveSmPosF, &TBactiveSmNegF, &TBactiveSmPosRR_F, &TBactiveSmNegRR_F, &TBrecoveredLT_F, &TBsuscepF, 1);
+	}
+	if (IncludeDR_TB == 1) {
+		UpdateTBactive(&TBactiveSmPosRR_M, &TBlatentM, &RR_TBtreated1stM, &RR_TBtreated2ndM, 1);
+		UpdateTBactive(&TBactiveSmPosRR_F, &TBlatentF, &RR_TBtreated1stF, &RR_TBtreated2ndF, 1);
+		UpdateTBactive(&TBactiveSmNegRR_M, &TBlatentM, &RR_TBtreated1stM, &RR_TBtreated2ndM, 0);
+		UpdateTBactive(&TBactiveSmNegRR_F, &TBlatentF, &RR_TBtreated1stF, &RR_TBtreated2ndF, 0);
+		UpdateTBtreated(&RR_TBtreated1stM, &RR_TBtreated2ndM, &TBactiveSmPosM, &TBactiveSmNegM, &TBactiveSmPosRR_M, &TBactiveSmNegRR_M, &TBrecoveredST_M, &TBrecST_IPT_M);
+		UpdateTBtreated(&RR_TBtreated1stF, &RR_TBtreated2ndF, &TBactiveSmPosF, &TBactiveSmNegF, &TBactiveSmPosRR_F, &TBactiveSmNegRR_F, &TBrecoveredST_F, &TBrecST_IPT_F);
+		UpdateTBtreated(&RR_TBtreated2ndM, &RR_TBtreated1stM, &TBactiveSmPosM, &TBactiveSmNegM, &TBactiveSmPosRR_M, &TBactiveSmNegRR_M, &TBrecoveredST_M, &TBrecST_IPT_M);
+		UpdateTBtreated(&RR_TBtreated2ndF, &RR_TBtreated1stF, &TBactiveSmPosF, &TBactiveSmNegF, &TBactiveSmPosRR_F, &TBactiveSmNegRR_F, &TBrecoveredST_F, &TBrecST_IPT_F);
+	}
+}
+
+void GetHIVtoTBpopRatios()
+{
+	// Similar to TB_SumTBandHIVPopTotals function in Mmamapudi's code
+
+	int ia, is;
+	double temp1, temp2;
+
+	for (ia = 0; ia < 81; ia++) {
+		temp1 = 0.0;
+		temp2 = 0.0;
+		for (is = 0; is < 44; is++) {
+			SumTBgroupsM[ia][is] = TBsuscepM.HIVstage[ia][is] + TBlatentM.HIVstage[ia][is] +
+				TBactiveSmPosM.HIVstage[ia][is] + TBactiveSmNegM.HIVstage[ia][is] + TBtreatedM.HIVstage[ia][is] +
+				TBrecoveredST_M.HIVstage[ia][is] + TBrecoveredLT_M.HIVstage[ia][is] +
+				TBlatentIPT_M.HIVstage[ia][is] + TBrecST_IPT_M.HIVstage[ia][is] + TBrecLT_IPT_M.HIVstage[ia][is];
+			SumTBgroupsF[ia][is] = TBsuscepF.HIVstage[ia][is] + TBlatentF.HIVstage[ia][is] +
+				TBactiveSmPosF.HIVstage[ia][is] + TBactiveSmNegF.HIVstage[ia][is] + TBtreatedF.HIVstage[ia][is] +
+				TBrecoveredST_F.HIVstage[ia][is] + TBrecoveredLT_F.HIVstage[ia][is] +
+				TBlatentIPT_F.HIVstage[ia][is] + TBrecST_IPT_F.HIVstage[ia][is] + TBrecLT_IPT_F.HIVstage[ia][is];
+			if (IncludeDR_TB == 1) {
+				SumTBgroupsM[ia][is] += TBactiveSmPosRR_M.HIVstage[ia][is] + TBactiveSmNegRR_M.HIVstage[ia][is] +
+					RR_TBtreated1stM.HIVstage[ia][is] + RR_TBtreated2ndM.HIVstage[ia][is];
+				SumTBgroupsF[ia][is] += TBactiveSmPosRR_F.HIVstage[ia][is] + TBactiveSmNegRR_F.HIVstage[ia][is] +
+					RR_TBtreated1stF.HIVstage[ia][is] + RR_TBtreated2ndF.HIVstage[ia][is];
+			}
+			temp1 += SumTBgroupsM[ia][is];
+			temp2 += SumTBgroupsF[ia][is];
+			if (SumTBgroupsM[ia][is] > 0.0 && SumGroupsM[ia][is] > 0.0) {
+				RatioHIVtoTBpopM[ia][is] = SumGroupsM[ia][is] / SumTBgroupsM[ia][is];
+			}
+			if (SumTBgroupsF[ia][is] > 0.0 && SumGroupsF[ia][is] > 0.0) {
+				RatioHIVtoTBpopF[ia][is] = SumGroupsF[ia][is] / SumTBgroupsF[ia][is];
+			}
+			if (SumTBgroupsM[ia][is] >= 0.0 && SumGroupsM[ia][is] == 0.0) {
+				RatioHIVtoTBpopM[ia][is] = 0.0;
+			}
+			if (SumTBgroupsF[ia][is] >= 0.0 && SumGroupsF[ia][is] == 0.0) {
+				RatioHIVtoTBpopF[ia][is] = 0.0;
+			}
+			// - 1 below is just an indicator of an undefined ratio (dealt with differently)
+			if (SumTBgroupsM[ia][is] == 0.0 && SumGroupsM[ia][is] > 0.0) {
+				RatioHIVtoTBpopM[ia][is] = -1.0;
+			}
+			if (SumTBgroupsF[ia][is] == 0.0 && SumGroupsF[ia][is] > 0.0) {
+				RatioHIVtoTBpopF[ia][is] = -1.0;
+			}
+		}
+		SumTB[ia][0] = temp1;
+		SumTB[ia][1] = temp2;
+	}
+}
+
+void BalanceTBpop()
+{
+	// Similar to TB_BalancePopulations in Mmamapudi's code
+
+	TBsuscepM.AdjustPopTotals();
+	TBlatentM.AdjustPopTotals();
+	TBactiveSmPosM.AdjustPopTotals();
+	TBactiveSmNegM.AdjustPopTotals();
+	TBtreatedM.AdjustPopTotals();
+	TBrecoveredST_M.AdjustPopTotals();
+	TBrecoveredLT_M.AdjustPopTotals();
+	TBlatentIPT_M.AdjustPopTotals();
+	TBrecST_IPT_M.AdjustPopTotals();
+	TBrecLT_IPT_M.AdjustPopTotals();
+	TBsuscepF.AdjustPopTotals();
+	TBlatentF.AdjustPopTotals();
+	TBactiveSmPosF.AdjustPopTotals();
+	TBactiveSmNegF.AdjustPopTotals();
+	TBtreatedF.AdjustPopTotals();
+	TBrecoveredST_F.AdjustPopTotals();
+	TBrecoveredLT_F.AdjustPopTotals();
+	TBlatentIPT_F.AdjustPopTotals();
+	TBrecST_IPT_F.AdjustPopTotals();
+	TBrecLT_IPT_F.AdjustPopTotals();
+	if (IncludeDR_TB == 1) {
+		TBactiveSmPosRR_M.AdjustPopTotals();
+		TBactiveSmNegRR_M.AdjustPopTotals();
+		RR_TBtreated1stM.AdjustPopTotals();
+		RR_TBtreated2ndM.AdjustPopTotals();
+		TBactiveSmPosRR_F.AdjustPopTotals();
+		TBactiveSmNegRR_F.AdjustPopTotals();
+		RR_TBtreated1stF.AdjustPopTotals();
+		RR_TBtreated2ndF.AdjustPopTotals();
+	}
+}
+
+void UpdateTBtotStart()
+{
+	// Calculates totals at the START of the month
+
+	TBsuscepM.UpdateStartTotal();
+	TBsuscepF.UpdateStartTotal();
+	TBactiveSmPosM.UpdateStartTotal();
+	TBactiveSmPosF.UpdateStartTotal();
+	TBactiveSmNegM.UpdateStartTotal();
+	TBactiveSmNegF.UpdateStartTotal();
+	TBrecoveredLT_M.UpdateStartTotal();
+	TBrecoveredLT_F.UpdateStartTotal();
+	TBlatentM.UpdateStartTotal();
+	TBlatentF.UpdateStartTotal();
+	TBtreatedM.UpdateStartTotal();
+	TBtreatedF.UpdateStartTotal();
+	TBrecoveredST_M.UpdateStartTotal();
+	TBrecoveredST_F.UpdateStartTotal();
+	TBlatentIPT_M.UpdateStartTotal();
+	TBlatentIPT_F.UpdateStartTotal();
+	TBrecST_IPT_M.UpdateStartTotal();
+	TBrecST_IPT_F.UpdateStartTotal();
+	TBrecLT_IPT_M.UpdateStartTotal();
+	TBrecLT_IPT_F.UpdateStartTotal();
+	if (IncludeDR_TB == 1) {
+		TBactiveSmPosRR_M.UpdateStartTotal();
+		TBactiveSmNegRR_M.UpdateStartTotal();
+		RR_TBtreated1stM.UpdateStartTotal();
+		RR_TBtreated2ndM.UpdateStartTotal();
+		TBactiveSmPosRR_F.UpdateStartTotal();
+		TBactiveSmNegRR_F.UpdateStartTotal();
+		RR_TBtreated1stF.UpdateStartTotal();
+		RR_TBtreated2ndF.UpdateStartTotal();
+	}
+}
+
+void GetTBcontactScreenPropns()
+{
+	int ia, iy;
+	double UntreatedTB, NoTB, TotAdults;
+
+	if (CurrMonth > 0) { iy = CurrYear - StartYear; }
+	else { iy = CurrYear - StartYear - 1; }
+
+	if (TBindexCasesLastMonth > 0.0) {
+		// This condition is included to avoid replacing non-zero values with zeros when the UpdatePop
+		// function is called at the start of the year.
+		UntreatedTB = 0.0;
+		TotAdults = 0.0;
+		for (ia = 0; ia < 81; ia++) {
+			UntreatedTB += TBactiveSmPosM.Total[ia] + TBactiveSmPosF.Total[ia] +
+				TBactiveSmNegM.Total[ia] + TBactiveSmNegF.Total[ia];
+			TotAdults += TotalPop[ia + 10][0] + TotalPop[ia + 10][1];
+		}
+		if (IncludeDR_TB == 1) {
+			for (ia = 0; ia < 81; ia++) {
+				UntreatedTB += TBactiveSmPosRR_M.Total[ia] + TBactiveSmPosRR_F.Total[ia] +
+					TBactiveSmNegRR_M.Total[ia] + TBactiveSmNegRR_F.Total[ia];
+			}
+		}
+		NoTB = TotAdults - UntreatedTB;
+
+		HHscreeningProb = TBindexCasesLastMonth * HHcontactsPerCase * PropnHHcontactScreened[iy] *
+			TBprevHHcontacts / UntreatedTB;
+		HHscreeningProbNeg = TBindexCasesLastMonth * HHcontactsPerCase * (1.0 - TBprevHHcontacts) / NoTB;
+		// Note we've omitted PropnHHcontactScreened[iy] here because HHscreeningProbNeg is used only in TPT 
+		// uptake calculations, where we instead multiply by PropnHHcontactTPT[iy].
+		if (CurrMonth == 11 && iy > 0) { // Effect of nutritional intervention
+			HHcontactPropn[iy + 1] = TBindexCasesLastMonth * HHcontactsPerCase * (1.0 - TBprevHHcontacts) / NoTB;
+			TBincRednNutrition = (6.0 * HHcontactPropn[iy + 1] * NutritionSupportHHcontacts[iy + 1] +
+				12.0 * HHcontactPropn[iy] * NutritionSupportHHcontacts[iy] +
+				6.0 * HHcontactPropn[iy - 1] * NutritionSupportHHcontacts[iy - 1]) * NutritionEfficacy;
+			if (TBincRednNutrition > NutritionEfficacy) { TBincRednNutrition = NutritionEfficacy; }
+		}
+	}
+	TBindexCasesLastYr += TBindexCasesLastMonth;
+	TBindexCasesLastMonth = 0.0;
 }
 
 void ResetMonthlyCum()
@@ -8819,6 +11316,9 @@ void ResetMonthlyCum()
 		NewPrEP_AGYW = 0.0;
 		NewPrEP_FSW = 0.0;
 		NewPrEP_MSM = 0.0;
+		NewCABLA_AGYW = 0.0;
+		NewCABLA_FSW = 0.0;
+		NewCABLA_MSM = 0.0;
 		NewDiagnosesPregnancy.out[CurrSim - 1][CurrYear - StartYear] = 0.0; 
 	}
 
@@ -8897,6 +11397,78 @@ void ResetMonthlyCum()
 	AIDSdeathsDiagPreART.out[CurrSim - 1][CurrYear - StartYear] = 0.0;
 	AIDSdeaths1st6moART.out[CurrSim - 1][CurrYear - StartYear] = 0.0;
 	AIDSdeathsAfter6moART.out[CurrSim - 1][CurrYear - StartYear] = 0.0;
+
+	// TB outputs
+	if (IncludeTB == 1) {
+		TBadultRxSmDiag[CurrYear - StartYear] = 0.0;
+		SmPosRxScreen[CurrYear - StartYear] = 0.0;
+		TBadultRxHIV[CurrYear - StartYear][0] = 0.0;
+		TBadultRxHIV[CurrYear - StartYear][1] = 0.0;
+		TBadultLabDiag[CurrYear - StartYear] = 0.0;
+		FalseTBadultLabDiag[CurrYear - StartYear] = 0.0;
+		NewTBreactivation = 0.0;
+		NewEmpiricTB[0] = 0.0;
+		NewEmpiricTB[1] = 0.0;
+		NewIPT_TSTpos = 0.0;
+		NewTPT_HH = 0.0;
+		TBdeathsAdultHIV[CurrYear - StartYear] = 0.0;
+		TBadultMortOnRx[CurrYear - StartYear][0] = 0.0;
+		TBadultMortOnRx[CurrYear - StartYear][1] = 0.0;
+		if (IncludeDR_TB == 1) {
+			TBadultMortOnRx1[CurrYear - StartYear][0] = 0.0;
+			TBadultMortOnRx1[CurrYear - StartYear][1] = 0.0;
+			TBadultMortOnRx2[CurrYear - StartYear][0] = 0.0;
+			TBadultMortOnRx2[CurrYear - StartYear][1] = 0.0;
+		}
+		for (ia = 0; ia < 16; ia++) {
+			for (ig = 0; ig < 2; ig++) {
+				TBadultMortBy5yr[CurrYear - StartYear][ia][ig] = 0.0;
+				TBadultRxBy5yr[CurrYear - StartYear][ia][ig] = 0.0;
+			}
+		}
+		TBindexCasesLastYr = 0.0;
+		for (is = 0; is < 2; is++) {
+			NewRxACF[is] = 0.0;
+			NewRxART_ICF[is] = 0.0;
+			NewRxTBscreenPrev[is] = 0.0;
+			NewRxTBscreenD2D[is] = 0.0;
+		}
+		if (FixedUncertainty == 1) {
+			for (ia = 0; ia < 81; ia++) {
+				for (ig = 0; ig < 2; ig++) {
+					TBmortSmNeg[ia][ig] = 0.0;
+					TBmortSmPos[ia][ig] = 0.0;
+					TBmortTreated[ia][ig] = 0.0;
+				}
+			}
+		}
+		if (IncludeDR_TB == 1) {
+			NewRR_TBnaive[CurrYear - StartYear] = 0.0;
+			NewRR_TBprevRx[CurrYear - StartYear] = 0.0;
+			NewRS_TBnaive[CurrYear - StartYear] = 0.0;
+			NewRS_TBprevRx[CurrYear - StartYear] = 0.0;
+			RifResFoundPreRx[CurrYear - StartYear] = 0.0;
+			RifResFoundOnRx[CurrYear - StartYear] = 0.0;
+			CultureOrLPAfailing[CurrYear - StartYear] = 0.0;
+			New2ndLineTB_NF[CurrYear - StartYear] = 0.0;
+			New2ndLineTB_F[CurrYear - StartYear] = 0.0;
+			FailTB_Rx_RS[CurrYear - StartYear] = 0.0;
+			FailTB_Rx_RR[CurrYear - StartYear] = 0.0;
+			FailTB_RxNewRR[CurrYear - StartYear] = 0.0;
+		}
+		if (FixedUncertainty == 1) {
+			for (ia = 0; ia < 81; ia++) {
+				for (ig = 0; ig < 2; ig++) {
+					NewActiveTBbyAgeSex[ia][ig] = 0.0;
+					NewHIVposTBbyAgeSex[ia][ig] = 0.0;
+					NewTBonARTbyAgeSex[ia][ig] = 0.0;
+					NewRecurrentTBbyAgeSex[ia][ig] = 0.0;
+					NewRelapseTBbyAgeSex[ia][ig] = 0.0;
+				}
+			}
+		}
+		AnnualRiskMTBpaed[CurrYear - StartYear] = 0.0;
+	}
 }
 
 void ResultsAtStartOfYr()
@@ -9276,6 +11848,8 @@ void ResultsAtStartOfYr()
 			(1.0 - MSMpropn18to24.out[CurrSim - 1][iy]) * MSMprev25plus.out[CurrSim - 1][iy];
 		MSMprev18plus.out[CurrSim - 1][iy] *= 1.0 / (PropnTGW * RR_HIV_TGW + 1.0 - PropnTGW);
 		TGWprev18plus.out[CurrSim - 1][iy] = MSMprev18plus.out[CurrSim - 1][iy] * RR_HIV_TGW;
+		TotalCisMSM.out[CurrSim - 1][iy] = (Temp3 + Temp2) * (1.0 - PropnTGW);
+		TotalTGW.out[CurrSim - 1][iy] = (Temp3 + Temp2) * PropnTGW;
 		Temp1 = 0.0;
 		for (ia = 5; ia < 40; ia++){
 			Temp1 += MHU_STM.NegNoHCT[ia] + MHU_STM.NegPastHCT[ia] + MHU_STM.RegHCT[ia] +
@@ -9308,9 +11882,11 @@ void ResultsAtStartOfYr()
 	}
 
 	// Proportions of adults in different CD4 stages
+	double ART_AHD;
 	if(FixedUncertainty==1 || CalibCD4==1){
 		for(is=0; is<4; is++){
 			TempCD4[is] = 0.0;}
+		ART_AHD = 0.0;
 		for(ia=5; ia<81; ia++){
 			TempCD4[0] += SumGroupsM[ia][5] + SumGroupsF[ia][5] +
 				SumGroupsM[ia][10] + SumGroupsF[ia][10] +
@@ -9332,7 +11908,15 @@ void ResultsAtStartOfYr()
 					}
 				}
 			}
+			for (ii = 1; ii<5; ii++){ // baseline CD4
+				for (id = 1; id < 5; id++){ // ART duration
+					ART_AHD += (SumGroupsM[ia][15 + ii * 5 + id] * OnARThalfIntDur[id][0][ia] +
+						SumGroupsF[ia][15 + ii * 5 + id] * OnARThalfIntDur[id][1][ia]) *
+						CD4dbnNonIntDur[3][4 - ii][id];
+				}
+			}
 		}
+		AHDnotOnART.out[CurrSim - 1][iy] = TempCD4[3] - ART_AHD;
 		Temp1 = TempCD4[0] + TempCD4[1] + TempCD4[2] + TempCD4[3];
 		AdultsUnder200.out[CurrSim-1][iy] = TempCD4[3]/Temp1;
 		Adults200to349.out[CurrSim-1][iy] = TempCD4[2]/Temp1;
@@ -9964,17 +12548,26 @@ void ResultsAtStartOfYr()
 		Temp2 = 0.0;
 		Temp3 = 0.0;
 		Temp4 = 0.0;
+		Temp5 = 0.0;
 		for (ia = 0; ia < 81; ia++){
 			Temp1 += SumGroupsM[ia][3];
 			Temp2 += SumGroupsF[ia][3];
 			Temp3 += SumGroupsF[ia][4];
-			Temp4 += SumGroupsM[ia][2] + SumGroupsF[ia][2];
+			Temp4 += SumGroupsM[ia][2];
+			Temp5 += SumGroupsF[ia][2];
 			if (ia == 9){ AdolescOnPrEP.out[CurrSim - 1][iy] = Temp1 + Temp2; }
-			if (ia == 14){ AGYWonPrEP.out[CurrSim - 1][iy] = Temp2; }
+			if (ia == 14){ 
+				AGYWonPrEP.out[CurrSim - 1][iy] = Temp2; 
+				AGYWonCABLA.out[CurrSim - 1][iy] = Temp5;
+			}
 		}
 		MenOnPrEP.out[CurrSim - 1][iy] = Temp1;
 		WomenOnPrEP.out[CurrSim - 1][iy] = Temp2;
 		TotOnPrEP.out[CurrSim - 1][iy] = Temp1 + Temp2;
+		WomenOnVM.out[CurrSim - 1][iy] = Temp3;
+		MenOnCABLA.out[CurrSim - 1][iy] = Temp4;
+		WomenOnCABLA.out[CurrSim - 1][iy] = Temp5;
+		TotOnCABLA.out[CurrSim - 1][iy] = Temp4 + Temp5;
 		if (iy>0){ 
 			NewPrEP_M.out[CurrSim - 1][iy - 1] = (MenOnPrEP.out[CurrSim - 1][iy] -
 				MenOnPrEP.out[CurrSim - 1][iy - 1] * exp(-1.0 / PrEPdur[0])) /
@@ -9982,18 +12575,31 @@ void ResultsAtStartOfYr()
 			NewPrEP_F.out[CurrSim - 1][iy - 1] = (WomenOnPrEP.out[CurrSim - 1][iy] -
 				WomenOnPrEP.out[CurrSim - 1][iy - 1] * exp(-1.0 / PrEPdur[1])) /
 				(PrEPdur[1] * (1.0 - exp(-1.0 / PrEPdur[1])));
+			NewCABLA_M.out[CurrSim - 1][iy - 1] = (MenOnCABLA.out[CurrSim - 1][iy] -
+				MenOnCABLA.out[CurrSim - 1][iy - 1] * exp(-1.0 / CABLAdur[0])) /
+				(CABLAdur[0] * (1.0 - exp(-1.0 / CABLAdur[0])));
+			NewCABLA_F.out[CurrSim - 1][iy - 1] = (WomenOnCABLA.out[CurrSim - 1][iy] -
+				WomenOnCABLA.out[CurrSim - 1][iy - 1] * exp(-1.0 / CABLAdur[1])) /
+				(CABLAdur[1] * (1.0 - exp(-1.0 / CABLAdur[1])));
 		}
-		WomenOnVM.out[CurrSim - 1][iy] = Temp3;
-		TotOnCABLA.out[CurrSim - 1][iy] = Temp4;
 		Temp1 = 0.0;
-		for (ia = 0; ia < 81; ia++){ Temp1 += FH_SW.RegPrEP[ia]; }
+		Temp2 = 0.0;
+		for (ia = 0; ia < 81; ia++){ 
+			Temp1 += FH_SW.RegPrEP[ia]; 
+			Temp2 += FH_SW.RegHCT[ia];
+		}
 		FSWonPrEP.out[CurrSim - 1][iy] = Temp1;
+		FSWonCABLA.out[CurrSim - 1][iy] = Temp2;
 		Temp1 = 0.0;
+		Temp2 = 0.0;
 		for (ia = 0; ia < 81; ia++){ 
 			Temp1 += MHU_STM.RegPrEP[ia] + MHC_STM.RegPrEP[ia] +
 				MLU_STM.RegPrEP[ia] + MLC_STM.RegPrEP[ia];
+			Temp2 += MHU_STM.RegHCT[ia] + MHC_STM.RegHCT[ia] +
+				MLU_STM.RegHCT[ia] + MLC_STM.RegHCT[ia];
 		}
 		MSMonPrEP.out[CurrSim - 1][iy] = Temp1;
+		MSMonCABLA.out[CurrSim - 1][iy] = Temp2;
 	}
 
 	// Additional outputs for Investment Case
@@ -10223,8 +12829,6 @@ void ResultsAtStartOfYr()
 					FH_LTL.PosDiagnosedPreART[ia][is] + FL_LTL.PosDiagnosedPreART[ia][is];
 			}
 		}
-		//DiscordantARTelig.out[CurrSim-1][iy] = Temp1 * DiscordantPropn;
-		//DiscordantPrEPelig.out[CurrSim - 1][iy] = Temp2 * DiscordantPropn;
 		for (is = 0; is < 4; is++){
 			TempCD4[is] = 0.0;
 		}
@@ -10273,6 +12877,292 @@ void ResultsAtStartOfYr()
 		CalcYLDs();
 	}
 	if (CalibMarriageData == 1 || FixedUncertainty == 1){ GetMarriageForCalib(); }
+	if (IncludeTB == 1 && (FixedUncertainty == 1 || CurrYear == 2018)) { TBresultsAtStartOfYr(); }
+	if (IncludeTB == 1) { TBresultsAtStartOfYr2(); }
+}
+
+void TBresultsAtStartOfYr()
+{
+	int ia, ig, iy, is, id, ii;
+	double temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8;
+	double temp9, temp10, temp11, temp12;
+
+	iy = CurrYear - StartYear;
+
+	// Note LTBI prevalence includes everyone with active TB
+	temp1 = 0.0;
+	temp2 = 0.0;
+	for (ia = 5; ia < 81; ia++) {
+		temp1 += TBsuscepM.Total[ia] + TBsuscepF.Total[ia];
+		temp2 += TotalPop[ia + 10][0] + TotalPop[ia + 10][1];
+	}
+	AdultLTBIprev.out[CurrSim - 1][iy] = 1.0 - temp1 / temp2;
+
+	// Active TB prevalence
+	temp1 = 0.0;
+	temp2 = 0.0;
+	temp3 = 0.0;
+	temp4 = 0.0;
+	temp9 = 0.0;
+	temp10 = 0.0;
+	for (ia = 5; ia < 81; ia++) {
+		temp1 += TBactiveSmPosM.Total[ia] + TBactiveSmNegM.Total[ia] + TBtreatedM.Total[ia];
+		temp2 += TBactiveSmPosF.Total[ia] + TBactiveSmNegF.Total[ia] + TBtreatedF.Total[ia];
+		temp3 += TotalPop[ia + 10][0];
+		temp4 += TotalPop[ia + 10][1];
+		temp9 += TBtreatedM.Total[ia];
+		temp10 += TBtreatedF.Total[ia];
+	}
+	if (IncludeDR_TB == 1) {
+		for (ia = 5; ia < 81; ia++) {
+			temp1 += TBactiveSmPosRR_M.Total[ia] + TBactiveSmNegRR_M.Total[ia] +
+				RR_TBtreated1stM.Total[ia] + RR_TBtreated2ndM.Total[ia];
+			temp2 += TBactiveSmPosRR_F.Total[ia] + TBactiveSmNegRR_F.Total[ia] +
+				RR_TBtreated1stF.Total[ia] + RR_TBtreated2ndF.Total[ia];
+			temp9 += RR_TBtreated1stM.Total[ia] + RR_TBtreated2ndM.Total[ia];
+			temp10 += RR_TBtreated1stF.Total[ia] + RR_TBtreated2ndF.Total[ia];
+		}
+	}
+	AdultTBprev.out[CurrSim - 1][iy] = (temp1 + temp2) / (temp3 + temp4);
+	AdultTBprevM.out[CurrSim - 1][iy] = temp1 / temp3;
+	AdultTBprevF.out[CurrSim - 1][iy] = temp2 / temp4;
+	AdultTBprevN.out[CurrSim - 1][iy] = temp1 + temp2;
+	TotTBadult.out[CurrSim - 1][iy] = temp1 + temp2;
+	TotTBadultM.out[CurrSim - 1][iy] = temp1;
+	TotTBadultF.out[CurrSim - 1][iy] = temp2;
+	UntreatedTBprev.out[CurrSim - 1][iy] = (temp1 + temp2 - temp9 - temp10) / (temp3 + temp4);
+	UntreatedTBprevM.out[CurrSim - 1][iy] = (temp1 - temp9) / temp3;
+	UntreatedTBprevF.out[CurrSim - 1][iy] = (temp2 - temp10) / temp4;
+	temp5 = 0.0;
+	temp6 = 0.0;
+	temp7 = 0.0;
+	temp8 = 0.0;
+	temp11 = 0.0;
+	temp12 = 0.0;
+	for (ia = 5; ia < 81; ia++) {
+		for (is = 5; is < 44; is++) {
+			temp5 += TBactiveSmPosM.HIVstage[ia][is] + TBactiveSmNegM.HIVstage[ia][is] + TBtreatedM.HIVstage[ia][is];
+			temp6 += TBactiveSmPosF.HIVstage[ia][is] + TBactiveSmNegF.HIVstage[ia][is] + TBtreatedF.HIVstage[ia][is];
+			temp11 += TBtreatedM.HIVstage[ia][is];
+			temp12 += TBtreatedF.HIVstage[ia][is];
+		}
+		temp7 += TotalPositive[ia + 10][0];
+		temp8 += TotalPositive[ia + 10][1];
+	}
+	if (IncludeDR_TB == 1) {
+		for (ia = 5; ia < 81; ia++) {
+			for (is = 5; is < 44; is++) {
+				temp5 += TBactiveSmPosRR_M.HIVstage[ia][is] + TBactiveSmNegRR_M.HIVstage[ia][is] +
+					RR_TBtreated1stM.HIVstage[ia][is] + RR_TBtreated2ndM.HIVstage[ia][is];
+				temp6 += TBactiveSmPosRR_F.HIVstage[ia][is] + TBactiveSmNegRR_F.HIVstage[ia][is] +
+					RR_TBtreated1stF.HIVstage[ia][is] + RR_TBtreated2ndF.HIVstage[ia][is];
+				temp11 += RR_TBtreated1stM.HIVstage[ia][is] + RR_TBtreated2ndM.HIVstage[ia][is];
+				temp12 += RR_TBtreated1stF.HIVstage[ia][is] + RR_TBtreated2ndF.HIVstage[ia][is];
+			}
+		}
+	}
+	AdultTBprevHIVpos.out[CurrSim - 1][iy] = (temp5 + temp6) / (temp7 + temp8);
+	AdultTBprevHIVneg.out[CurrSim - 1][iy] = (temp1 + temp2 - temp5 - temp6) / (temp3 + temp4 - temp7 - temp8);
+	TotTBadultHIVpos.out[CurrSim - 1][iy] = temp5 + temp6;
+	TotTBadultHIVneg.out[CurrSim - 1][iy] = temp1 + temp2 - temp5 - temp6;
+	if (CalibTBprev == 1) {
+		AdultPTBprev.out[CurrSim - 1][iy] = ((temp1 + temp2 - temp5 - temp6) * (1.0 - PropnETB[0]) + (temp5 + temp6) *
+			(1.0 - PropnETB[1])) / (temp3 + temp4);
+		AdultPTBprevM.out[CurrSim - 1][iy] = ((temp1 - temp5) * (1.0 - PropnETB[0]) + temp5 * (1.0 - PropnETB[1])) / temp3;
+		AdultPTBprevF.out[CurrSim - 1][iy] = ((temp2 - temp6) * (1.0 - PropnETB[0]) + temp6 * (1.0 - PropnETB[1])) / temp4;
+		if (CurrYear == 2018) {
+			TBprev2018[0] = ((temp1 - temp5 - (temp9 - temp11)) * (1.0 - PropnETB[0]) + (temp5 - temp11) * (1.0 - PropnETB[1]) +
+				0.15 * ((temp9 - temp11) * (1.0 - PropnETB[0]) + temp11 * (1.0 - PropnETB[1]))) / temp3;
+			TBprev2018[1] = ((temp2 - temp6 - (temp10 - temp12)) * (1.0 - PropnETB[0]) + (temp6 - temp12) * (1.0 - PropnETB[1]) +
+				0.15 * ((temp10 - temp12) * (1.0 - PropnETB[0]) + temp12 * (1.0 - PropnETB[1]))) / temp4;
+		}
+	}
+
+	// Ever treated prevalence
+	temp1 = 0.0;
+	temp2 = 0.0;
+	for (ia = 5; ia < 81; ia++) {
+		temp1 += TBtreatedM.Total[ia] + TBrecoveredST_M.Total[ia] + TBrecoveredLT_M.Total[ia] +
+			TBrecST_IPT_M.Total[ia] + TBrecLT_IPT_M.Total[ia];
+		temp2 += TBtreatedF.Total[ia] + TBrecoveredST_F.Total[ia] + TBrecoveredLT_F.Total[ia] +
+			TBrecST_IPT_F.Total[ia] + TBrecLT_IPT_F.Total[ia];
+	}
+	if (IncludeDR_TB == 1) {
+		for (ia = 5; ia < 81; ia++) {
+			temp1 += RR_TBtreated1stM.Total[ia] + RR_TBtreated2ndM.Total[ia];
+			temp2 += RR_TBtreated1stF.Total[ia] + RR_TBtreated2ndF.Total[ia];
+		}
+	}
+	EverTBtreatedM.out[CurrSim - 1][iy] = temp1 / temp3;
+	EverTBtreatedF.out[CurrSim - 1][iy] = temp2 / temp4;
+
+	// Ever treated among treatment initiators
+	if (IncludeDR_TB == 1) {
+		PropnPrevTreatedRR.out[CurrSim - 1][iy] = PrevTreatedRifRes[iy];
+		temp1 = FailTB_Rx_RR[iy - 1] + NewRR_TBprevRx[iy - 1];
+		temp2 = FailTB_Rx_RS[iy - 1] + NewRS_TBprevRx[iy - 1];
+		PropnPrevTreatedRS.out[CurrSim - 1][iy] = temp2 / (temp2 + NewRS_TBnaive[iy - 1]);
+		PropnPrevTreated.out[CurrSim - 1][iy] = (temp1 + temp2) / (temp1 + temp2 +
+			NewRR_TBnaive[iy - 1] + NewRS_TBnaive[iy - 1]);
+	}
+
+	// Drug resistance prevalence
+	if (IncludeDR_TB == 1) {
+		RifResPrevTB.out[CurrSim - 1][iy] = (FailTB_Rx_RR[iy - 1] + NewRR_TBprevRx[iy - 1]) /
+			(FailTB_Rx_RR[iy - 1] + NewRR_TBprevRx[iy - 1] + FailTB_Rx_RS[iy - 1] + NewRS_TBprevRx[iy - 1]);
+		RifResNewTB.out[CurrSim - 1][iy] = NewRR_TBnaive[iy - 1] /
+			(NewRR_TBnaive[iy - 1] + NewRS_TBnaive[iy - 1]);
+	}
+
+	// Number currently treated
+	temp1 = 0.0;
+	for (ia = 5; ia < 81; ia++) {
+		temp1 += TBtreatedM.Total[ia] + TBtreatedF.Total[ia];
+	}
+	if (IncludeDR_TB == 1) {
+		temp2 = 0.0;
+		temp3 = 0.0;
+		for (ia = 5; ia < 81; ia++) {
+			temp2 += RR_TBtreated1stM.Total[ia] + RR_TBtreated1stF.Total[ia];
+			temp3 += RR_TBtreated2ndM.Total[ia] + RR_TBtreated2ndF.Total[ia];
+		}
+		TreatedTBcurr2nd.out[CurrSim - 1][iy] = temp3;
+		temp1 += temp2 + temp3;
+	}
+	TreatedTBcurr.out[CurrSim - 1][iy] = temp1;
+}
+
+void TBresultsAtStartOfYr2()
+{
+	int ia, iy, is, ii, id;
+	double temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, ARTbyCD4[4], TBbyCD4[4];
+
+	iy = CurrYear - StartYear;
+
+	// Untreated TB
+	temp1 = 0.0;
+	temp2 = 0.0;
+	for (ia = 5; ia < 81; ia++) {
+		temp1 += TBactiveSmPosM.Total[ia] + TBactiveSmPosF.Total[ia];
+		temp2 += TBactiveSmNegM.Total[ia] + TBactiveSmNegF.Total[ia];
+	}
+	TotSmPosTB[iy] = temp1;
+	TotSmNegTB[iy] = temp2;
+	if (IncludeDR_TB == 1) {
+		temp1 = 0.0;
+		temp2 = 0.0;
+		for (ia = 5; ia < 81; ia++) {
+			temp1 += TBactiveSmPosRR_M.Total[ia] + TBactiveSmPosRR_F.Total[ia];
+			temp2 += TBactiveSmNegRR_M.Total[ia] + TBactiveSmNegRR_F.Total[ia];
+		}
+		TotSmPosRR_TB[iy] = temp1;
+		TotSmNegRR_TB[iy] = temp2;
+		TotSmPosTB[iy] += temp1;
+		TotSmNegTB[iy] += temp2;
+	}
+	UntreatedSmPosPropn[iy] = TotSmPosTB[iy] / (TotSmPosTB[iy] + TotSmNegTB[iy]);
+	if (FixedUncertainty == 1) {
+		UntreatedTB.out[CurrSim - 1][iy] = TotSmPosTB[iy] + TotSmNegTB[iy];
+		UntreatedTBsmPos.out[CurrSim - 1][iy] = TotSmPosTB[iy];
+		PropnUntreatedSmPos.out[CurrSim - 1][iy] = UntreatedSmPosPropn[iy];
+		if (IncludeDR_TB == 1) {
+			TotRifResTB.out[CurrSim - 1][iy] = TotSmPosRR_TB[iy] + TotSmNegRR_TB[iy];
+			RifResAllTB.out[CurrSim - 1][iy] = (TotSmPosRR_TB[iy] + TotSmNegRR_TB[iy]) /
+				(TotSmPosTB[iy] + TotSmNegTB[iy]);
+			MDRprevAllTB.out[CurrSim - 1][iy] = RifResAllTB.out[CurrSim - 1][iy] *
+				MDR_TBproportion[iy];
+		}
+	}
+
+	// TB-HIV odds ratios
+	if (CalibTB_HIV_OR == 1 || FixedUncertainty == 1) {
+		temp1 = 0.0;
+		temp2 = 0.0;
+		temp3 = 0.0;
+		temp4 = 0.0;
+		for (ia = 5; ia < 81; ia++) {
+			temp1 += TBactiveSmPosM.Total[ia] + TBactiveSmNegM.Total[ia] + TBtreatedM.Total[ia];
+			temp2 += TBactiveSmPosF.Total[ia] + TBactiveSmNegF.Total[ia] + TBtreatedF.Total[ia];
+			temp3 += TotalPop[ia + 10][0];
+			temp4 += TotalPop[ia + 10][1];
+		}
+		if (IncludeDR_TB == 1) {
+			for (ia = 5; ia < 81; ia++) {
+				temp1 += TBactiveSmPosRR_M.Total[ia] + TBactiveSmNegRR_M.Total[ia] +
+					RR_TBtreated1stM.Total[ia] + RR_TBtreated2ndM.Total[ia];
+				temp2 += TBactiveSmPosRR_F.Total[ia] + TBactiveSmNegRR_F.Total[ia] +
+					RR_TBtreated1stF.Total[ia] + RR_TBtreated2ndF.Total[ia];
+			}
+		}
+		temp5 = 0.0;
+		temp6 = 0.0;
+		temp7 = 0.0;
+		temp8 = 0.0;
+		for (ia = 5; ia < 81; ia++) {
+			for (is = 5; is < 44; is++) {
+				temp5 += TBactiveSmPosM.HIVstage[ia][is] + TBactiveSmNegM.HIVstage[ia][is] + TBtreatedM.HIVstage[ia][is];
+				temp6 += TBactiveSmPosF.HIVstage[ia][is] + TBactiveSmNegF.HIVstage[ia][is] + TBtreatedF.HIVstage[ia][is];
+			}
+			temp7 += TotalPositive[ia + 10][0];
+			temp8 += TotalPositive[ia + 10][1];
+		}
+		if (IncludeDR_TB == 1) {
+			for (ia = 5; ia < 81; ia++) {
+				for (is = 5; is < 44; is++) {
+					temp5 += TBactiveSmPosRR_M.HIVstage[ia][is] + TBactiveSmNegRR_M.HIVstage[ia][is] +
+						RR_TBtreated1stM.HIVstage[ia][is] + RR_TBtreated2ndM.HIVstage[ia][is];
+					temp6 += TBactiveSmPosRR_F.HIVstage[ia][is] + TBactiveSmNegRR_F.HIVstage[ia][is] +
+						RR_TBtreated1stF.HIVstage[ia][is] + RR_TBtreated2ndF.HIVstage[ia][is];
+				}
+			}
+		}
+		OddsTB_HIV[iy] = (temp5 + temp6) * (temp3 + temp4 + temp5 + temp6 - temp1 - temp2 - temp7 - temp8) /
+			((temp1 + temp2 - temp5 - temp6) * (temp7 + temp8 - temp5 - temp6));
+		if (FixedUncertainty == 1) { OR_TB_HIVassociation.out[CurrSim - 1][iy] = OddsTB_HIV[iy]; }
+	}
+
+	// Active TB prevalence in ART patients by baseline CD4
+	if (FixedUncertainty == 1 || RateART_TBscreened[iy] > 0.0) {
+		for (is = 0; is < 4; is++) {
+			ARTbyCD4[is] = 0.0;
+			TBbyCD4[is] = 0.0;
+		}
+		for (ia = 5; ia < 81; ia++) {
+			for (is = 0; is < 4; is++) {
+				for (id = 0; id < 5; id++) {
+					ii = 20 + is * 5 + id;
+					TBbyCD4[is] += TBactiveSmPosM.HIVstage[ia][ii] + TBactiveSmNegM.HIVstage[ia][ii] +
+						TBtreatedM.HIVstage[ia][ii] + TBactiveSmPosF.HIVstage[ia][ii] +
+						TBactiveSmNegF.HIVstage[ia][ii] + TBtreatedF.HIVstage[ia][ii];
+					if (IncludeDR_TB == 1) {
+						TBbyCD4[is] += TBactiveSmPosRR_M.HIVstage[ia][ii] + TBactiveSmNegRR_M.HIVstage[ia][ii] +
+							RR_TBtreated1stM.HIVstage[ia][ii] + RR_TBtreated2ndM.HIVstage[ia][ii] +
+							TBactiveSmPosRR_F.HIVstage[ia][ii] + TBactiveSmNegRR_F.HIVstage[ia][ii] +
+							RR_TBtreated1stF.HIVstage[ia][ii] + RR_TBtreated2ndF.HIVstage[ia][ii];
+					}
+					ARTbyCD4[is] += SumGroupsM[ia][ii] + SumGroupsF[ia][ii];
+				}
+			}
+		}
+		temp1 = 0.0;
+		temp2 = 0.0;
+		for (is = 0; is < 4; is++) {
+			temp1 += ARTbyCD4[is];
+			temp2 += TBbyCD4[is];
+		}
+		if (FixedUncertainty == 1) {
+			AdultTBprevART.out[CurrSim - 1][iy] = temp2 / temp1;
+			AdultTBprevARTover500.out[CurrSim - 1][iy] = TBbyCD4[0] / ARTbyCD4[0];
+			AdultTBprevART500.out[CurrSim - 1][iy] = TBbyCD4[1] / ARTbyCD4[1];
+			AdultTBprevART350.out[CurrSim - 1][iy] = TBbyCD4[2] / ARTbyCD4[2];
+			AdultTBprevART200.out[CurrSim - 1][iy] = TBbyCD4[3] / ARTbyCD4[3];
+		}
+		if (RateART_TBscreened[iy] > 0.0) {
+			TotTUTTtests = temp1 * RateART_TBscreened[iy];
+			TotTUTTdiag = temp2 * RateART_TBscreened[iy] * CurrSeTB_ART[0] +
+				(temp1 - temp2) * RateART_TBscreened[iy] * (1.0 - CurrSpTB);
+		}
+	}
 }
 
 void Get2ndLineOutput()
@@ -10595,29 +13485,42 @@ void CalcVLSstartYr()
 
 void CalcYLDs()
 {
-	// Note that this function will need to be updated if we extend the model to allow for
-	// male-female differences in ART interruption rates.
+	int ia, is, id, ii, ig, ic;
+	double temp, temp2, AveARTdisab[4][6];
 
-	int ia, is, id, ii;
-	double temp;
+	// CalculateAveARTdisab
+	for (is = 0; is < 4; is++){
+		for (id = 1; id < 6; id++){
+			AveARTdisab[is][id] = 0.0;
+			for (ic = 0; ic < 4; ic++){
+				AveARTdisab[is][id] += IHMEdisab[ic] * CD4dbnNonIntDur[ic][3 - is][id];
+			}
+		}
+	}
 
 	if (CurrYear == StartYear){
 		// Initialize DisabilityWeights
-		for (ii = 0; ii < 3; ii++){
-			DisabilityWeights[ii * 5] = 0.0; // Acute HIV
-			for (is = 1; is < 5; is++){
-				DisabilityWeights[ii * 5 + is] = IHMEdisab[is - 1];
+		for (ig = 0; ig < 2; ig++){
+			for (ia = 0; ia < 81; ia++){
+				for (ii = 0; ii < 3; ii++){
+					DisabilityWeights[ii * 5][ig][ia] = 0.0; // Acute HIV
+					for (is = 1; is < 5; is++){
+						DisabilityWeights[ii * 5 + is][ig][ia] = IHMEdisab[is - 1];
+					}
+				}
+				for (is = 0; is < 4; is++){
+					DisabilityWeights[15 + is * 5][ig][ia] = IHMEdisab[4];
+					for (id = 1; id < 5; id++){
+						// Assume people who are ART-experienced have half the disability
+						// weight of ART-naive people with the same CD4
+						DisabilityWeights[15 + is * 5 + id][ig][ia] = 0.5 * (AveARTdisab[is][id] * 
+							OnARThalfIntDur[id][ig][ia] + IHMEdisab[is] * (1.0 - OnARThalfIntDur[id][ig][ia]));
+					}
+				}
+				for (is = 0; is < 4; is++){
+					DisabilityWeights[35 + is][ig][ia] = IHMEdisab[is];
+				}
 			}
-		}
-		for (is = 0; is < 4; is++){
-			DisabilityWeights[15 + is * 5] = IHMEdisab[4];
-			for (id = 1; id < 5; id++){
-				// Implicitly assuming people who choose to interrupt aren't experiencing symptoms
-				DisabilityWeights[15 + is * 5 + id] = IHMEdisab[4] * OnARThalfIntDur[id][0][25];
-			}
-		}
-		for (is = 0; is < 4; is++){
-			DisabilityWeights[35 + is] = IHMEdisab[is];
 		}
 	}
 
@@ -10625,19 +13528,40 @@ void CalcYLDs()
 
 	// YLDs in children aged <10
 	for (ia = 0; ia < 10; ia++){
-		temp += IHMEdisab[3] * (TotalNaiveElig[ia][0] + TotalNaiveElig[ia][1]) +
-			IHMEdisab[4] * (TotalART[ia][0] + TotalART[ia][1]);
+		temp += IHMEdisab[3] * (TotalNaiveElig[ia][0] + TotalNaiveElig[ia][1]) + IHMEdisab[4] *
+			(TotalART[ia][0] + TotalART[ia][1] + TotalInterrupt[ia][0] + TotalInterrupt[ia][1]);
 	}
 
 	// YLDs at ages 10+
 	for (ia = 0; ia < 81; ia++){
 		for (is = 0; is < 39; is++){
-			temp += DisabilityWeights[is] * (SumGroupsM[ia][is + 5] + SumGroupsF[ia][is + 5]);
+			temp += DisabilityWeights[is][0][ia] * SumGroupsM[ia][is + 5] + 
+				DisabilityWeights[is][1][ia] * SumGroupsF[ia][is + 5];
 		}
 		if (ia == 4){ YLD_HIVpaed.out[CurrSim - 1][CurrYear - StartYear] = temp; }
 	}
-
 	YLD_HIV.out[CurrSim - 1][CurrYear - StartYear] = temp;
+
+	// YLDs at ages 15+ for AHD
+	temp = 0.0;
+	temp2 = 0.0;
+	for (ia = 0; ia < 81; ia++){
+		for (ii = 0; ii < 3; ii++){
+			temp += IHMEdisab[3] * (SumGroupsM[ia][ii * 5 + 9] + SumGroupsF[ia][ii * 5 + 9]);
+		}
+		for (id = 1; id < 5; id++){
+			temp += 0.5 * IHMEdisab[3] * ((1.0 - OnARThalfIntDur[id][0][ia]) * SumGroupsM[ia][30 + id] +
+				(1.0 - OnARThalfIntDur[id][1][ia]) * SumGroupsF[ia][30 + id]);
+		}
+		for (is = 0; is < 4; is++){
+			for (id = 1; id < 5; id++){
+				temp2 += 0.5 * IHMEdisab[3] * (OnARThalfIntDur[id][0][ia] * SumGroupsM[ia][20 + is * 5 + id] +
+					OnARThalfIntDur[id][1][ia] * SumGroupsF[ia][20 + is * 5 + id]) * CD4dbnNonIntDur[3][3 - is][id];
+			}
+		}
+	}
+	YLD_AHD.out[CurrSim - 1][CurrYear - StartYear] = temp + temp2;
+	YLD_AHDuntreated.out[CurrSim - 1][CurrYear - StartYear] = temp;
 }
 
 void GetMarriageForCalib()
@@ -10708,7 +13632,7 @@ void CalcMultPartners()
 	numerator = 0.0;
 	denominator = 0.0;
 	for (ia = 5; ia < 15; ia++){
-		lambda = PartnerAcqF[ia];
+		lambda = PartnerAcqF[ia] * PartnerRate20F;
 		denominator += CurrBehavDbn[ia][0][1] + CurrBehavDbn[ia][1][1] +
 			CurrBehavDbn[ia][2][1] + CurrBehavDbn[ia][3][1];
 		numerator += CurrBehavDbn[ia][0][1] * (1.0 - exp(-lambda) * (1.0 + lambda));
@@ -10736,7 +13660,7 @@ void CalcMultPartners()
 	numerator = 0.0;
 	denominator = 0.0;
 	for (ia = 15; ia < 40; ia++){
-		lambda = PartnerAcqF[ia];
+		lambda = PartnerAcqF[ia] * PartnerRate20F;
 		denominator += CurrBehavDbn[ia][0][1] + CurrBehavDbn[ia][1][1] +
 			CurrBehavDbn[ia][2][1] + CurrBehavDbn[ia][3][1];
 		numerator += CurrBehavDbn[ia][0][1] * (1.0 - exp(-lambda) * (1.0 + lambda));
@@ -10793,30 +13717,68 @@ void GetPrEPrateFSW()
 		CurrPrEPrateFSW = (TotStartingPrEP[iy] / 12.0) / temp;
 		if (CurrYear == PrEPdataYr){ StoredPrEPrateFSW = CurrPrEPrateFSW; }
 	}
+	if (TotStartingCABLA[iy] > 0.0){
+		temp = PrEPeligFSW;
+		for (ia = 0; ia < 81; ia++){
+			for (ii = 0; ii < 2; ii++){
+				temp += PrEPeligMSM[ia][ii] * RR_CABLAstartMSM[iy] * RR_CABLA_MSM[ia][ii];
+				for (ig = 0; ig < 2; ig++){
+					temp += PrEPeligOther[ia][ii][ig] * RR_CABLAstartF20[iy] *
+						RR_CABLA_Het[ia][ii][ig];
+				}
+			}
+		}
+		CurrCABLArateFSW = (TotStartingCABLA[iy] / 12.0) / temp;
+		if (CurrYear == CABLAdataYr){ StoredCABLArateFSW = CurrCABLArateFSW; }
+	}
 
-	// Calculate PrEP initiation and coverage outputs
+	// Calculate PrEP/CAB-LA initiation and coverage outputs
 	if (FixedUncertainty == 1){ 
 		NewPrEPrateFSW.out[CurrSim - 1][iy] = CurrPrEPrateFSW; 
-		if (PrEPeligFSW > 0.0){ PrEPcoverageFSW.out[CurrSim - 1][iy] = FSWonPrEP.out[CurrSim - 1][iy] / (PrEPeligFSW + 
-			FSWonPrEP.out[CurrSim - 1][iy]); }
-		tempMSM = 0.0;
-		for (ia = 0; ia < 81; ia++){ tempMSM += PrEPeligMSM[ia][0] + PrEPeligMSM[ia][1]; }
-		if (tempMSM > 0.0){ PrEPcoverageMSM.out[CurrSim - 1][iy] = MSMonPrEP.out[CurrSim - 1][iy] / (tempMSM + 
-			MSMonPrEP.out[CurrSim - 1][iy]); }
-		temp = 0.0;
-		for (ia = 0; ia < 15; ia++){ temp += PrEPeligOther[ia][0][1] + PrEPeligOther[ia][1][1]; }
-		if (temp > 0.0){ PrEPcoverageAGYW.out[CurrSim - 1][iy] = AGYWonPrEP.out[CurrSim - 1][iy] / (temp + 
-			AGYWonPrEP.out[CurrSim - 1][iy]); }
-		for (ia = 15; ia < 81; ia++){ temp += PrEPeligOther[ia][0][1] + PrEPeligOther[ia][1][1]; }
-		if (PrEPeligFSW > 0.0){ PrEPcoverageAllF.out[CurrSim - 1][iy] = WomenOnPrEP.out[CurrSim - 1][iy] / (temp + 
-			PrEPeligFSW + WomenOnPrEP.out[CurrSim - 1][iy]);}
-		temp2 = 0.0;
-		for (ia = 0; ia < 81; ia++){ temp2 += PrEPeligOther[ia][0][0] + PrEPeligOther[ia][1][0]; }
-		if (tempMSM > 0.0){ PrEPcoverageAllM.out[CurrSim - 1][iy] = MenOnPrEP.out[CurrSim - 1][iy] / (temp2 + 
-			tempMSM + MenOnPrEP.out[CurrSim - 1][iy]);}
+		NewCABLArateFSW.out[CurrSim - 1][iy] = CurrCABLArateFSW;
 		if (PrEPeligFSW > 0.0){
-			PrEPcoverageAll.out[CurrSim - 1][iy] = (WomenOnPrEP.out[CurrSim - 1][iy] + MenOnPrEP.out[CurrSim - 1][iy]) /
-				(temp + PrEPeligFSW + temp2 + tempMSM + WomenOnPrEP.out[CurrSim - 1][iy] + MenOnPrEP.out[CurrSim - 1][iy]);
+			PrEPcoverageFSW.out[CurrSim - 1][iy] = (FSWonPrEP.out[CurrSim - 1][iy] + FSWonCABLA.out[CurrSim - 1][iy]) / 
+				(PrEPeligFSW + FSWonPrEP.out[CurrSim - 1][iy] + FSWonCABLA.out[CurrSim - 1][iy]);
+		}
+		tempMSM = 0.0;
+		for (ia = 0; ia < 81; ia++){ 
+			tempMSM += PrEPeligMSM[ia][0] * exp(-PartnerAcqM[ia]) + PrEPeligMSM[ia][1] * exp(-PartnerAcqM[ia] * RRpartnerLow[0]);
+		}
+		if (tempMSM > 0.0){
+			PrEPcoverageMSM.out[CurrSim - 1][iy] = (MSMonPrEP.out[CurrSim - 1][iy] + MSMonCABLA.out[CurrSim - 1][iy]) / 
+				(tempMSM + MSMonPrEP.out[CurrSim - 1][iy] + MSMonCABLA.out[CurrSim - 1][iy]);
+		}
+		temp = 0.0;
+		for (ia = 0; ia < 15; ia++){ 
+			temp += PrEPeligOther[ia][0][1] * exp(-PartnerAcqF[ia] * PartnerRate20F) + PrEPeligOther[ia][1][1] * 
+				exp(-PartnerAcqF[ia] * PartnerRate20F * RRpartnerLow[1]);
+		}
+		if (temp > 0.0){
+			PrEPcoverageAGYW.out[CurrSim - 1][iy] = (AGYWonPrEP.out[CurrSim - 1][iy] + AGYWonCABLA.out[CurrSim - 1][iy]) / 
+				(temp + AGYWonPrEP.out[CurrSim - 1][iy] + AGYWonCABLA.out[CurrSim - 1][iy]);
+		}
+		for (ia = 15; ia < 81; ia++){ 
+			temp += PrEPeligOther[ia][0][1] * exp(-PartnerAcqF[ia] * PartnerRate20F) + PrEPeligOther[ia][1][1] *
+				exp(-PartnerAcqF[ia] * PartnerRate20F * RRpartnerLow[1]);
+		}
+		if (PrEPeligFSW > 0.0){
+			PrEPcoverageAllF.out[CurrSim - 1][iy] = (WomenOnPrEP.out[CurrSim - 1][iy] + WomenOnCABLA.out[CurrSim - 1][iy]) / 
+				(temp + PrEPeligFSW + WomenOnPrEP.out[CurrSim - 1][iy] + WomenOnCABLA.out[CurrSim - 1][iy]);
+		}
+		temp2 = 0.0;
+		for (ia = 0; ia < 81; ia++){ 
+			temp2 += PrEPeligOther[ia][0][0] * exp(-PartnerAcqM[ia]) + PrEPeligOther[ia][1][0] * exp(-PartnerAcqM[ia] * 
+				RRpartnerLow[0]);
+		}
+		if (tempMSM > 0.0){
+			PrEPcoverageAllM.out[CurrSim - 1][iy] = (MenOnPrEP.out[CurrSim - 1][iy] + MenOnCABLA.out[CurrSim - 1][iy]) / 
+				(temp2 + tempMSM + MenOnPrEP.out[CurrSim - 1][iy] + MenOnCABLA.out[CurrSim - 1][iy]);
+		}
+		if (PrEPeligFSW > 0.0){
+			PrEPcoverageAll.out[CurrSim - 1][iy] = (WomenOnPrEP.out[CurrSim - 1][iy] + MenOnPrEP.out[CurrSim - 1][iy] +
+				WomenOnCABLA.out[CurrSim - 1][iy] + MenOnCABLA.out[CurrSim - 1][iy]) / (temp + PrEPeligFSW + temp2 +
+				tempMSM + WomenOnPrEP.out[CurrSim - 1][iy] + MenOnPrEP.out[CurrSim - 1][iy] +
+				WomenOnCABLA.out[CurrSim - 1][iy] + MenOnCABLA.out[CurrSim - 1][iy]);
 		}
 	}
 }
@@ -11075,6 +14037,189 @@ void SetCurrYearParameters()
 		temp2 = (a_term - 10.0) / (b_term * b_term);
 		for (ia = 0; ia < 81; ia++){
 			PartnerAcqF[ia] = pow((ia + 0.5) / 10.0, temp - 1) * exp(-(ia - 9.5) * temp2);
+		}
+	}
+
+	if (IncludeTB == 1) { SetCurrYearParametersTB(); }
+}
+
+void SetCurrYearParametersTB()
+{
+	int iy, is;
+	double temp1, temp2;
+
+	iy = CurrYear - StartYear;
+
+	// Age and sex mixing
+	UpdateSocialMixing();
+
+	// Sensitivity and specificity of microbiological diagnosis
+	//MicroscopyPropn[iy] = 1.0;
+	CurrXpertSe[0] = UltraPropn[iy] * XpertUltraSe[0] + (1.0 - UltraPropn[iy]) * XpertSe[0];
+	CurrXpertSe[1] = UltraPropn[iy] * XpertUltraSe[1] + (1.0 - UltraPropn[iy]) * XpertSe[1];
+	CurrXpertSp = UltraPropn[iy] * XpertUltraSp + (1.0 - UltraPropn[iy]) * XpertSp;
+	CurrSeTB[0][0] = MicroscopyPropn[iy] * CultureConfirmSmNeg[iy][0] + (1.0 - MicroscopyPropn[iy]) *
+		(CurrXpertSe[0] + (1.0 - CurrXpertSe[0]) * CultureConfirmXpNeg[iy][0]);
+	CurrSeTB[1][0] = MicroscopyPropn[iy] + (1.0 - MicroscopyPropn[iy]) *
+		(CurrXpertSe[1] + (1.0 - CurrXpertSe[1]) * CultureConfirmXpNeg[iy][0]);
+	CurrSeTB[0][1] = (1.0 - OIsDiagnosed[iy]) * (MicroscopyPropn[iy] * CultureConfirmSmNeg[iy][0] +
+		(1.0 - MicroscopyPropn[iy]) * (CurrXpertSe[0] + (1.0 - CurrXpertSe[0]) * CultureConfirmXpNeg[iy][0])) +
+		OIsDiagnosed[iy] * (MicroscopyPropn[iy] * CultureConfirmSmNeg[iy][1] + (1.0 - MicroscopyPropn[iy]) *
+			(CurrXpertSe[0] + (1.0 - CurrXpertSe[0]) * CultureConfirmXpNeg[iy][1]));
+	CurrSeTB[1][1] = (1.0 - OIsDiagnosed[iy]) * (MicroscopyPropn[iy] + (1.0 - MicroscopyPropn[iy]) *
+		(CurrXpertSe[1] + (1.0 - CurrXpertSe[1]) * CultureConfirmXpNeg[iy][0])) + OIsDiagnosed[iy] *
+		(MicroscopyPropn[iy] + (1.0 - MicroscopyPropn[iy]) * (CurrXpertSe[1] + (1.0 - CurrXpertSe[1]) *
+			CultureConfirmXpNeg[iy][1]));
+	CurrSpTB = MicroscopyPropn[iy] * SmearSp + (1.0 - MicroscopyPropn[iy]) * CurrXpertSp;
+	for (is = 0; is < 2; is++) {
+		CurrSeTB_HHC[is] = (PropnHHcontactTUTT[iy] + (1 - PropnHHcontactTUTT[iy]) * Cough2wkActiveSmNeg *
+			pow(RRsymptomsSmPos, is)) * (UltraPropn[iy] * XpertUltraSeActive[is] + (1.0 - UltraPropn[iy]) *
+				XpertSeActive[is]);
+		CurrSeTB_ART[is] = (PropnART_TB_TUTT[iy] + (1 - PropnART_TB_TUTT[iy]) * Cough2wkActiveSmNeg *
+			pow(RRsymptomsSmPos, is)) * (UltraPropn[iy] * XpertUltraSeActive[is] + (1.0 - UltraPropn[iy]) *
+				XpertSeActive[is]);
+		CurrSeTBprev[is] = (PropnPrevTB_TUTT[iy] + (1 - PropnPrevTB_TUTT[iy]) * Cough2wkActiveSmNeg *
+			pow(RRsymptomsSmPos, is)) * (UltraPropn[iy] * XpertUltraSeActive[is] + (1.0 - UltraPropn[iy]) *
+				XpertSeActive[is]);
+		CurrSeTB_D2D[is] = (Cough2wkActiveSmNeg * pow(RRsymptomsSmPos, is) / (1.0 - TongueSwabDetected[1]) + (1.0 -
+			Cough2wkActiveSmNeg * pow(RRsymptomsSmPos, is)) * PropnD2DdCXR[iy] * Se_dCXR / (1.0 - TongueSwabDetected[0])) *
+			(UltraPropn[iy] * XpertUltraSeActive[is] + (1.0 - UltraPropn[iy]) * XpertSeActive[is]);
+	}
+
+	// Initial LTFU
+	CurrInitLTFU = MicroscopyPropn[iy] * InitialLTFU[0] + (1.0 - MicroscopyPropn[iy]) * InitialLTFU[1];
+	//if (CurrYear >= 2023){ CurrInitLTFU *= 0.5; }
+	if (VaryFutureInterventionsTB == 1 && CurrYear > 2022) {
+		if (CurrYear < 2027) {
+			CurrInitLTFU = 0.2 * (InitialLTFU[1] * (2027 - CurrYear) +
+				FutureInterventionsTB.out[CurrSim - 1][25] * (CurrYear - 2022));
+		}
+		else { CurrInitLTFU = FutureInterventionsTB.out[CurrSim - 1][25]; }
+	}
+
+	// Effects of changing smear grade distribution on infectivity and mortality
+	if (CurrYear < 2000) {
+		TBtransmProbCurr = TBtransmProb;
+		AnnMortTB_RxCurr[0] = AnnMortTB_Rx[0];
+		AnnMortTB_RxCurr[1] = AnnMortTB_Rx[1];
+	}
+	else {
+		TBtransmProbCurr = TBtransmProb * (1.0 - (1.0 - RatioMinToBaseInfectivity) *
+			(1.0 - SmPosRxDelay[iy - 1] / SmPosRxDelay[14]));
+		AnnMortTB_RxCurr[0] = AnnMortTB_Rx[0] * (1.0 - (1.0 - RatioMinToBaseTBmort) *
+			(1.0 - SmPosRxDelay[iy - 1] / SmPosRxDelay[14]));
+		AnnMortTB_RxCurr[1] = AnnMortTB_Rx[1] * (1.0 - (1.0 - RatioMinToBaseTBmort) *
+			(1.0 - SmPosRxDelay[iy - 1] / SmPosRxDelay[14]));
+		if (TBtransmProbCurr > TBtransmProb) { TBtransmProbCurr = TBtransmProb; }
+		if (AnnMortTB_RxCurr[0] > AnnMortTB_Rx[0]) { AnnMortTB_RxCurr[0] = AnnMortTB_Rx[0]; }
+		if (AnnMortTB_RxCurr[1] > AnnMortTB_Rx[1]) { AnnMortTB_RxCurr[1] = AnnMortTB_Rx[1]; }
+	}
+
+	// RR of microbiological screening in patients seeking Rx for TB symptoms
+	if (CurrYear <= 2004 || CurrYear > 2021) { RRscreenSymptoms = RRscreenSymptomsBase; }
+	else if (CurrYear > 2004 && CurrYear <= 2011) {
+		RRscreenSymptoms = RRscreenSymptomsBase + (RRscreenSymptomsUlt - RRscreenSymptomsBase) *
+			(CurrYear - 2004) / 7.0;
+	}
+	else {
+		RRscreenSymptoms = RRscreenSymptomsUlt + (RRscreenSymptomsBase - RRscreenSymptomsUlt) *
+			(CurrYear - 2011) / 10.0;
+	}
+	if (VaryFutureInterventionsTB == 1 && CurrYear > 2022) {
+		if (CurrYear < 2027) {
+			RRscreenSymptoms = 0.2 * (RRscreenSymptomsBase * (2027 - CurrYear) +
+				FutureInterventionsTB.out[CurrSim - 1][24] * (CurrYear - 2022));
+		}
+		else { RRscreenSymptoms = FutureInterventionsTB.out[CurrSim - 1][24]; }
+	}
+
+	// Drug resistance
+	if (IncludeDR_TB == 0) {
+		PropnNewTBrifRes[iy] = 0.0;
+		PrevTreatedRifRes[iy] = 0.0;
+		CurrDSTcoverageRR = 0.0;
+		ProbDSTifFailingRx = 0.0;
+	}
+	else {
+		if (iy == 0) {
+			PropnNewTBrifRes[iy] = InitRR_TBprev * RifResInfectiousness; // Approximate starting value
+			PrevTreatedRifRes[iy] = 0.68; // Approx value based on Kleeberg (1986) at end of Fourie et al (1986)
+		}
+		else {
+			temp1 = (TotSmPosRR_TB[iy - 1] + TotSmNegRR_TB[iy - 1] * SmNegInfectiousness) * RifResInfectiousness;
+			temp2 = TotSmPosTB[iy - 1] - TotSmPosRR_TB[iy - 1] + (TotSmNegTB[iy - 1] - TotSmNegRR_TB[iy - 1]) *
+				SmNegInfectiousness;
+			PropnNewTBrifRes[iy] = temp1 / (temp1 + temp2);
+			temp1 = FailTB_Rx_RR[iy - 1] + NewRR_TBprevRx[iy - 1];
+			PrevTreatedRifRes[iy] = temp1 / (temp1 + NewRR_TBnaive[iy - 1]);
+		}
+		CurrDSTcoverageRR = DSTcoveragePrevTB[iy] * PrevTreatedRifRes[iy] + DSTcoverageNewTB[iy] * (1.0 - PrevTreatedRifRes[iy]);
+		//CurrDSTcoverageRR = DSTcoveragePrevTB[0] * PrevTreatedRifRes[iy] + DSTcoverageNewTB[0] * (1.0 - PrevTreatedRifRes[iy]);
+		if (iy <= 15) { ProbDSTifFailingRx = ProbDSTifFailingRx1; }
+		else if (iy <= 25) { ProbDSTifFailingRx = ProbDSTifFailingRx2; }
+		else { ProbDSTifFailingRx = ProbDSTifFailingRx3; }
+		if (iy < 23) {
+			DSTcoveragePrevTB[iy] = DSTcoveragePrevTB[23] * ProbDSTifFailingRx / ProbDSTifFailingRx2;
+			DSTcoverageNewTB[iy] = DSTcoverageNewTB[23] * ProbDSTifFailingRx / ProbDSTifFailingRx2;
+		}
+	}
+
+	// IPT / TPT
+	CurrDurTPTprotection = TPTfraction3HP[iy] / (0.333 + MnthlyTPTdropout) + (1.0 - TPTfraction3HP[iy]) /
+		((1.0 / IPTduration[iy]) + MnthlyTPTdropout);
+
+	// Counterfactual settings
+	//DOTrollout[iy] = 0.0;
+	/*if (CurrYear > 2004){
+		PropnScreened.out[CurrSim - 1][iy] = TBsymptomScreened[19];
+		PropnScreened2.out[CurrSim - 1][iy] = TBsymptomScreened2[19];
+	}*/
+	//IPTinitiators[iy+1] = 0.0; // +1 because the IPT calculation use the number in the NEXT yr
+}
+
+void UpdateSocialMixing()
+{
+	int ia, ig, ia2, ig2;
+	double TotAgeSex[5][2], CurrAgeSexDbn[5][2], TotPopn;
+
+	// Calculate current age and sex distribution
+	TotPopn = 0.0;
+	for (ig = 0; ig < 2; ig++) {
+		for (ia = 0; ia < 5; ia++) { TotAgeSex[ia][ig] = 0.0; }
+		for (ia = 0; ia < 5; ia++) {
+			TotAgeSex[0][ig] += TotalPop[ia][ig];
+		}
+		for (ia = 5; ia < 13; ia++) {
+			TotAgeSex[1][ig] += TotalPop[ia][ig];
+		}
+		for (ia = 13; ia < 26; ia++) {
+			TotAgeSex[2][ig] += TotalPop[ia][ig];
+		}
+		for (ia = 26; ia < 46; ia++) {
+			TotAgeSex[3][ig] += TotalPop[ia][ig];
+		}
+		for (ia = 46; ia < 91; ia++) {
+			TotAgeSex[4][ig] += TotalPop[ia][ig];
+		}
+		for (ia = 0; ia < 5; ia++) { TotPopn += TotAgeSex[ia][ig]; }
+	}
+	for (ig = 0; ig < 2; ig++) {
+		for (ia = 0; ia < 5; ia++) {
+			CurrAgeSexDbn[ia][ig] = TotAgeSex[ia][ig] / TotPopn;
+		}
+	}
+
+	// Calculate SocialMixMatrix
+	// Here ia2 and ig2 correspond to the index case, ia and ig correspond to the contacts.
+	for (ig2 = 0; ig2 < 2; ig2++) {
+		for (ia2 = 0; ia2 < 4; ia2++) {
+			for (ig = 0; ig < 2; ig++) {
+				for (ia = 0; ia < 5; ia++) {
+					SocialMixMatrix[ia][ig][ia2][ig2] = DoddMixMatrix[ia][ig][ia2][ig2] *
+						CurrAgeSexDbn[ia][ig] / DoddAgeSexDbn[ia][ig];
+					//SocialMixMatrix[ia][ig][ia2][ig2] = DoddMixMatrix[ia][ig][ia2][ig2];
+				}
+			}
 		}
 	}
 }
@@ -11895,6 +15040,409 @@ void CalcRRtestVirgin()
 	if (FixedUncertainty == 1){ RelativeTestingVirgins.out[CurrSim - 1][iy] = RRtestVirgin; }
 }
 
+void CalcTBscreenPropn()
+{
+	int iy, ia, ig, is, ia2;
+	double SmPosTB[2][2], SmNegTB[2][2], NonTBpop[2][2]; // Population totals stratified by sex and HIV status
+	double temp1, temp2, temp3, temp4, temp5, HIVeffect[2], SexEffect[2], AdjF;
+	double ScreenTemp[2], Sensitivity, temp1a, temp1b, temp2a, temp2b, Growth;
+	double PropnSymptomCheck[2]; // In people seeking Rx for TB symptoms and those seeking Rx for other conditions
+
+	iy = CurrYear - StartYear;
+
+	for (ig = 0; ig < 2; ig++) {
+		for (is = 0; is < 2; is++) {
+			SmPosTB[ig][is] = 0.0;
+			SmNegTB[ig][is] = 0.0;
+			NonTBpop[ig][is] = 0.0;
+		}
+	}
+	for (ia = 5; ia < 81; ia++) {
+		temp1 = 0.0;
+		temp2 = 0.0;
+		temp3 = 0.0;
+		temp4 = 0.0;
+		for (is = 0; is < 5; is++) {
+			temp1 += TBactiveSmPosM.HIVstage[ia][is];
+			temp2 += TBactiveSmPosF.HIVstage[ia][is];
+			temp3 += TBactiveSmNegM.HIVstage[ia][is];
+			temp4 += TBactiveSmNegF.HIVstage[ia][is];
+		}
+		SmPosTB[0][0] += temp1;
+		SmPosTB[1][0] += temp2;
+		SmNegTB[0][0] += temp3;
+		SmNegTB[1][0] += temp4;
+		SmPosTB[0][1] += TBactiveSmPosM.Total[ia] - temp1;
+		SmPosTB[1][1] += TBactiveSmPosF.Total[ia] - temp2;
+		SmNegTB[0][1] += TBactiveSmNegM.Total[ia] - temp3;
+		SmNegTB[1][1] += TBactiveSmNegF.Total[ia] - temp4;
+		if (IncludeDR_TB == 1) {
+			temp1 = 0.0;
+			temp2 = 0.0;
+			temp3 = 0.0;
+			temp4 = 0.0;
+			for (is = 0; is < 5; is++) {
+				temp1 += TBactiveSmPosRR_M.HIVstage[ia][is];
+				temp2 += TBactiveSmPosRR_F.HIVstage[ia][is];
+				temp3 += TBactiveSmNegRR_M.HIVstage[ia][is];
+				temp4 += TBactiveSmNegRR_F.HIVstage[ia][is];
+			}
+			SmPosTB[0][0] += temp1;
+			SmPosTB[1][0] += temp2;
+			SmNegTB[0][0] += temp3;
+			SmNegTB[1][0] += temp4;
+			SmPosTB[0][1] += TBactiveSmPosRR_M.Total[ia] - temp1;
+			SmPosTB[1][1] += TBactiveSmPosRR_F.Total[ia] - temp2;
+			SmNegTB[0][1] += TBactiveSmNegRR_M.Total[ia] - temp3;
+			SmNegTB[1][1] += TBactiveSmNegRR_F.Total[ia] - temp4;
+		}
+		for (ig = 0; ig < 2; ig++) {
+			NonTBpop[ig][0] += TotalPop[ia + 10][ig] - TotalPositive[ia + 10][ig];
+			NonTBpop[ig][1] += TotalPositive[ia + 10][ig];
+		}
+	}
+	temp1 = 0.0;
+	temp2 = 0.0;
+	temp3 = 0.0;
+	Sensitivity = 0.0;
+	HIVeffect[0] = 1.0;
+	HIVeffect[1] = RRhealthSeekingHIV;
+	SexEffect[0] = 1.0;
+	SexEffect[1] = RRhealthSeekingFem * RRscreenF;
+	for (ig = 0; ig < 2; ig++) {
+		for (is = 0; is < 2; is++) {
+			NonTBpop[ig][is] = NonTBpop[ig][is] - SmPosTB[ig][is] - SmNegTB[ig][is];
+			temp1 += NonTBpop[ig][is] * (HealthSeekingGen * Cough2wkGen / RRscreenSymptoms +
+				HealthSeekingTBLS) * HIVeffect[is] * SexEffect[ig];
+			temp2 += (SmNegTB[ig][is] + SmPosTB[ig][is] * RRsymptomsSmPos) * (HealthSeekingGen *
+				Cough2wkActiveSmNeg / RRscreenSymptoms + HealthSeekingTB) * HIVeffect[is] *
+				SexEffect[ig];
+			Sensitivity += (SmNegTB[ig][is] * CurrSeTB[0][is] + SmPosTB[ig][is] * CurrSeTB[1][is] *
+				RRsymptomsSmPos) * (HealthSeekingGen * Cough2wkActiveSmNeg / RRscreenSymptoms +
+					HealthSeekingTB) * HIVeffect[is] * SexEffect[ig];
+			if (FixedUncertainty == 1) {
+				temp3 += NonTBpop[ig][is] * (HealthSeekingGen * Cough2wkGen / RRscreenSymptoms +
+					HealthSeekingTBLS) * HIVeffect[is] * SexEffect[ig] * (MicroscopyPropn[iy] *
+						SmearSp * CultureConfirmSmNeg[iy][is] + (1.0 - MicroscopyPropn[iy]) * CurrXpertSp *
+						CultureConfirmXpNeg[iy][is]);
+				temp3 += (SmNegTB[ig][is] * (MicroscopyPropn[iy] * SmearSp * CultureConfirmSmNeg[iy][is] +
+					(1.0 - MicroscopyPropn[iy]) * (1.0 - CurrXpertSe[0]) * CultureConfirmXpNeg[iy][is]) +
+					SmPosTB[ig][is] * (1.0 - MicroscopyPropn[iy]) * (1.0 - CurrXpertSe[1]) * CultureConfirmXpNeg[iy][is] *
+					RRsymptomsSmPos) * (HealthSeekingGen * Cough2wkActiveSmNeg / RRscreenSymptoms +
+						HealthSeekingTB) * HIVeffect[is] * SexEffect[ig];
+			}
+		}
+	}
+	Sensitivity = Sensitivity / temp2;
+	if (iy > 0) {
+		if (TotSmPosTB[iy] > 0.0 && TotSmPosTB[iy - 1] > 0.0) {
+			Growth = pow(TotSmPosTB[iy] / TotSmPosTB[iy - 1], 0.5);
+		}
+		else { Growth = 1.0; }
+		if (Growth > 1.5) { Growth = 1.5; }
+		if (Growth < 0.5) { Growth = 0.5; }
+		temp2 *= Growth;
+	}
+
+	//if (CurrYear >= 2023){ TBsymptomScreened[iy] = 0.4; } // Add 'else' before next line if including this line
+	if (FixedTBscreening == 1 && FixedUncertainty == 1 && CurrYear <= TBtestYear) {
+		TBsymptomScreened[iy] = PropnScreened.out[CurrSim - 1][iy];
+		TBsymptomScreened2[iy] = PropnScreened2.out[CurrSim - 1][iy];
+	}
+	else if (CurrYear >= TBtestYear + 5) {
+		TBsymptomScreened[iy] = UltTBsymptomScreen;
+	}
+	else if (CurrYear > TBtestYear) {
+		TBsymptomScreened[iy] = TBsymptomScreened[TBtestYear - StartYear] * (1.0 -
+			0.2 * (CurrYear - TBtestYear)) + UltTBsymptomScreen * 0.2 * (CurrYear - TBtestYear);
+	}
+	/*if (CurrYear > TBtestYear){
+		UltSmearScreenPropn = 0.5 * (TBsymptomScreened[25] + TBsymptomScreened[26]);
+		TBsymptomScreened[iy] = UltSmearScreenPropn * (MicroscopyPropn[iy] + (1.0 - MicroscopyPropn[iy]) *
+			UltTBsymptomScreen); // UltTBsymptomScreen is the RR screening under Xpert
+	}*/
+	else {
+		TBsymptomScreened[iy] = TotPosTBtestsAdult[iy] /
+			(temp1 * (1.0 - CurrSpTB) + temp2 * Sensitivity);
+		if (RateART_TBscreened[iy] > 0.0) {
+			TBsymptomScreened[iy] = (TotPosTBtestsAdult[iy] - TotTUTTdiag) /
+				(temp1 * (1.0 - CurrSpTB) + temp2 * Sensitivity);
+			if (TotPosTBtestsAdult[iy] < TotTUTTdiag) { TBsymptomScreened[iy] = 0.001; }
+		}
+		if (TBsymptomScreened[iy] > 1.0) { TBsymptomScreened[iy] = 1.0; }
+	}
+	EmpiricalAdj = pow(TBsymptomScreened[iy] / 0.2, LogEmpiricToMicro);
+	TBsymptomScreened2[iy] = TBsymptomScreened[iy] / RRscreenSymptoms;
+	ModelTBtests[iy] = (temp1 + temp2) * TBsymptomScreened[iy];
+	if (FixedUncertainty == 1) {
+		TotalScreens.out[CurrSim - 1][iy] = ModelTBtests[iy];
+		CultureConfirmTests.out[CurrSim - 1][iy] = temp3 * TBsymptomScreened[iy];
+		if (FixedTBscreening == 0) {
+			PropnScreened.out[CurrSim - 1][iy] = TBsymptomScreened[iy];
+			PropnScreened2.out[CurrSim - 1][iy] = TBsymptomScreened2[iy];
+		}
+	}
+	if (RateART_TBscreened[iy] > 0.0) { ModelTBtests[iy] += TotTUTTtests; }
+
+	// Calculate proportion of patients who are symptom-screened.
+	if (FixedUncertainty == 1) {
+		PropnSymptomCheck[0] = TBsymptomScreened[iy] * RatioSymptomToMicroScreen;
+		PropnSymptomCheck[1] = TBsymptomScreened2[iy] * RatioSymptomToMicroScreen;
+		if (PropnSymptomCheck[0] > 1.0) { PropnSymptomCheck[0] = 1.0; }
+		if (PropnSymptomCheck[1] > 1.0) { PropnSymptomCheck[1] = 1.0; }
+		TotTBsymptomChecks.out[CurrSim - 1][iy] = (NonTBpop[0][0] + NonTBpop[0][1] * HIVeffect[1] +
+			NonTBpop[1][0] * SexEffect[1] + NonTBpop[1][1] * HIVeffect[1] * SexEffect[1]) *
+			(HealthSeekingGen * PropnSymptomCheck[1] + HealthSeekingTBLS * PropnSymptomCheck[0]);
+		TotTBsymptomChecks.out[CurrSim - 1][iy] += (SmNegTB[0][0] + SmNegTB[0][1] * HIVeffect[1] +
+			SmNegTB[1][0] * SexEffect[1] + SmNegTB[1][1] * HIVeffect[1] * SexEffect[1]) *
+			(HealthSeekingGen * PropnSymptomCheck[1] + HealthSeekingTB * PropnSymptomCheck[0]);
+		TotTBsymptomChecks.out[CurrSim - 1][iy] += (SmPosTB[0][0] + SmPosTB[0][1] * HIVeffect[1] +
+			SmPosTB[1][0] * SexEffect[1] + SmPosTB[1][1] * HIVeffect[1] * SexEffect[1]) *
+			(HealthSeekingGen * PropnSymptomCheck[1] + HealthSeekingTB * RRsymptomsSmPos *
+				PropnSymptomCheck[0]);
+		if (iy > 0) {
+			TotTBsymptomChecksART.out[CurrSim - 1][iy] = (NonTBpop[0][1] * ARTcoverage15M.out[CurrSim - 1][iy] +
+				NonTBpop[1][1] * SexEffect[1] * ARTcoverage15F.out[CurrSim - 1][iy]) * HIVeffect[1] *
+				(HealthSeekingGen * PropnSymptomCheck[1] + HealthSeekingTBLS * PropnSymptomCheck[0]);
+			TotTBsymptomChecksART.out[CurrSim - 1][iy] += (SmNegTB[0][1] + SmNegTB[1][1] * SexEffect[1]) *
+				HIVeffect[1] * (NewActiveTBonART.out[CurrSim - 1][iy - 1] / NewActiveTB_HIVpos.out[CurrSim - 1][iy - 1]) *
+				(HealthSeekingGen * PropnSymptomCheck[1] + HealthSeekingTB * PropnSymptomCheck[0]);
+			TotTBsymptomChecksART.out[CurrSim - 1][iy] += (SmPosTB[0][1] + SmPosTB[1][1] * SexEffect[1]) *
+				HIVeffect[1] * (NewActiveTBonART.out[CurrSim - 1][iy - 1] / NewActiveTB_HIVpos.out[CurrSim - 1][iy - 1]) *
+				(HealthSeekingGen * PropnSymptomCheck[1] + HealthSeekingTB * RRsymptomsSmPos *
+					PropnSymptomCheck[0]);
+		}
+	}
+
+	// Calculate false-positive diagnoses and Rx initiations
+	if (FixedUncertainty == 1 || CalibTBdiagnosesA == 1) {
+		FalseTBadultLabDiag[iy] = temp1 * TBsymptomScreened[iy] * (1.0 - CurrSpTB);
+		LabDiagAdultTBfalsePos.out[CurrSim - 1][iy] = FalseTBadultLabDiag[iy];
+		temp3 = NonTBpop[0][0] + NonTBpop[0][1] * HIVeffect[1];
+		// We divide by RRscreenF in the next line to reverse the previous adjustment to SexEffect[1]
+		temp4 = (NonTBpop[1][0] + NonTBpop[1][1] * HIVeffect[1]) * SexEffect[1] / RRscreenF;
+		NewRxAdultTBfalsePos.out[CurrSim - 1][iy] = FalseTBadultLabDiag[iy] * (1.0 - CurrInitLTFU);
+		temp1 = EmpiricRx[0][0] * HealthSeekingGen * Cough2wkGen * (temp3 * (1.0 - TBsymptomScreened[iy] /
+			RRscreenSymptoms) + temp4 * (1.0 - TBsymptomScreened[iy] * RRscreenF / RRscreenSymptoms));
+		temp1 += EmpiricRx[1][0] * HealthSeekingTBLS * (temp3 * (1.0 - TBsymptomScreened[iy]) +
+			temp4 * (1.0 - TBsymptomScreened[iy] * RRscreenF));
+		temp2 = EmpiricRxNeg[0][0] * (1.0 - EmpiricRednXpert * (1.0 - MicroscopyPropn[iy])) * (temp3 + temp4 * RRscreenF) *
+			HealthSeekingGen * Cough2wkGen * (TBsymptomScreened[iy] / RRscreenSymptoms) * CurrSpTB;
+		temp2 += EmpiricRxNeg[1][0] * (1.0 - EmpiricRednXpert * (1.0 - MicroscopyPropn[iy])) * (temp3 + temp4 * RRscreenF) *
+			HealthSeekingTBLS * TBsymptomScreened[iy] * CurrSpTB;
+		temp1 *= EmpiricalAdj;
+		temp2 *= EmpiricalAdj;
+		NewRxAdultTBfalsePos.out[CurrSim - 1][iy] += temp1 + temp2;
+		NewRxAdultTB.out[CurrSim - 1][iy] = NewRxAdultTBfalsePos.out[CurrSim - 1][iy];
+		TBempiricRxAdults.out[CurrSim - 1][iy] = temp1 + temp2;
+		TBempiricRxNoLab.out[CurrSim - 1][iy] = temp1;
+		TBempiricRxNegLab.out[CurrSim - 1][iy] = temp2;
+		// HIV outputs
+		temp5 = HIVeffect[1] * (NonTBpop[0][1] * SexEffect[0] + NonTBpop[1][1] * SexEffect[1]) * (HealthSeekingGen *
+			Cough2wkGen / RRscreenSymptoms + HealthSeekingTBLS) * TBsymptomScreened[iy] * (1.0 - CurrSpTB);
+		NewRxAdultTB_HIV.out[CurrSim - 1][iy] = temp5 + (temp1 + temp2) * (NonTBpop[0][1] + NonTBpop[1][1] *
+			SexEffect[1] / RRscreenF) * HIVeffect[1] / (temp3 + temp4);
+	}
+
+	// Calculate false-positive Rx initiators stratified by age and sex
+	// Using the same code as before, but slightly simplified
+	if (FixedUncertainty == 1 || CalibTBdiagnosesA == 1) {
+		HIVeffect[0] = 1.0;
+		HIVeffect[1] = RRhealthSeekingHIV;
+		SexEffect[0] = 1.0;
+		SexEffect[1] = RRhealthSeekingFem * RRscreenF;
+		for (ia2 = 0; ia2 < 16; ia2++) {
+			for (ig = 0; ig < 2; ig++) {
+				for (is = 0; is < 2; is++) {
+					SmPosTB[ig][is] = 0.0;
+					SmNegTB[ig][is] = 0.0;
+					NonTBpop[ig][is] = 0.0;
+				}
+			}
+			if (ia2 < 15) {
+				for (ia = ia2 * 5; ia < ia2 * 5 + 5; ia++) {
+					temp1 = 0.0;
+					temp2 = 0.0;
+					temp3 = 0.0;
+					temp4 = 0.0;
+					for (is = 0; is < 5; is++) {
+						temp1 += TBactiveSmPosM.HIVstage[ia + 5][is];
+						temp2 += TBactiveSmPosF.HIVstage[ia + 5][is];
+						temp3 += TBactiveSmNegM.HIVstage[ia + 5][is];
+						temp4 += TBactiveSmNegF.HIVstage[ia + 5][is];
+					}
+					SmPosTB[0][0] += temp1;
+					SmPosTB[1][0] += temp2;
+					SmNegTB[0][0] += temp3;
+					SmNegTB[1][0] += temp4;
+					SmPosTB[0][1] += TBactiveSmPosM.Total[ia + 5] - temp1;
+					SmPosTB[1][1] += TBactiveSmPosF.Total[ia + 5] - temp2;
+					SmNegTB[0][1] += TBactiveSmNegM.Total[ia + 5] - temp3;
+					SmNegTB[1][1] += TBactiveSmNegF.Total[ia + 5] - temp4;
+					if (IncludeDR_TB == 1) {
+						temp1 = 0.0;
+						temp2 = 0.0;
+						temp3 = 0.0;
+						temp4 = 0.0;
+						for (is = 0; is < 5; is++) {
+							temp1 += TBactiveSmPosRR_M.HIVstage[ia + 5][is];
+							temp2 += TBactiveSmPosRR_F.HIVstage[ia + 5][is];
+							temp3 += TBactiveSmNegRR_M.HIVstage[ia + 5][is];
+							temp4 += TBactiveSmNegRR_F.HIVstage[ia + 5][is];
+						}
+						SmPosTB[0][0] += temp1;
+						SmPosTB[1][0] += temp2;
+						SmNegTB[0][0] += temp3;
+						SmNegTB[1][0] += temp4;
+						SmPosTB[0][1] += TBactiveSmPosRR_M.Total[ia + 5] - temp1;
+						SmPosTB[1][1] += TBactiveSmPosRR_F.Total[ia + 5] - temp2;
+						SmNegTB[0][1] += TBactiveSmNegRR_M.Total[ia + 5] - temp3;
+						SmNegTB[1][1] += TBactiveSmNegRR_F.Total[ia + 5] - temp4;
+					}
+					for (ig = 0; ig < 2; ig++) {
+						NonTBpop[ig][0] += TotalPop[ia + 15][ig] - TotalPositive[ia + 15][ig];
+						NonTBpop[ig][1] += TotalPositive[ia + 15][ig];
+					}
+				}
+			}
+			else {
+				temp1 = 0.0;
+				temp2 = 0.0;
+				temp3 = 0.0;
+				temp4 = 0.0;
+				for (is = 0; is < 5; is++) {
+					temp1 += TBactiveSmPosM.HIVstage[80][is];
+					temp2 += TBactiveSmPosF.HIVstage[80][is];
+					temp3 += TBactiveSmNegM.HIVstage[80][is];
+					temp4 += TBactiveSmNegF.HIVstage[80][is];
+				}
+				SmPosTB[0][0] += temp1;
+				SmPosTB[1][0] += temp2;
+				SmNegTB[0][0] += temp3;
+				SmNegTB[1][0] += temp4;
+				SmPosTB[0][1] += TBactiveSmPosM.Total[80] - temp1;
+				SmPosTB[1][1] += TBactiveSmPosF.Total[80] - temp2;
+				SmNegTB[0][1] += TBactiveSmNegM.Total[80] - temp3;
+				SmNegTB[1][1] += TBactiveSmNegF.Total[80] - temp4;
+				if (IncludeDR_TB == 1) {
+					temp1 = 0.0;
+					temp2 = 0.0;
+					temp3 = 0.0;
+					temp4 = 0.0;
+					for (is = 0; is < 5; is++) {
+						temp1 += TBactiveSmPosRR_M.HIVstage[80][is];
+						temp2 += TBactiveSmPosRR_F.HIVstage[80][is];
+						temp3 += TBactiveSmNegRR_M.HIVstage[80][is];
+						temp4 += TBactiveSmNegRR_F.HIVstage[80][is];
+					}
+					SmPosTB[0][0] += temp1;
+					SmPosTB[1][0] += temp2;
+					SmNegTB[0][0] += temp3;
+					SmNegTB[1][0] += temp4;
+					SmPosTB[0][1] += TBactiveSmPosRR_M.Total[80] - temp1;
+					SmPosTB[1][1] += TBactiveSmPosRR_F.Total[80] - temp2;
+					SmNegTB[0][1] += TBactiveSmNegRR_M.Total[80] - temp3;
+					SmNegTB[1][1] += TBactiveSmNegRR_F.Total[80] - temp4;
+				}
+				for (ig = 0; ig < 2; ig++) {
+					NonTBpop[ig][0] = TotalPop[90][ig] - TotalPositive[90][ig];
+					NonTBpop[ig][1] = TotalPositive[90][ig];
+				}
+			}
+			for (ig = 0; ig < 2; ig++) {
+				AdjF = 1.0;
+				if (ig == 1) { AdjF = RRscreenF; }
+				for (is = 0; is < 2; is++) {
+					NonTBpop[ig][is] = NonTBpop[ig][is] - SmPosTB[ig][is] - SmNegTB[ig][is];
+					TBadultRxBy5yr[iy][ia2][ig] += NonTBpop[ig][is] * (HealthSeekingGen * Cough2wkGen / RRscreenSymptoms +
+						HealthSeekingTBLS) * TBsymptomScreened[iy] * HIVeffect[is] * SexEffect[ig] * (1.0 - CurrSpTB) *
+						(1.0 - CurrInitLTFU);
+				}
+				// We divide by AdjF in the next line to reverse the previous adjustment to SexEffect[1]
+				temp3 = (NonTBpop[ig][0] + NonTBpop[ig][1] * HIVeffect[1]) * SexEffect[ig] / AdjF;
+				temp1 = EmpiricRx[0][0] * temp3 * HealthSeekingGen * Cough2wkGen * (1.0 - TBsymptomScreened[iy] * AdjF /
+					RRscreenSymptoms);
+				temp1 += EmpiricRx[1][0] * temp3 * HealthSeekingTBLS * (1.0 - TBsymptomScreened[iy] * AdjF);
+				temp2 = EmpiricRxNeg[0][0] * (1.0 - EmpiricRednXpert * (1.0 - MicroscopyPropn[iy])) * temp3 * HealthSeekingGen *
+					Cough2wkGen * (TBsymptomScreened[iy] * AdjF / RRscreenSymptoms) * CurrSpTB;
+				temp2 += EmpiricRxNeg[1][0] * (1.0 - EmpiricRednXpert * (1.0 - MicroscopyPropn[iy])) * temp3 * HealthSeekingTBLS *
+					TBsymptomScreened[iy] * AdjF * CurrSpTB;
+				temp1 *= EmpiricalAdj;
+				temp2 *= EmpiricalAdj;
+				TBadultRxBy5yr[iy][ia2][ig] += temp1 + temp2;
+			}
+		}
+	}
+}
+
+void UpdateIPTuptake()
+{
+	int ia, id, is, is2, ii, iy;
+	double NewIPT, IPTeligible[6][4][3], IPTeligibleART[5][4][3], WeightedEligible;
+
+	iy = CurrYear - StartYear + 1;
+	NewIPT = IPTinitiators[iy] / 12.0;
+
+	if (CurrYear + 1 > IPTdataYr + 5 && iy < ProjectionTerm) { BaseIPTuptake[iy] = IPTuptakeUlt; }
+	else if (CurrYear + 1 > IPTdataYr) {
+		BaseIPTuptake[iy] = (BaseIPTuptake[IPTdataYr - StartYear] * (4 - (CurrYear - IPTdataYr)) +
+			IPTuptakeUlt * (CurrYear + 1 - IPTdataYr)) / 5.0;
+	}
+	else if (NewIPT > 0.0) {
+		for (id = 0; id < 6; id++) {
+			for (is = 0; is < 4; is++) {
+				for (ii = 0; ii < 3; ii++) {
+					IPTeligible[id][is][ii] = 0.0;
+					if (id < 5) { IPTeligibleART[id][is][ii] = 0.0; }
+				}
+			}
+		}
+		for (ia = 4; ia < 81; ia++) {
+			for (is = 0; is < 4; is++) {
+				IPTeligible[0][is][0] += TBsuscepM.HIVstage[ia][16 + is] + TBsuscepF.HIVstage[ia][16 + is];
+				IPTeligible[0][is][1] += TBlatentM.HIVstage[ia][16 + is] + TBlatentF.HIVstage[ia][16 + is];
+				IPTeligible[0][is][2] += TBrecoveredST_M.HIVstage[ia][16 + is] + TBrecoveredST_F.HIVstage[ia][16 + is] +
+					TBrecoveredLT_M.HIVstage[ia][16 + is] + TBrecoveredLT_F.HIVstage[ia][16 + is];
+				for (id = 0; id < 5; id++) {
+					IPTeligibleART[id][is][0] += TBsuscepM.HIVstage[ia][20 + is * 5 + id] * OnARThalfIntDur[id + 1][0][ia] +
+						TBsuscepF.HIVstage[ia][20 + is * 5 + id] * OnARThalfIntDur[id + 1][1][ia];
+					IPTeligibleART[id][is][1] += TBlatentM.HIVstage[ia][20 + is * 5 + id] * OnARThalfIntDur[id + 1][0][ia] +
+						TBlatentF.HIVstage[ia][20 + is * 5 + id] * OnARThalfIntDur[id + 1][1][ia];
+					IPTeligibleART[id][is][2] += (TBrecoveredST_M.HIVstage[ia][20 + is * 5 + id] +
+						TBrecoveredLT_M.HIVstage[ia][20 + is * 5 + id]) * OnARThalfIntDur[id + 1][0][ia] +
+						(TBrecoveredST_F.HIVstage[ia][20 + is * 5 + id] + TBrecoveredLT_F.HIVstage[ia][20 + is * 5 + id]) *
+						OnARThalfIntDur[id + 1][1][ia];
+				}
+			}
+		}
+		// Now get numbers on ART by current CD4 (is) as a function of numbers by baseline CD4 (is2)
+		for (is = 0; is < 4; is++) {
+			for (id = 0; id < 5; id++) {
+				for (ii = 0; ii < 3; ii++) {
+					IPTeligible[id + 1][is][ii] = 0.0;
+					for (is2 = 0; is2 < 4; is2++) {
+						IPTeligible[id + 1][is][ii] += IPTeligibleART[id][is2][ii] * CD4dbnNonIntDur[is][3 - is2][id + 1];
+					}
+				}
+			}
+		}
+		// And finally, calculate WeightedEligible and BaseIPTuptake
+		WeightedEligible = 0.0;
+		for (is = 0; is < 4; is++) {
+			for (id = 0; id < 6; id++) {
+				if (CurrYear <= 2016 || id > 0) {
+					WeightedEligible += (IPTeligible[id][is][0] * RR_IPTuptakeNoLTBI + IPTeligible[id][is][1] +
+						IPTeligible[id][is][2] * RR_IPTuptakePrevTB) * RR_IPTuptakeCD4[is] * RR_IPTuptakeARTdur[id];
+				}
+			}
+		}
+		BaseIPTuptake[iy] = NewIPT / WeightedEligible;
+		if (BaseIPTuptake[iy] > 1.0) { BaseIPTuptake[iy] = 1.0; }
+	}
+	else { BaseIPTuptake[iy] = 0.0; }
+	//if (CurrYear >= 2023){ BaseIPTuptake[iy] = 2.0 * IPTuptakeUlt; }
+}
+
 void UpdateNonAIDSmort()
 {
 	int ia, offset;
@@ -12615,6 +16163,44 @@ void UpdateAllDemog()
 	MoveIntoAdultGroups();
 }
 
+void UpdateAllDemogTB()
+{
+	TBsuscepM.UpdateDemog();
+	TBlatentM.UpdateDemog();
+	TBactiveSmPosM.UpdateDemog();
+	TBactiveSmNegM.UpdateDemog();
+	TBtreatedM.UpdateDemog();
+	TBrecoveredST_M.UpdateDemog();
+	TBrecoveredLT_M.UpdateDemog();
+	TBlatentIPT_M.UpdateDemog();
+	TBrecST_IPT_M.UpdateDemog();
+	TBrecLT_IPT_M.UpdateDemog();
+	TBsuscepF.UpdateDemog();
+	TBlatentF.UpdateDemog();
+	TBactiveSmPosF.UpdateDemog();
+	TBactiveSmNegF.UpdateDemog();
+	TBtreatedF.UpdateDemog();
+	TBrecoveredST_F.UpdateDemog();
+	TBrecoveredLT_F.UpdateDemog();
+	TBlatentIPT_F.UpdateDemog();
+	TBrecST_IPT_F.UpdateDemog();
+	TBrecLT_IPT_F.UpdateDemog();
+	if (IncludeDR_TB == 1) {
+		TBactiveSmPosRR_M.UpdateDemog();
+		TBactiveSmNegRR_M.UpdateDemog();
+		RR_TBtreated1stM.UpdateDemog();
+		RR_TBtreated2ndM.UpdateDemog();
+		TBactiveSmPosRR_F.UpdateDemog();
+		TBactiveSmNegRR_F.UpdateDemog();
+		RR_TBtreated1stF.UpdateDemog();
+		RR_TBtreated2ndF.UpdateDemog();
+	}
+	MoveIntoAdultTB();
+
+	// Recalculate totals
+	UpdateTBtotStart();
+}
+
 void MoveIntoAdultGroups()
 {
 	double Temp, Temp2, TempByS[4];
@@ -12813,6 +16399,29 @@ void MoveIntoAdultGroups()
 	}
 }
 
+void MoveIntoAdultTB()
+{
+	// Since we aren't (yet) modelling paediatric TB, this function is very simple.
+	// But once we include paediatric TB, this function will need to be revised.
+
+	int is, iy;
+	double LTBIprevAge10, temp;
+
+	temp = 0.0;
+	for (iy = 0; iy < 10; iy++) {
+		if (CurrYear - iy >= 1985) { temp += AnnualRiskMTBpaed[CurrYear - iy - 1985]; }
+		else{ temp += InitLTBI[0] * InitLTBI[1]; }
+	}
+	LTBIprevAge10 = 1.0 - exp(-temp);
+
+	for (is = 0; is < 44; is++) {
+		TBsuscepM.HIVstage[0][is] = SumGroupsM[0][is] * (1.0 - LTBIprevAge10);
+		TBsuscepF.HIVstage[0][is] = SumGroupsF[0][is] * (1.0 - LTBIprevAge10);
+		TBlatentM.HIVstage[0][is] = SumGroupsM[0][is] * LTBIprevAge10;
+		TBlatentF.HIVstage[0][is] = SumGroupsF[0][is] * LTBIprevAge10;
+	}
+}
+
 void UpdateDebut(Adult* Virgin, Adult* SexExp, Adult* SexExp2, int ind)
 {
 	int ia, is, ig, group;
@@ -12916,7 +16525,7 @@ void UpdateStartTot()
 void ResultsAtEndOfYr()
 {
 	int ia, ig, ii, iy;
-	double Temp[2];
+	double Temp[2], NewART_P;
 
 	iy = CurrYear - StartYear;
 	Temp[0] = 0.0;
@@ -13061,10 +16670,9 @@ void ResultsAtEndOfYr()
 		ARTdeaths5to9.out[CurrSim - 1][iy] = AIDSdeathsART_P[1];
 	}
 
-	StartingART0to14.out[CurrSim - 1][iy] = 0.0;
-	for (ia = 0; ia < 15; ia++){
-		StartingART0to14.out[CurrSim - 1][iy] += PaedNewARTbyAge[ia];
-	}
+	NewART_P = 0.0;
+	for (ia = 0; ia < 15; ia++){ NewART_P += PaedNewARTbyAge[ia]; }
+	StartingART0to14.out[CurrSim - 1][iy] = NewART_P;
 
 	// Fraction of infections acquired recently
 	if (CalibANCprev == 1){
@@ -13099,6 +16707,7 @@ void ResultsAtEndOfYr()
 	// Generate outputs not required for calculating likelihood
 	if (FixedUncertainty == 1){
 		// Mortality outputs
+		Deaths15M.out[CurrSim - 1][iy] = AdultMortBy5yr[iy][0][0];
 		Deaths20M.out[CurrSim - 1][iy] = AdultMortBy5yr[iy][1][0];
 		Deaths25M.out[CurrSim - 1][iy] = AdultMortBy5yr[iy][2][0];
 		Deaths30M.out[CurrSim - 1][iy] = AdultMortBy5yr[iy][3][0];
@@ -13107,6 +16716,7 @@ void ResultsAtEndOfYr()
 		Deaths45M.out[CurrSim - 1][iy] = AdultMortBy5yr[iy][6][0];
 		Deaths50M.out[CurrSim - 1][iy] = AdultMortBy5yr[iy][7][0];
 		Deaths55M.out[CurrSim - 1][iy] = AdultMortBy5yr[iy][8][0];
+		Deaths15F.out[CurrSim - 1][iy] = AdultMortBy5yr[iy][0][1];
 		Deaths20F.out[CurrSim - 1][iy] = AdultMortBy5yr[iy][1][1];
 		Deaths25F.out[CurrSim - 1][iy] = AdultMortBy5yr[iy][2][1];
 		Deaths30F.out[CurrSim - 1][iy] = AdultMortBy5yr[iy][3][1];
@@ -13115,6 +16725,7 @@ void ResultsAtEndOfYr()
 		Deaths45F.out[CurrSim - 1][iy] = AdultMortBy5yr[iy][6][1];
 		Deaths50F.out[CurrSim - 1][iy] = AdultMortBy5yr[iy][7][1];
 		Deaths55F.out[CurrSim - 1][iy] = AdultMortBy5yr[iy][8][1];
+		NonAIDSdeaths15M.out[CurrSim - 1][iy] = NonAIDSmortBy5yr[iy][0][0];
 		NonAIDSdeaths20M.out[CurrSim - 1][iy] = NonAIDSmortBy5yr[iy][1][0];
 		NonAIDSdeaths25M.out[CurrSim - 1][iy] = NonAIDSmortBy5yr[iy][2][0];
 		NonAIDSdeaths30M.out[CurrSim - 1][iy] = NonAIDSmortBy5yr[iy][3][0];
@@ -13123,6 +16734,7 @@ void ResultsAtEndOfYr()
 		NonAIDSdeaths45M.out[CurrSim - 1][iy] = NonAIDSmortBy5yr[iy][6][0];
 		NonAIDSdeaths50M.out[CurrSim - 1][iy] = NonAIDSmortBy5yr[iy][7][0];
 		NonAIDSdeaths55M.out[CurrSim - 1][iy] = NonAIDSmortBy5yr[iy][8][0];
+		NonAIDSdeaths15F.out[CurrSim - 1][iy] = NonAIDSmortBy5yr[iy][0][1];
 		NonAIDSdeaths20F.out[CurrSim - 1][iy] = NonAIDSmortBy5yr[iy][1][1];
 		NonAIDSdeaths25F.out[CurrSim - 1][iy] = NonAIDSmortBy5yr[iy][2][1];
 		NonAIDSdeaths30F.out[CurrSim - 1][iy] = NonAIDSmortBy5yr[iy][3][1];
@@ -13132,9 +16744,13 @@ void ResultsAtEndOfYr()
 		NonAIDSdeaths50F.out[CurrSim - 1][iy] = NonAIDSmortBy5yr[iy][7][1];
 		NonAIDSdeaths55F.out[CurrSim - 1][iy] = NonAIDSmortBy5yr[iy][8][1];
 		AIDSdeathsPaed.out[CurrSim - 1][iy] = 0.0;
+		AIDSdeathsBoys.out[CurrSim - 1][iy] = 0.0;
+		AIDSdeathsGirls.out[CurrSim - 1][iy] = 0.0;
 		for (ii = 0; ii <= 10; ii++){
 			AIDSdeathsPaed.out[CurrSim - 1][iy] += AIDSdeathsByAgeP[ii][0] +
 				AIDSdeathsByAgeP[ii][1];
+			AIDSdeathsBoys.out[CurrSim - 1][iy] += AIDSdeathsByAgeP[ii][0];
+			AIDSdeathsGirls.out[CurrSim - 1][iy] += AIDSdeathsByAgeP[ii][1];
 			if (ii == 0){ AIDSdeaths0.out[CurrSim - 1][iy] = AIDSdeathsPaed.out[CurrSim - 1][iy]; }
 			if (ii == 4){ AIDSdeaths1to4.out[CurrSim - 1][iy] = AIDSdeathsPaed.out[CurrSim - 1][iy] - 
 				AIDSdeaths0.out[CurrSim - 1][iy]; }
@@ -13146,6 +16762,8 @@ void ResultsAtEndOfYr()
 		for (ii = 10; ii < 15; ii++){
 			AIDSdeathsPaed.out[CurrSim - 1][iy] += AIDSdeathsByAge[ii - 10][0] +
 				AIDSdeathsByAge[ii - 10][1];
+			AIDSdeathsBoys.out[CurrSim - 1][iy] += AIDSdeathsByAge[ii - 10][0];
+			AIDSdeathsGirls.out[CurrSim - 1][iy] += AIDSdeathsByAge[ii - 10][1];
 			if (ii == 14){
 				AIDSdeaths10to14.out[CurrSim - 1][iy] = AIDSdeathsPaed.out[CurrSim - 1][iy] -
 					AIDSdeaths0.out[CurrSim - 1][iy] - AIDSdeaths1to4.out[CurrSim - 1][iy] - 
@@ -13218,14 +16836,24 @@ void ResultsAtEndOfYr()
 		}
 		// Additional mortality outputs for Investment Case
 		NonAIDSdeaths.out[CurrSim - 1][iy] = 0.0;
+		TotDeathsM.out[CurrSim - 1][iy] = 0.0;
+		TotDeathsF.out[CurrSim - 1][iy] = 0.0;
 		for (ii = 0; ii <= 10; ii++){
 			NonAIDSdeaths.out[CurrSim - 1][iy] += NonAIDSdeathsP[ii][0] +
 				NonAIDSdeathsP[ii][1];
+			TotDeathsM.out[CurrSim - 1][iy] += NonAIDSdeathsP[ii][0];
+			TotDeathsF.out[CurrSim - 1][iy] += NonAIDSdeathsP[ii][1];
 		}
 		for (ii = 0; ii < 81; ii++){
 			NonAIDSdeaths.out[CurrSim - 1][iy] += NonAIDSdeathsA[ii][0] +
 				NonAIDSdeathsA[ii][1];
+			TotDeathsM.out[CurrSim - 1][iy] += NonAIDSdeathsA[ii][0];
+			TotDeathsF.out[CurrSim - 1][iy] += NonAIDSdeathsA[ii][1];
 		}
+		TotDeathsM.out[CurrSim - 1][iy] += AIDSdeathsBoys.out[CurrSim - 1][iy] +
+			AIDSdeathsAdultM.out[CurrSim - 1][iy];
+		TotDeathsF.out[CurrSim - 1][iy] += AIDSdeathsGirls.out[CurrSim - 1][iy] +
+			AIDSdeathsAdultF.out[CurrSim - 1][iy];
 		LYlostAIDS.out[CurrSim - 1][iy] = 0.0;
 		for (ii = 0; ii <= 10; ii++){
 			LYlostAIDS.out[CurrSim - 1][iy] += AIDSdeathsByAgeP[ii][0] * WestLifeExpectP[ii][0] +
@@ -13404,7 +17032,7 @@ void ResultsAtEndOfYr()
 		STtoARTwork2.out[CurrSim - 1][iy] = NewSTtoART[5];
 	}
 
-	if (FixedUncertainty == 1 || CalibARTbyAgeP == 1){
+	if (FixedUncertainty == 1 || CalibARTbyAgeP == 1 || CalibAHDpaedART == 1){
 		// Paediatric ART initiation
 		StartingART0.out[CurrSim - 1][iy] = PaedNewARTbyAge[0];
 		StartingART1.out[CurrSim - 1][iy] = PaedNewARTbyAge[1];
@@ -13419,6 +17047,8 @@ void ResultsAtEndOfYr()
 		for (ia = 0; ia < 5; ia++){ Temp[1] += SumGroupsM[ia][35] + SumGroupsF[ia][35]; }
 		NewARTpaedAdvanced.out[CurrSim - 1][iy] = Temp[0] + Temp[1];
 		// The Temp[1] term is not strictly correct because it's net of mortality among ART initiators.
+		if (CurrYear >= 2020 && CurrYear <= 2023){
+			ModelAHDpaedART[iy - 35] = (Temp[0] + Temp[1]) / NewART_P; }
 	}
 
 	// Cumulative paed ART initiation
@@ -13698,6 +17328,363 @@ void ResultsAtEndOfYr2()
 	NewPrEPinAGYW.out[CurrSim - 1][iy] = NewPrEP_AGYW;
 	NewPrEPinFSW.out[CurrSim - 1][iy] = NewPrEP_FSW;
 	NewPrEPinMSM.out[CurrSim - 1][iy] = NewPrEP_MSM;
+	NewCABLAinAGYW.out[CurrSim - 1][iy] = NewCABLA_AGYW;
+	NewCABLAinFSW.out[CurrSim - 1][iy] = NewCABLA_FSW;
+	NewCABLAinMSM.out[CurrSim - 1][iy] = NewCABLA_MSM;
+}
+
+void TBresultsAtEndOfYr()
+{
+	int ia, ig, iy, ii, is, id, CD4stage;
+	double temp1, temp2, temp3, temp4, temp5, temp6, FalsePosRx[4];
+
+	iy = CurrYear - StartYear;
+	for (ii = 0; ii < 4; ii++) { FalsePosRx[ii] = 0.0; }
+
+	// Incidence outputs
+	if (FixedUncertainty == 1 || RatePrevTBscreened[iy + 1] > 0.0) {
+		temp1 = 0.0;
+		temp2 = 0.0;
+		temp3 = 0.0;
+		temp4 = 0.0;
+		temp5 = 0.0;
+		temp6 = 0.0;
+		for (ia = 5; ia < 81; ia++) {
+			temp1 += NewActiveTBbyAgeSex[ia][0] + NewActiveTBbyAgeSex[ia][1];
+			temp2 += NewHIVposTBbyAgeSex[ia][0] + NewHIVposTBbyAgeSex[ia][1];
+			temp3 += NewTBonARTbyAgeSex[ia][0] + NewTBonARTbyAgeSex[ia][1];
+			temp4 += NewRecurrentTBbyAgeSex[ia][0] + NewRecurrentTBbyAgeSex[ia][1];
+			temp5 += NewActiveTBbyAgeSex[ia][0];
+			temp6 += NewRelapseTBbyAgeSex[ia][0] + NewRelapseTBbyAgeSex[ia][1];
+		}
+		NewActiveTBadult.out[CurrSim - 1][iy] = temp1;
+		NewActiveTB_HIVpos.out[CurrSim - 1][iy] = temp2;
+		NewActiveTBonART.out[CurrSim - 1][iy] = temp3;
+		NewActiveTBprevTB.out[CurrSim - 1][iy] = temp4;
+		NewActiveTBprevTBpropn.out[CurrSim - 1][iy] = temp4 / temp1;
+		RelapseTBpropnLastYr = temp6 / temp1;
+		NewActiveTBadultM.out[CurrSim - 1][iy] = temp5;
+		NewActiveTBadultF.out[CurrSim - 1][iy] = temp1 - temp5;
+		NewTBrateAdult.out[CurrSim - 1][iy] = temp1 / (MalesOver15.out[CurrSim - 1][iy] +
+			FemalesOver15.out[CurrSim - 1][iy]);
+		NewTBrateAdultM.out[CurrSim - 1][iy] = temp5 / MalesOver15.out[CurrSim - 1][iy];
+		NewTBrateAdultF.out[CurrSim - 1][iy] = (temp1 - temp5) / FemalesOver15.out[CurrSim - 1][iy];
+		PropnTBreactivation.out[CurrSim - 1][iy] = NewTBreactivation / temp1;
+		TBincFastProg.out[CurrSim - 1][iy] = NewTBrateAdult.out[CurrSim - 1][iy] *
+			(1.0 - PropnTBreactivation.out[CurrSim - 1][iy]);
+		TBincReactivation.out[CurrSim - 1][iy] = NewTBrateAdult.out[CurrSim - 1][iy] *
+			PropnTBreactivation.out[CurrSim - 1][iy];
+		// Duration outputs (prevalence-to-incidence ratios)
+		DurTBadult.out[CurrSim - 1][iy] = TotTBadult.out[CurrSim - 1][iy] / temp1;
+		DurTBadultM.out[CurrSim - 1][iy] = TotTBadultM.out[CurrSim - 1][iy] / temp5;
+		DurTBadultF.out[CurrSim - 1][iy] = TotTBadultF.out[CurrSim - 1][iy] / (temp1 - temp5);
+		DurTBadultHIVpos.out[CurrSim - 1][iy] = TotTBadultHIVpos.out[CurrSim - 1][iy] / temp2;
+		DurTBadultHIVneg.out[CurrSim - 1][iy] = TotTBadultHIVneg.out[CurrSim - 1][iy] / (temp1 - temp2);
+	}
+	if (FixedUncertainty == 1) { AnnMTBriskPaed.out[CurrSim - 1][iy] = AnnualRiskMTBpaed[iy]; }
+
+	// Diagnosis and treatment outputs
+	SmPosRxDelay[iy] = TotSmPosTB[iy] / (TBadultRxSmDiag[iy] + SmPosRxScreen[iy]);
+	if (FixedUncertainty == 1 || CalibTBdiagnosesA == 1) {
+		NewRxAdultTBsmPos.out[CurrSim - 1][iy] = TBadultRxSmDiag[iy];
+		TotNewRxAdultTBsmPos.out[CurrSim - 1][iy] = TBadultRxSmDiag[iy] + NewRxACF[1] + 
+			NewRxART_ICF[1] + NewRxTBscreenPrev[1] + NewRxTBscreenD2D[1];
+		LabDiagAdultTB.out[CurrSim - 1][iy] = TBadultLabDiag[iy] + FalseTBadultLabDiag[iy];
+		TBempiricRxAdults.out[CurrSim - 1][iy] += NewEmpiricTB[0] + NewEmpiricTB[1];
+		TBempiricRxNoLab.out[CurrSim - 1][iy] += NewEmpiricTB[0];
+		TBempiricRxNegLab.out[CurrSim - 1][iy] += NewEmpiricTB[1];
+		temp1 = 0.0;
+		temp2 = 0.0;
+		temp3 = 0.0;
+		for (ia = 0; ia < 16; ia++) {
+			for (ig = 0; ig < 2; ig++) {
+				temp1 += TBadultRxBy5yr[iy][ia][ig];
+				if (ia < 2) { temp2 += TBadultRxBy5yr[iy][ia][ig]; }
+			}
+			if (FixedUncertainty == 1) {
+				temp3 += TBadultRxBy5yr[iy][ia][0];
+				MaleTBtreatAS.out[ia][iy] += TBadultRxBy5yr[iy][ia][0];
+				FemTBtreatAS.out[ia][iy] += TBadultRxBy5yr[iy][ia][1];
+			}
+		}
+		NewRxAdultTB.out[CurrSim - 1][iy] += temp1;
+		if (FixedUncertainty == 1) {
+			TreatedTB15to24.out[CurrSim - 1][iy] = temp2 / temp1;
+			NewRxAdultTB_M.out[CurrSim - 1][iy] = temp3;
+			NewRxAdultTB_F.out[CurrSim - 1][iy] = temp1 - temp3;
+		}
+		NewRxAdultTB_HIV.out[CurrSim - 1][iy] += TBadultRxHIV[iy][0] + TBadultRxHIV[iy][1];
+		TotNewRxAdultTB_HIV.out[CurrSim - 1][iy] = NewRxAdultTB_HIV.out[CurrSim - 1][iy] +
+			NewRxART_ICF[0] + NewRxART_ICF[1]; // Quick fix, ignoring other active case finding
+	}
+	if (FixedUncertainty == 1) {
+		for (ig = 0; ig < 2; ig++) {
+			temp1 = 0.0;
+			for (ia = 0; ia < 16; ia++) {
+				temp1 += TBadultRxBy5yr[iy][ia][ig];
+			}
+			if (ig == 0) { HIVprevNewRxTB_M.out[CurrSim - 1][iy] = TBadultRxHIV[iy][ig] / temp1; }
+			else { HIVprevNewRxTB_F.out[CurrSim - 1][iy] = TBadultRxHIV[iy][ig] / temp1; }
+		}
+	}
+	if (FixedUncertainty == 1) {
+		NewRxAdultTB_ACF.out[CurrSim - 1][iy] = NewRxACF[0] + NewRxACF[1];
+		TotalScreensACF.out[CurrSim - 1][iy] = TBindexCasesLastYr * HHcontactsPerCase * PropnHHcontactScreened[iy];
+		TotalXpertScreensACF.out[CurrSim - 1][iy] = TBindexCasesLastYr * HHcontactsPerCase * PropnHHcontactScreened[iy] *
+			(PropnHHcontactTUTT[iy] + (1.0 - PropnHHcontactTUTT[iy]) * (TBprevHHcontacts * Cough2wkActiveSmNeg + (1.0 -
+				TBprevHHcontacts) * Cough2wkGen));
+		// Add false positives
+		FalsePosRx[0] = TBindexCasesLastYr * HHcontactsPerCase * PropnHHcontactScreened[iy] * (1.0 - TBprevHHcontacts) *
+			(PropnHHcontactTUTT[iy] + (1.0 - PropnHHcontactTUTT[iy]) * Cough2wkGen) * (1.0 - CurrXpertSp) *
+			(1.0 - CurrInitLTFU) * HHcontactRxUptake;
+		NewRxAdultTB_ACF.out[CurrSim - 1][iy] += FalsePosRx[0];
+		NewRxAdultTB_ART_ICF.out[CurrSim - 1][iy] = NewRxART_ICF[0] + NewRxART_ICF[1];
+		if (RateART_TBscreened[iy] > 0.0 || RateART_TBscreened[iy + 1] > 0.0) {
+			temp1 = 0.0;
+			temp2 = 0.0;
+			temp3 = 0.0;
+			for (ia = 0; ia < 81; ia++) {
+				for (is = 20; is < 40; is++) {
+					CD4stage = (is - 20) / 5;
+					id = is - 20 - CD4stage * 5;
+					temp1 += TBactiveSmNegM.HIVstage[ia][is] * OnARThalfIntDur[id][0][ia] + 
+						TBactiveSmNegF.HIVstage[ia][is] * OnARThalfIntDur[id][1][ia];
+					temp2 += TBactiveSmPosM.HIVstage[ia][is] * OnARThalfIntDur[id][0][ia] + 
+						TBactiveSmPosF.HIVstage[ia][is] * OnARThalfIntDur[id][1][ia];
+					if (IncludeDR_TB == 1) {
+						temp1 += TBactiveSmNegRR_M.HIVstage[ia][is] * OnARThalfIntDur[id][0][ia] +
+							TBactiveSmNegRR_F.HIVstage[ia][is] * OnARThalfIntDur[id][1][ia];
+						temp2 += TBactiveSmPosRR_M.HIVstage[ia][is] * OnARThalfIntDur[id][0][ia] +
+							TBactiveSmPosRR_F.HIVstage[ia][is] * OnARThalfIntDur[id][1][ia];
+					}
+				}
+				temp3 += TotalART[ia + 10][0] + TotalART[ia + 10][1];
+			}
+			temp3 = temp3 - temp1 - temp2;
+			if (RateART_TBscreened[iy] > 0.0) {
+				TotalScreensART_ICF.out[CurrSim - 1][iy] = 0.5 * (temp1 + TotARTbyTB[0] + temp2 + TotARTbyTB[1] +
+					temp3 + TotARTbyTB[2]) * RateART_TBscreened[iy];
+				TotalXpertScreensART_ICF.out[CurrSim - 1][iy] = ((0.5 * (temp1 + TotARTbyTB[0]) * Cough2wkActiveSmNeg +
+					0.5 * (temp2 + TotARTbyTB[1]) * Cough2wkActiveSmNeg * RRsymptomsSmPos + 0.5 * (temp3 + TotARTbyTB[2]) *
+					Cough2wkGen) * (1.0 - PropnART_TB_TUTT[iy]) + PropnART_TB_TUTT[iy] * 0.5 * (temp1 + TotARTbyTB[0] +
+						temp2 + TotARTbyTB[1] + temp3 + TotARTbyTB[2])) * RateART_TBscreened[iy];
+				// Add false positives
+				FalsePosRx[1] = 0.5 * (temp3 + TotARTbyTB[2]) * (Cough2wkGen * (1.0 - PropnART_TB_TUTT[iy]) +
+					PropnART_TB_TUTT[iy]) * RateART_TBscreened[iy] * (1.0 - CurrXpertSp) * (1.0 - CurrInitLTFU);
+				NewRxAdultTB_ART_ICF.out[CurrSim - 1][iy] += FalsePosRx[1];
+			}
+			TotARTbyTB[0] = temp1;
+			TotARTbyTB[1] = temp2;
+			TotARTbyTB[2] = temp3;
+		}
+		NewRxAdultTBscreenPrev.out[CurrSim - 1][iy] = NewRxTBscreenPrev[0] + NewRxTBscreenPrev[1];
+		if (RatePrevTBscreened[iy] > 0.0 || RatePrevTBscreened[iy + 1] > 0.0) {
+			temp1 = 0.0;
+			temp2 = 0.0;
+			temp3 = 0.0;
+			for (ia = 0; ia < 81; ia++) {
+				temp1 += TBactiveSmNegM.Total[ia] + TBactiveSmNegF.Total[ia];
+				temp2 += TBactiveSmPosM.Total[ia] + TBactiveSmPosF.Total[ia];
+				temp3 += (TBrecoveredST_M.Total[ia] + TBrecoveredST_F.Total[ia] + TBrecST_IPT_M.Total[ia] +
+					TBrecST_IPT_F.Total[ia]) * 4.0;
+			}
+			if (IncludeDR_TB == 1) {
+				for (ia = 0; ia < 81; ia++) {
+					temp1 += TBactiveSmNegRR_M.Total[ia] + TBactiveSmNegRR_F.Total[ia];
+					temp2 += TBactiveSmPosRR_M.Total[ia] + TBactiveSmPosRR_F.Total[ia];
+				}
+			}
+			temp1 *= RelapseTBpropnLastYr;
+			temp2 *= RelapseTBpropnLastYr;
+			if (RatePrevTBscreened[iy] > 0.0) {
+				TotalScreensPrevTB.out[CurrSim - 1][iy] = 0.5 * (temp1 + PrevTBbyCurrTB[0] + temp2 + PrevTBbyCurrTB[1] +
+					temp3 + PrevTBbyCurrTB[2]) * RatePrevTBscreened[iy];
+				TotalXpertScreensPrevTB.out[CurrSim - 1][iy] = ((0.5 * (temp1 + PrevTBbyCurrTB[0]) * Cough2wkActiveSmNeg +
+					0.5 * (temp2 + PrevTBbyCurrTB[1]) * Cough2wkActiveSmNeg * RRsymptomsSmPos + 0.5 * (temp3 +
+						PrevTBbyCurrTB[2]) * Cough2wkGen) * (1.0 - PropnPrevTB_TUTT[iy]) + PropnPrevTB_TUTT[iy] * 0.5 * (temp1 +
+							PrevTBbyCurrTB[0] + temp2 + PrevTBbyCurrTB[1] + temp3 + PrevTBbyCurrTB[2])) * RatePrevTBscreened[iy];
+				// Add false positives
+				FalsePosRx[2] = 0.5 * (temp3 + PrevTBbyCurrTB[2]) * (Cough2wkGen * (1.0 - PropnPrevTB_TUTT[iy]) +
+					PropnPrevTB_TUTT[iy]) * RatePrevTBscreened[iy] * (1.0 - CurrXpertSp) * (1.0 - CurrInitLTFU);
+				NewRxAdultTBscreenPrev.out[CurrSim - 1][iy] += FalsePosRx[2];
+			}
+			PrevTBbyCurrTB[0] = temp1;
+			PrevTBbyCurrTB[1] = temp2;
+			PrevTBbyCurrTB[2] = temp3;
+		}
+		NewRxAdultTBscreenD2D.out[CurrSim - 1][iy] = NewRxTBscreenD2D[0] + NewRxTBscreenD2D[1];
+		if (RateD2Dscreen[iy] > 0.0) {
+			temp1 = 0.0;
+			temp2 = 0.0;
+			temp3 = 0.0;
+			for (ia = 0; ia < 81; ia++) {
+				temp1 += TBactiveSmNegM.Total[ia] + TBactiveSmNegF.Total[ia];
+				temp2 += TBactiveSmPosM.Total[ia] + TBactiveSmPosF.Total[ia];
+				temp3 += TotalPop[ia + 10][0] + TotalPop[ia + 10][1];
+			}
+			if (IncludeDR_TB == 1) {
+				for (ia = 0; ia < 81; ia++) {
+					temp1 += TBactiveSmNegRR_M.Total[ia] + TBactiveSmNegRR_F.Total[ia];
+					temp2 += TBactiveSmPosRR_M.Total[ia] + TBactiveSmPosRR_F.Total[ia];
+				}
+			}
+			temp3 = temp3 - temp1 - temp2;
+			TotalScreensD2D.out[CurrSim - 1][iy] = (temp1 + temp2 + temp3) * RateD2Dscreen[iy];
+			Total_dCXRscreensD2D.out[CurrSim - 1][iy] = (temp1 * (1.0 - Cough2wkActiveSmNeg) + temp2 * (1.0 -
+				Cough2wkActiveSmNeg * RRsymptomsSmPos) + temp3 * (1.0 - Cough2wkGen)) * RateD2Dscreen[iy] *
+				PropnD2DdCXR[iy];
+			TotalXpertScreensD2D.out[CurrSim - 1][iy] = (temp1 * (Cough2wkActiveSmNeg + (1.0 - Cough2wkActiveSmNeg) *
+				PropnD2DdCXR[iy] * Se_dCXR) + temp2 * (Cough2wkActiveSmNeg * RRsymptomsSmPos + (1.0 - Cough2wkActiveSmNeg *
+					RRsymptomsSmPos) * PropnD2DdCXR[iy] * Se_dCXR) + temp3 * (Cough2wkGen + (1.0 - Cough2wkGen) * PropnD2DdCXR[iy] *
+						(1.0 - Sp_dCXR))) * RateD2Dscreen[iy];
+			temp4 = (1.0 - AbleSputum[1]) * TongueSwabTested / AbleSputum[1];
+			temp5 = (1.0 - AbleSputum[0]) * TongueSwabTested / AbleSputum[0];
+			TotTongueSwabsD2D.out[CurrSim - 1][iy] = (temp1 * (Cough2wkActiveSmNeg * temp4 + (1.0 - Cough2wkActiveSmNeg) *
+				PropnD2DdCXR[iy] * Se_dCXR * temp5) + temp2 * (Cough2wkActiveSmNeg * RRsymptomsSmPos * temp4 + (1.0 -
+					Cough2wkActiveSmNeg * RRsymptomsSmPos) * PropnD2DdCXR[iy] * Se_dCXR * temp5) + temp3 * (Cough2wkGen * temp4 +
+						(1.0 - Cough2wkGen) * PropnD2DdCXR[iy] * (1.0 - Sp_dCXR) * temp5)) * RateD2Dscreen[iy];
+			// Add false positives
+			FalsePosRx[3] = temp3 * (Cough2wkGen * (1.0 + temp4) + (1.0 - Cough2wkGen) * (1.0 + temp5) * PropnD2DdCXR[iy] *
+				(1.0 - Sp_dCXR)) * RateD2Dscreen[iy] * (1.0 - CurrXpertSp) * (1.0 - CurrInitLTFU) * HHcontactRxUptake;
+			NewRxAdultTBscreenD2D.out[CurrSim - 1][iy] += FalsePosRx[3];
+		}
+		TotLabDiagAllTBscreening.out[CurrSim - 1][iy] = LabDiagAdultTB.out[CurrSim - 1][iy] +
+			NewRxAdultTB_ACF.out[CurrSim - 1][iy] / ((1.0 - CurrInitLTFU) * HHcontactRxUptake) +
+			NewRxAdultTB_ART_ICF.out[CurrSim - 1][iy] / (1.0 - CurrInitLTFU) +
+			NewRxAdultTBscreenPrev.out[CurrSim - 1][iy] / (1.0 - CurrInitLTFU) +
+			NewRxAdultTBscreenD2D.out[CurrSim - 1][iy] / ((1.0 - CurrInitLTFU) * HHcontactRxUptake);
+		TBtestingYield.out[CurrSim - 1][iy] = TotLabDiagAllTBscreening.out[CurrSim - 1][iy] /
+			ModelTBtests[iy];
+		TotNewRxAdultTBfalsePos.out[CurrSim - 1][iy] = NewRxAdultTBfalsePos.out[CurrSim - 1][iy] +
+			FalsePosRx[0] + FalsePosRx[1] + FalsePosRx[2] + FalsePosRx[3];
+		LabDiagFalsePosActive[iy] = ((FalsePosRx[0] + FalsePosRx[3])/(HHcontactRxUptake) + FalsePosRx[1] + 
+			FalsePosRx[2]) / (1.0 - CurrInitLTFU);
+		TotLabDiagAdultFalsePos.out[CurrSim - 1][iy] = LabDiagAdultTBfalsePos.out[CurrSim - 1][iy] +
+			LabDiagFalsePosActive[iy];
+		TotNewRxAdultTB.out[CurrSim - 1][iy] = NewRxAdultTB.out[CurrSim - 1][iy] + 
+			NewRxAdultTB_ACF.out[CurrSim - 1][iy] + NewRxAdultTB_ART_ICF.out[CurrSim - 1][iy] +
+			NewRxAdultTBscreenPrev.out[CurrSim - 1][iy] + NewRxAdultTBscreenD2D.out[CurrSim - 1][iy];
+		HIVprevNewRxAdultTB.out[CurrSim - 1][iy] = TotNewRxAdultTB_HIV.out[CurrSim - 1][iy] /
+			TotNewRxAdultTB.out[CurrSim - 1][iy];
+		DiagnosisDelay.out[CurrSim - 1][iy] = AdultTBprevN.out[CurrSim - 1][iy] /
+			TotNewRxAdultTB.out[CurrSim - 1][iy];
+		CaseDetectionRatioT.out[CurrSim - 1][iy] = (TotNewRxAdultTB.out[CurrSim - 1][iy] -
+			TotNewRxAdultTBfalsePos.out[CurrSim - 1][iy]) / NewActiveTBadult.out[CurrSim - 1][iy];
+		if (CurrYear >= 2004 && CurrYear <= 2016) {
+			temp1 = 0.0;
+			for (ia = 0; ia < 16; ia++) {
+				temp1 += RecordedTBcasesA[ia][iy - 19][0] + RecordedTBcasesA[ia][iy - 19][1];
+			}
+			CaseDetectionRatioR.out[CurrSim - 1][iy] = temp1 / NewActiveTBadult.out[CurrSim - 1][iy];
+		}
+		temp1 = 0.0;
+		temp2 = 0.0;
+		for (ii = 0; ii < 5; ii++) { // ii is years prior to current
+			temp1 += exp(-(ii + 0.5) / DurTBadult.out[CurrSim - 1][iy]) *
+				NewActiveTBadult.out[CurrSim - 1][iy - ii];
+			temp2 += exp(-(ii + 0.5) / DurTBadult.out[CurrSim - 1][iy]);
+		}
+		LagAdjCaseDetectionRatio.out[CurrSim - 1][iy] = (TotNewRxAdultTB.out[CurrSim - 1][iy] -
+			TotNewRxAdultTBfalsePos.out[CurrSim - 1][iy]) / (temp1 / temp2);
+	}
+	if (FixedUncertainty == 1) {
+		TotLabTestedAllScreening.out[CurrSim - 1][iy] = TotalScreens.out[CurrSim - 1][iy] +
+			TotalXpertScreensACF.out[CurrSim - 1][iy] + TotalXpertScreensART_ICF.out[CurrSim - 1][iy] +
+			TotalXpertScreensPrevTB.out[CurrSim - 1][iy] + TotalXpertScreensD2D.out[CurrSim - 1][iy];
+	}
+
+	// Drug resistance outputs
+	if (FixedUncertainty == 1 && IncludeDR_TB == 1) {
+		NewRifResAcquired.out[CurrSim - 1][iy] = FailTB_RxNewRR[iy] / (FailTB_RxNewRR[iy] +
+			NewRR_TBnaive[iy] + NewRR_TBprevRx[iy]);
+		/*RifResDetected.out[CurrSim - 1][iy] = (TBadultLabDiag[iy] - FalseTBadultLabDiag[iy]) *
+			((NewRR_TBprevRx[iy - 1] + FailTB_Rx_RR[iy - 1]) * DSTcoveragePrevTB[iy] + NewRR_TBnaive[iy - 1] *
+			DSTcoverageNewTB[iy]) / (NewRR_TBprevRx[iy - 1] + FailTB_Rx_RR[iy - 1] + NewRS_TBprevRx[iy - 1] +
+			FailTB_Rx_RS[iy - 1] + NewRR_TBnaive[iy - 1] + NewRS_TBnaive[iy - 1]) + RifResFoundOnRx[iy];*/
+		RifResDetected.out[CurrSim - 1][iy] = RifResFoundPreRx[iy] + RifResFoundOnRx[iy];
+		RifResDetectedFailing.out[CurrSim - 1][iy] = RifResFoundOnRx[iy];
+		New2ndRxAdultTB.out[CurrSim - 1][iy] = New2ndLineTB_NF[iy] + New2ndLineTB_F[iy];
+		New2ndRxFailing1st.out[CurrSim - 1][iy] = New2ndLineTB_F[iy];
+		CultureLPAtestsFailing.out[CurrSim - 1][iy] = CultureOrLPAfailing[iy];
+	}
+
+	// Mortality outputs
+	if (FixedUncertainty == 1) {
+		temp1 = 0.0;
+		temp2 = 0.0;
+		for (ia = 0; ia < 16; ia++) {
+			MaleTBdeathsAS.out[ia][iy] += TBadultMortBy5yr[iy][ia][0];
+			FemTBdeathsAS.out[ia][iy] += TBadultMortBy5yr[iy][ia][1];
+			temp1 += TBadultMortBy5yr[iy][ia][0];
+			temp2 += TBadultMortBy5yr[iy][ia][1];
+		}
+		TotTBdeathsM.out[CurrSim - 1][iy] = temp1;
+		TotTBdeathsF.out[CurrSim - 1][iy] = temp2;
+		TotTBmortRate.out[CurrSim - 1][iy] = (temp1 + temp2) / (MalesOver15.out[CurrSim - 1][iy] +
+			FemalesOver15.out[CurrSim - 1][iy]);
+		TotTBmortRateM.out[CurrSim - 1][iy] = temp1 / MalesOver15.out[CurrSim - 1][iy];
+		TotTBmortRateF.out[CurrSim - 1][iy] = temp2 / FemalesOver15.out[CurrSim - 1][iy];
+		TotTBdeathsAdult.out[CurrSim - 1][iy] = temp1 + temp2;
+		TBdeathsOnRxM.out[CurrSim - 1][iy] = TBadultMortOnRx[iy][0];
+		TBdeathsOnRxF.out[CurrSim - 1][iy] = TBadultMortOnRx[iy][1];
+		TBdeathsOnRx.out[CurrSim - 1][iy] = TBadultMortOnRx[iy][0] + TBadultMortOnRx[iy][1];
+		MortRateTB_RxM.out[CurrSim - 1][iy] = TBadultMortOnRx[iy][0] / NewRxAdultTB_M.out[CurrSim - 1][iy];
+		MortRateTB_RxF.out[CurrSim - 1][iy] = TBadultMortOnRx[iy][1] / NewRxAdultTB_F.out[CurrSim - 1][iy];
+		TBdeathsHIV.out[CurrSim - 1][iy] = TBdeathsAdultHIV[iy];
+		CaseFatalityRatioA.out[CurrSim - 1][iy] = TotTBdeathsAdult.out[CurrSim - 1][iy] /
+			NewActiveTBadult.out[CurrSim - 1][iy];
+		CaseFatalityRatioT.out[CurrSim - 1][iy] = TBdeathsOnRx.out[CurrSim - 1][iy] /
+			NewRxAdultTB.out[CurrSim - 1][iy];
+		// Calculate adjustment to discontinuation rates for post-2016 period
+		temp1 = 1.0;
+		if (CurrYear > 2021) { temp1 = UltTBdefaultAdj; }
+		else if (CurrYear > 2016) { temp1 = 0.2 * ((2021 - CurrYear) + (CurrYear - 2016) * UltTBdefaultAdj); }
+		if (IncludeDR_TB == 0) {
+			TBRxCompletion.out[CurrSim - 1][iy] = (1.0 - TBdeathsOnRx.out[CurrSim - 1][iy] /
+				(NewRxAdultTB.out[CurrSim - 1][iy] - NewRxAdultTBfalsePos.out[CurrSim - 1][iy])) *
+				exp(-0.5 * temp1 * (AnnDropoutTB_Rx[0] * 0.6 + AnnDropoutTB_Rx[1] * 0.4) *
+					(DOTrollout[iy] + (1.0 - DOTrollout[iy]) / (RRdefaultDOT + (1.0 - RRdefaultDOT) *
+						(1.0 - DOTSeffectivenessAdj))));
+		}
+		else {
+			TBRxCompletion.out[CurrSim - 1][iy] = (1.0 - (TBadultMortOnRx1[iy][0] +
+				TBadultMortOnRx1[iy][1]) / (NewRxAdultTB.out[CurrSim - 1][iy] -
+					NewRxAdultTBfalsePos.out[CurrSim - 1][iy] - New2ndRxAdultTB.out[CurrSim - 1][iy])) *
+				exp(-0.5 * temp1 * (AnnDropoutTB_Rx[0] * 0.6 + AnnDropoutTB_Rx[1] * 0.4) *
+					(DOTrollout[iy] + (1.0 - DOTrollout[iy]) / (RRdefaultDOT + (1.0 - RRdefaultDOT) *
+						(1.0 - DOTSeffectivenessAdj))));
+			TBRx2Completion.out[CurrSim - 1][iy] = (1.0 - (TBadultMortOnRx2[iy][0] +
+				TBadultMortOnRx2[iy][1]) / New2ndRxAdultTB.out[CurrSim - 1][iy]) *
+				exp(-(Dur2ndLineRxTB[iy] / 12.0) * temp1 * (AnnDropoutTB_Rx[0] * 0.6 + AnnDropoutTB_Rx[1] * 0.4) *
+					(DOTrollout[iy] + (1.0 - DOTrollout[iy]) / (RRdefaultDOT + (1.0 - RRdefaultDOT) *
+						(1.0 - DOTSeffectivenessAdj))));
+		}
+		AdultLYlostTB.out[CurrSim - 1][iy] = 0.0;
+		for (ia = 5; ia < 81; ia++) {
+			AdultLYlostTB.out[CurrSim - 1][iy] += (TBmortSmNeg[ia][0] + TBmortSmPos[ia][0] +
+				TBmortTreated[ia][0]) * WestLifeExpectA[ia][0] + (TBmortSmNeg[ia][1] +
+					TBmortSmPos[ia][1] + TBmortTreated[ia][1]) * WestLifeExpectA[ia][1];
+		}
+	}
+
+	// IPT outputs
+	if (FixedUncertainty == 1) {
+		NewIPTlatent.out[CurrSim - 1][iy] = NewIPT_TSTpos;
+		NewTPTinHHcontacts.out[CurrSim - 1][iy] = NewTPT_HH;
+		IPTstartRate.out[CurrSim - 1][iy] = BaseIPTuptake[iy] * RR_IPTuptakeARTdur[1];
+		if (CurrYear == StartYear) { temp1 = 0.0; }
+		else {
+			//temp1 = 0.5 * (AdultARTinterrupters.out[CurrSim - 1][iy - 1] + 
+			//	AdultARTinterrupters.out[CurrSim - 1][iy]) * ARTresumptionRate;
+			temp1 = (TotalART15M.out[CurrSim - 1][iy] + TotalART15F.out[CurrSim - 1][iy]) *
+				RR_IPTuptakeARTdur[2] / RR_IPTuptakeARTdur[1];
+			temp1 += 0.5 * (DiagnosedHIV_M.out[CurrSim - 1][iy] - TotalART15M.out[CurrSim - 1][iy] +
+				DiagnosedHIV_F.out[CurrSim - 1][iy] - TotalART15F.out[CurrSim - 1][iy]) *
+				RR_IPTuptakeARTdur[0] / RR_IPTuptakeARTdur[1];
+		}
+		IPTcoverage.out[CurrSim - 1][iy] = NewIPT_TSTpos / (StartingART_M15.out[CurrSim - 1][iy] +
+			StartingART_F15.out[CurrSim - 1][iy] + temp1);
+	}
 }
 
 void OneYear()
@@ -13739,9 +17726,15 @@ void OneYear()
 	}
 	GetTotalTesting();
 	ResultsAtStartOfYr(); // Should come after updating rates of condom use
+	if (IncludeTB == 1) {
+		CalcTBincAdjByAgeSex();
+		CalcTBscreenPropn();
+		CalcHIVeffectTB();
+	}
 	for(im=0; im<12; im++){
 		OneMonth(im);
 		if(im==7){GetPrevPregnant();}
+		if (im == 11 && IncludeTB == 1) { UpdateIPTuptake(); }
 	}
 
 	// Update calculation of annual RATES
@@ -13795,9 +17788,11 @@ void OneYear()
 	GetCurrBehavDbnF();
 	GetCurrBehavDbnM();
 	UpdatePop();
+	if (IncludeTB == 1) { UpdateAllDemogTB(); }
 	
 	if(FixedUncertainty==1){
 		ResultsAtEndOfYr2();} // None of these outputs are required for calibration
+	if (IncludeTB == 1) { TBresultsAtEndOfYr(); }
 }
 
 /*void SaveHSRCcalib(char* filout)
@@ -13875,11 +17870,15 @@ void GetSummaryOutputs(char* filout)
 	U5MR.GetMeans();
 	AIDSdeathsTot.GetMeans();
 	NonAIDSdeaths.GetMeans();
+	TotDeathsM.GetMeans(); // New in v4.8
+	TotDeathsF.GetMeans(); // New in v4.8
 	NonAIDSdeathsHIVpos.GetMeans();
 	AIDSdeathsART.GetMeans();
 	AIDSdeathsAdultM.GetMeans();
 	AIDSdeathsAdultF.GetMeans();
 	AIDSdeathsPaed.GetMeans(); 
+	AIDSdeathsBoys.GetMeans(); // New in v4.8
+	AIDSdeathsGirls.GetMeans(); // New in v4.8
 	AIDSdeaths15to24.GetMeans(); 
 	AIDSdeaths15to24M.GetMeans(); 
 	AIDSdeaths15to24F.GetMeans(); 
@@ -13918,6 +17917,9 @@ void GetSummaryOutputs(char* filout)
 	Total50plus.GetMeans(); 
 	Total50plusM.GetMeans(); 
 	Total50plusF.GetMeans(); 
+	TotSexWorkers.GetMeans(); // New in v4.8
+	TotalCisMSM.GetMeans(); // New in v4.8
+	TotalTGW.GetMeans(); // New in v4.8
 	TotBirths.GetMeans();
 	TotFertRate.GetMeans();
 	BirthRate.GetMeans();
@@ -14111,6 +18113,7 @@ void GetSummaryOutputs(char* filout)
 	TotalHIVtests.GetMeans();
 	TotalHIVtestsU15.GetMeans();
 	HIVtestsPos.GetMeans();
+	FirstHIVtestsPos.GetMeans(); // New to v4.8
 	HIVtestsPosU15.GetMeans();
 	NewDiagAtBirth.GetMeans();
 	NewDiagInfants.GetMeans();
@@ -14160,6 +18163,16 @@ void GetSummaryOutputs(char* filout)
 	NewPrEPinFSW.GetMeans();
 	NewPrEPinMSM.GetMeans();
 	NewPrEPinAGYW.GetMeans();
+	MenOnCABLA.GetMeans();
+	WomenOnCABLA.GetMeans();
+	FSWonCABLA.GetMeans();
+	MSMonCABLA.GetMeans();
+	AGYWonCABLA.GetMeans();
+	NewCABLA_M.GetMeans();
+	NewCABLA_F.GetMeans();
+	NewCABLAinFSW.GetMeans();
+	NewCABLAinMSM.GetMeans();
+	NewCABLAinAGYW.GetMeans();
 	PrEPcoverageFSW.GetMeans();
 	PrEPcoverageMSM.GetMeans();
 	PrEPcoverageAGYW.GetMeans();
@@ -14231,6 +18244,7 @@ void GetAddedOutputs(char* filout)
 	Deaths45M.GetMeans();
 	Deaths50M.GetMeans();
 	Deaths55M.GetMeans();
+	NonAIDSdeaths15F.GetMeans();
 	NonAIDSdeaths20F.GetMeans();
 	NonAIDSdeaths25F.GetMeans();
 	NonAIDSdeaths30F.GetMeans();
@@ -14239,6 +18253,7 @@ void GetAddedOutputs(char* filout)
 	NonAIDSdeaths45F.GetMeans();
 	NonAIDSdeaths50F.GetMeans();
 	NonAIDSdeaths55F.GetMeans();
+	NonAIDSdeaths15M.GetMeans();
 	NonAIDSdeaths20M.GetMeans();
 	NonAIDSdeaths25M.GetMeans();
 	NonAIDSdeaths30M.GetMeans();
@@ -14317,16 +18332,16 @@ void GetAddedOutputs(char* filout)
 	HIVtestsPos18mo.GetMeans();
 	HIVtestsPos19to59mo.GetMeans();
 	HIVtestsPos5to14.GetMeans();
-	PaedARTpropn0to4.GetMeans(); // New to 4.3
-	PaedARTpropn5to9.GetMeans(); // New to 4.3
-	AdultsOver500.GetMeans(); // New to 4.3
-	Adults350to499.GetMeans(); // New to 4.3
-	Adults200to349.GetMeans(); // New to 4.3
-	AdultsUnder200.GetMeans(); // New to 4.3
-	NewARTunder200F.GetMeans(); // New to 4.3
-	NewART200to349F.GetMeans(); // New to 4.3
-	NewART350to499F.GetMeans(); // New to 4.3
-	NewARTover500F.GetMeans(); // New to 4.3
+	PaedARTpropn0to4.GetMeans(); 
+	PaedARTpropn5to9.GetMeans(); 
+	AdultsOver500.GetMeans(); 
+	Adults350to499.GetMeans(); 
+	Adults200to349.GetMeans();
+	AdultsUnder200.GetMeans(); 
+	NewARTunder200F.GetMeans(); 
+	NewART200to349F.GetMeans(); 
+	NewART350to499F.GetMeans(); 
+	NewARTover500F.GetMeans(); 
 	HIVinc15to49adj.GetMeans();
 	ANCincidence.GetMeans();
 	ANCincidenceAdj.GetMeans();
@@ -14338,6 +18353,7 @@ void GetAddedOutputs(char* filout)
 	ARTresumptionRateF.GetMeans();
 	RelativeTestingVirgins.GetMeans();
 	NewPrEPrateFSW.GetMeans();
+	NewCABLArateFSW.GetMeans(); // New to 4.8
 	NewDiagnosesPregnancy.GetMeans();
 	NewDiag1yrOlds.GetMeans();
 	TotClients.GetMeans();
@@ -14350,6 +18366,13 @@ void GetAddedOutputs(char* filout)
 	LowVLallHIV_M.GetMeans();
 	LowVLallHIV_F.GetMeans();
 	LowVLallHIV_P.GetMeans();
+	DALY_HIV.GetMeans();
+	DALY_HIVpaed.GetMeans();
+	YLD_HIV.GetMeans();
+	YLD_HIVpaed.GetMeans();
+	AHDnotOnART.GetMeans();
+	YLD_AHD.GetMeans();
+	YLD_AHDuntreated.GetMeans();
 
 	for (i = 0; i <= SummOutRow; i++){
 		for (c = 0; c<86; c++){
@@ -14492,6 +18515,264 @@ void GetOutputsByAge2(char* filout)
 	file.close();
 }
 
+void GetTBoutputs(char* filout)
+{
+	// Similar to the TB_GetSummaryOutputs function in Mmamapudi's code
+
+	int i, c;
+	ofstream file(filout);
+
+	// Clear SummaryOutputs
+	for (i = 0; i <= SummOutRow; i++) {
+		for (c = 0; c < 86; c++) {
+			SummaryOutputs[i][c] = 0.0;
+		}
+	}
+
+	SummOutRow = 0;
+
+	// Incidence outputs
+	NewActiveTBadult.GetMeans();
+	NewActiveTBadultM.GetMeans();
+	NewActiveTBadultF.GetMeans();
+	NewActiveTB_HIVpos.GetMeans();
+	NewActiveTBonART.GetMeans();
+	NewActiveTBprevTB.GetMeans();
+	NewActiveTBprevTBpropn.GetMeans();
+	NewTBrateAdult.GetMeans();
+	NewTBrateAdultM.GetMeans();
+	NewTBrateAdultF.GetMeans();
+	PropnTBreactivation.GetMeans();
+
+	// Prevalence outputs
+	SummOutRow += 3;
+	AdultLTBIprev.GetMeans();
+	AdultTBprev.GetMeans();
+	AdultTBprevM.GetMeans();
+	AdultTBprevF.GetMeans();
+	AdultTBprevN.GetMeans();
+	AdultPTBprev.GetMeans();
+	AdultPTBprevM.GetMeans();
+	AdultPTBprevF.GetMeans();
+	AdultTBprevHIVpos.GetMeans();
+	AdultTBprevHIVneg.GetMeans();
+	OR_TB_HIVassociation.GetMeans();
+	AdultTBprevART.GetMeans();
+	AdultTBprevART200.GetMeans();
+	AdultTBprevART350.GetMeans();
+	AdultTBprevART500.GetMeans();
+	AdultTBprevARTover500.GetMeans();
+	TotTBadult.GetMeans();
+	TotTBadultM.GetMeans();
+	TotTBadultF.GetMeans();
+	TotTBadultHIVpos.GetMeans();
+	TotTBadultHIVneg.GetMeans();
+	DurTBadult.GetMeans();
+	DurTBadultM.GetMeans();
+	DurTBadultF.GetMeans();
+	DurTBadultHIVpos.GetMeans();
+	DurTBadultHIVneg.GetMeans();
+	EverTBtreatedM.GetMeans();
+	EverTBtreatedF.GetMeans();
+	UntreatedTBprev.GetMeans(); // New in version 16k
+	UntreatedTBprevM.GetMeans(); // New in version 16k
+	UntreatedTBprevF.GetMeans(); // New in version 16k
+
+	// Diagnosis and treatment outputs (active + passive)
+	SummOutRow += 3;
+	TotLabTestedAllScreening.GetMeans();
+	TotLabDiagAllTBscreening.GetMeans();
+	TotLabDiagAdultFalsePos.GetMeans();
+	TotNewRxAdultTB.GetMeans();
+	TotNewRxAdultTBfalsePos.GetMeans();
+	TotNewRxAdultTBsmPos.GetMeans();
+	TBempiricRxAdults.GetMeans();
+	TBempiricRxNoLab.GetMeans();
+	TBempiricRxNegLab.GetMeans();
+	DiagnosisDelay.GetMeans();
+	TreatedTBcurr.GetMeans();
+	UntreatedTB.GetMeans();
+	UntreatedTBsmPos.GetMeans();
+	PropnUntreatedSmPos.GetMeans();
+	TotNewRxAdultTB_HIV.GetMeans();
+	HIVprevNewRxAdultTB.GetMeans();
+	CaseDetectionRatioT.GetMeans();
+	CaseDetectionRatioR.GetMeans();
+	LagAdjCaseDetectionRatio.GetMeans(); 
+	TBRxCompletion.GetMeans(); 
+
+	// Diagnosis and treatment outputs (passive)
+	SummOutRow += 3;
+	LabDiagAdultTB.GetMeans();
+	LabDiagAdultTBfalsePos.GetMeans();
+	NewRxAdultTB.GetMeans();
+	NewRxAdultTBfalsePos.GetMeans();
+	NewRxAdultTBsmPos.GetMeans();
+	TotTBsymptomChecks.GetMeans();
+	TotalScreens.GetMeans();
+	CultureConfirmTests.GetMeans();
+	PropnScreened.GetMeans();
+	PropnScreened2.GetMeans();
+	NewRxAdultTB_HIV.GetMeans();
+
+	// TB active case finding and TUTT
+	SummOutRow += 3;
+	TotalScreensACF.GetMeans();
+	TotalXpertScreensACF.GetMeans();
+	NewRxAdultTB_ACF.GetMeans();
+	TotalScreensART_ICF.GetMeans();
+	TotalXpertScreensART_ICF.GetMeans();
+	NewRxAdultTB_ART_ICF.GetMeans();
+	TotalScreensPrevTB.GetMeans();
+	TotalXpertScreensPrevTB.GetMeans();
+	NewRxAdultTBscreenPrev.GetMeans();
+	TotalScreensD2D.GetMeans();
+	Total_dCXRscreensD2D.GetMeans();
+	TotalXpertScreensD2D.GetMeans();
+	NewRxAdultTBscreenD2D.GetMeans();
+
+	// Drug-resistant TB outputs
+	SummOutRow += 3;
+	PropnPrevTreated.GetMeans(); // New in version 16i
+	PropnPrevTreatedRR.GetMeans(); // New in version 16i
+	PropnPrevTreatedRS.GetMeans(); // New in version 16i
+	TotRifResTB.GetMeans(); // New in version 16i
+	RifResAllTB.GetMeans(); // New in version 16i
+	RifResPrevTB.GetMeans(); // New in version 16i
+	RifResNewTB.GetMeans(); // New in version 16i
+	MDRprevAllTB.GetMeans(); // New in version 16i
+	NewRifResAcquired.GetMeans(); // New in version 16i
+	CultureLPAtestsFailing.GetMeans(); // New in version 16i
+	RifResDetected.GetMeans(); // New in version 16i
+	RifResDetectedFailing.GetMeans(); // New in version 16i
+	New2ndRxAdultTB.GetMeans(); // New in version 16i
+	New2ndRxFailing1st.GetMeans(); // New in version 16i
+	TreatedTBcurr2nd.GetMeans(); // New in version 16i
+	TBRx2Completion.GetMeans(); // New in version 16j
+
+	// Mortality outputs
+	SummOutRow += 3;
+	TotTBdeathsAdult.GetMeans();
+	TotTBdeathsM.GetMeans();
+	TotTBdeathsF.GetMeans();
+	TotTBmortRate.GetMeans();
+	TotTBmortRateM.GetMeans();
+	TotTBmortRateF.GetMeans();
+	TBdeathsOnRx.GetMeans();
+	TBdeathsOnRxM.GetMeans();
+	TBdeathsOnRxF.GetMeans();
+	TBdeathsHIV.GetMeans();
+	CaseFatalityRatioA.GetMeans();
+	CaseFatalityRatioT.GetMeans();
+	AdultLYlostTB.GetMeans();
+
+	// IPT outputs
+	SummOutRow += 3;
+	NewIPTlatent.GetMeans();
+	NewTPTinHHcontacts.GetMeans();
+	IPTstartRate.GetMeans();
+	IPTcoverage.GetMeans(); // New in version 16h
+
+	for (i = 0; i <= SummOutRow; i++) {
+		for (c = 0; c < 86; c++) {
+			if (SummaryOutputs[i][c] < 0.0 || SummaryOutputs[i][c]>0.0) {
+				file << setw(10) << right << SummaryOutputs[i][c] << "	";
+			}
+			else {
+				file << setw(10) << right << "	";
+			}
+		}
+		file << endl;
+	}
+	file.close();
+}
+
+void GetAddedTBoutputs(char* filout)
+{
+	int i, c;
+	ofstream file(filout);
+
+	// Clear SummaryOutputs
+	for (i = 0; i <= SummOutRow; i++) {
+		for (c = 0; c < 86; c++) {
+			SummaryOutputs[i][c] = 0.0;
+		}
+	}
+
+	SummOutRow = 0;
+
+	// Incidence outputs
+	TBincFastProg.GetMeans();
+	TBincReactivation.GetMeans();
+	AnnMTBriskPaed.GetMeans();
+
+	// Diagnosis and treatment outputs 
+	SummOutRow += 3;
+	HIVprevNewRxTB_M.GetMeans();
+	HIVprevNewRxTB_F.GetMeans();
+	TBtestingYield.GetMeans();
+	TreatedTB15to24.GetMeans();
+	NewRxAdultTB_M.GetMeans();
+	NewRxAdultTB_F.GetMeans();
+
+	// Mortality outputs
+	SummOutRow += 3;
+	MortRateTB_RxM.GetMeans();
+	MortRateTB_RxF.GetMeans();
+
+	for (i = 0; i < SummOutRow; i++) {
+		for (c = 0; c <= CurrYear - StartYear; c++) {
+			if (SummaryOutputs[i][c] < 0.0 || SummaryOutputs[i][c]>0.0) {
+				file << setw(10) << right << SummaryOutputs[i][c] << "	";
+			}
+			else {
+				file << setw(10) << right << "	";
+			}
+		}
+		file << endl;
+	}
+	file.close();
+}
+
+void GetTBoutputsByAge(char* filout)
+{
+	int i, c;
+	ofstream file(filout);
+
+	// Clear SummaryOutputs
+	for (i = 0; i <= SummOutRow; i++) {
+		for (c = 0; c < 86; c++) {
+			SummaryOutputs[i][c] = 0.0;
+		}
+	}
+
+	SummOutRow = 0;
+
+	// Mortality outputs 
+	MaleTBdeathsAS.GetMeans();
+	SummOutRow += 2;
+	FemTBdeathsAS.GetMeans();
+
+	// Treatment outputs
+	SummOutRow += 2;
+	MaleTBtreatAS.GetMeans();
+	SummOutRow += 2;
+	FemTBtreatAS.GetMeans();
+
+	for (i = 0; i < SummOutRow; i++) {
+		for (c = 0; c <= CurrYear - StartYear; c++) {
+			if (SummaryOutputs[i][c] < 0.0 || SummaryOutputs[i][c]>0.0) {
+				file << setw(10) << right << SummaryOutputs[i][c] << "	";
+			}
+			else {
+				file << setw(10) << right << "	";
+			}
+		}
+		file << endl;
+	}
+	file.close();
+}
+
 void CalcLikelihood()
 {
 	LogLikelihood = 0.0;
@@ -14499,6 +18780,8 @@ void CalcLikelihood()
 		LogLikelihood += CalcARTtotalLogL();}
 	if (CalibARTcoverage == 1){
 		LogLikelihood += CalcARTcoverageLogL();}
+	if (CalibAHDpaedART == 1){
+		LogLikelihood += CalcPaedAHDlogL();}
 	if (CalibARTbyAge == 1){
 		LogLikelihood += CalcAgeARTlogL();}
 	if (CalibARTbyAgeP == 1){
@@ -14517,6 +18800,18 @@ void CalcLikelihood()
 		LogLikelihood += CalcCSWprevLogL();}
 	if (CalibMSMprev == 1 && nMSMstudies > 0){
 		LogLikelihood += CalcMSMprevLogL();}
+	if (CalibTBdeathsA == 1) {
+		LogLikelihood += CalcAdultTBmortLogL();}
+	if (CalibTBdeathsPLHIV == 1) {
+		LogLikelihood += CalcTBmortPLHIVlogL();}
+	if (CalibETRdeathsA == 1) {
+		LogLikelihood += CalcETRmortLogL();}
+	if (CalibTBcasesA == 1) {
+		LogLikelihood += CalcAdultTBcasesLogL();}
+	if (CalibTBdiagnosesA == 1) {
+		LogLikelihood += CalcAdultTBlabDiagLogL();}
+	if (CalibHIVprevETR == 1) {
+		LogLikelihood += CalcHIVprevETRlogL();}
 	if (ProvModel == 0){
 		if (CalibPaedPrev == 1){
 			LogLikelihood += CalcPaedPrevLogL();}
@@ -14538,6 +18833,16 @@ void CalcLikelihood()
 			LogLikelihood += CalcChildPIPlogL();}
 		if (CalibMarriageData == 1){
 			LogLikelihood += CalcMarriageLogL();}
+		if (CalibTBprev == 1) {
+			LogLikelihood += CalcTBprevLogL();}
+		if (CalibRifResPropn == 1) {
+			LogLikelihood += CalcRifResLogL();}
+		if (CalibSmPosHH == 1) {
+			LogLikelihood += CalcSmPosHHlogL();}
+		if (CalibRRscreen == 1) {
+			LogLikelihood += CalcRRscreenLogL();}
+		if (CalibTB_HIV_OR == 1) {
+			LogLikelihood += CalcTB_HIV_ORlogL();}
 	}
 	else{
 		if (CalibAdultPrev == 1){
@@ -14723,6 +19028,7 @@ double CalcANCprevLogL()
 	}
 	ANCbias1 = ANCbias1/(5.0 * 20);
 	if(InclANCpre1997==1){
+		ANCbiasInit = 0.0;
 		for(ia=0; ia<5; ia++){
 			for(iy=0; iy<6; iy++){
 				RecencyAdj = pow(FractionRecentF[ia][iy + 6], RecencyBiasANC);
@@ -15946,6 +20252,23 @@ double CalcARTbyCD4logL()
 	return ARTlogL;
 }
 
+double CalcPaedAHDlogL()
+{
+	int iy;
+	double ARTlogL, VarEst, temp;
+
+	// Calculate likelihood
+	ARTlogL = 0.0;
+	for (iy = 0; iy < 4; iy++){
+		temp = ModelAHDpaedART[iy] - ObsAHDpaedART[iy];
+		VarEst = pow(SE_AHDpaedART[iy], 2.0);
+		ARTlogL += -0.5 * (log(2.0 * 3.141592654 * VarEst) + pow(temp, 2.0) / VarEst);
+	}
+	
+	return ARTlogL;
+}
+
+
 double CalcAgeARTlogL()
 {
 	int iy, ia, ig;
@@ -16742,6 +21065,8 @@ void SimulateParameters()
 		RR_ART1stMo2011 = SamplePrior(142) * RR_ARTstart1stMo;}
 	if (InclPriors[143][0] == 1){
 		IncreaseGammaMeanF = SamplePrior(143);}
+	if (InclPriors[144][0] == 1){
+		UntestedRescreen = SamplePrior(144);}
 	
 	// Update natural history calculations
 	CD4duration[1] = (1.0/CD4decline[0]) - CD4duration[0];
@@ -17161,7 +21486,6 @@ void GenerateSample()
 
 	LogL.Record("LogL.txt", 8);
 	PrevLogL.Record("PrevLogL.txt", 8);
-	PaedParameters.Record("PaedParameters.txt", 8);
 	RandomUniform.SampleInput();
 	RandomUniform.RecordSample("RandomUniform.txt", 8);*/
 }
@@ -17170,7 +21494,7 @@ void RunSample()
 {
 	// Remember to set FixedUncertainty to 1 before calling this function.
 
-	ifstream file1, file2;
+	ifstream file1, file2, file3;
 	char filout[18];
 	int i, c, ia, iy, idum;
 	double x1, intpart1, DoubleIntDif1;
@@ -17204,6 +21528,16 @@ void RunSample()
 			}
 			file2.close();
 		}
+		if (VaryFutureInterventionsTB == 1) {
+			file3.open("FutureInterventionsTB.txt");
+			for (i = 0; i < ResampleSize; i++) {
+				file3 >> idum;
+				for (c = 0; c < 30; c++) {
+					file3 >> FutureInterventionsTB.out[i][c];
+				}
+			}
+			file3.close();
+		}
 	}
 	/*file1.open("RandomUniform.txt");
 	for(i=0; i<ResampleSize; i++){
@@ -17223,18 +21557,29 @@ void RunSample()
 		if(i==1){
 			ReadAllFiles();}
 		if(IMISind==0){
-			SimulateParameters();}
+			if (IncludeTB == 0) { SimulateParameters(); }
+			else { SimulateTBparams(); }
+		}
 		else{
-			SimulateParameters_IMIS();}
+			if (IncludeTB == 0) { SimulateParameters_IMIS(); }
+			else{ SimulateTBparamsIMIS(); }
+		}
 		//SimulateParameters_FSW();
 		if (VaryFutureInterventions == 1){
 			SetFutureRollout();}
+		if (VaryFutureInterventionsTB == 1 && IncludeTB == 1) {
+			SetFutureRolloutTB();}
 		UpdateNonAIDSmort();
 		SetInitialParameters();
 		SetCD4byARTdur();
 		CalcInterruptions();
 		SetActivityByStage();
 		SetInitSexActivity();
+		if (IncludeTB == 1) {
+			InitializeTBprofiles();
+			CalcHIVeffectTB();
+			//CalcTBincAdjByAgeSex();
+		}
 		UpdateMixingST();
 		SetCurrYearParameters();
 		SetFertByStage();
@@ -17309,13 +21654,13 @@ void RunSample()
 	HIVinc15plusF.RecordSample("HIVinc15plusF.txt");
 	HIVinc2000.RecordSample("HIVinc2000.txt");
 	HIVinc2010.RecordSample("HIVinc2010.txt");
-	PAFforCSW.RecordSample("PAFforCSW.txt");*/
+	PAFforCSW.RecordSample("PAFforCSW.txt");
 	NewHIVatBirth.RecordSample("NewHIVatBirth.txt");
 	NewHIVafterBirth.RecordSample("NewHIVafterBirth.txt");
-	//NewHIVto18mo.RecordSample("NewHIVto18mo.txt");
+	NewHIVto18mo.RecordSample("NewHIVto18mo.txt");
 	NewHIVinANCandBF.RecordSample("NewHIVinANCandBF.txt");
-	//NewHIVmothersBF.RecordSample("NewHIVmothersBF.txt");
-	TotalNewHIV.RecordSample("TotalNewHIV.txt");
+	NewHIVmothersBF.RecordSample("NewHIVmothersBF.txt");
+	TotalNewHIV.RecordSample("TotalNewHIV.txt");*/
 	
 	// Write mortality outputs to text files
 	/*Deaths0M.RecordSample("Deaths0M.txt");
@@ -17405,6 +21750,29 @@ void RunSample()
 	AdultRootF.RecordSample("AdultRootF.txt");*/
 	AgeDbnOnART_M.RecordSample("AgeDbnOnART_M.txt");
 	AgeDbnOnART_F.RecordSample("AgeDbnOnART_F.txt");
+
+	// Write TB outputs to text files
+	ETRbias.RecordSample("ETRbias.txt");
+	VRbiasTB.RecordSample("VRbiasTB.txt");
+	TBlogL.RecordSample("TBlogL.txt");
+	/*NewActiveTBadult.RecordSample("NewActiveTBadult.txt");
+	NewActiveTBadultM.RecordSample("NewActiveTBadultM.txt");
+	NewActiveTBadultF.RecordSample("NewActiveTBadultF.txt");
+	NewActiveTB_HIVpos.RecordSample("NewActiveTB_HIVpos.txt");
+	NewTBrateAdult.RecordSample("NewTBrateAdult.txt");
+	NewTBrateAdultM.RecordSample("NewTBrateAdultM.txt");
+	NewTBrateAdultF.RecordSample("NewTBrateAdultF.txt");
+	TotTBdeathsAdult.RecordSample("TotTBdeathsAdult.txt");
+	TotTBdeathsM.RecordSample("TotTBdeathsM.txt");
+	TotTBdeathsF.RecordSample("TotTBdeathsF.txt");
+	TotTBmortRate.RecordSample("TotTBmortRate.txt");
+	TotTBmortRateM.RecordSample("TotTBmortRateM.txt");
+	TotTBmortRateF.RecordSample("TotTBmortRateF.txt");
+	if (FixedTBscreening == 0) {
+		PropnScreened.RecordSample("PropnScreened.txt");
+		PropnScreened2.RecordSample("PropnScreened2.txt");
+	}
+	TotLabTestedAllScreening.RecordSample("TotLabTestedAllScreening.txt");*/
 
 	// Write other outputs to text files
 	/*TotPop.RecordSample("TotPop.txt");
@@ -17541,14 +21909,12 @@ void RunSample()
 	SWsexActsProt.RecordSample("SWsexActsProt.txt");
 	MenOnPrEP.RecordSample("MenOnPrEP.txt");
 	WomenOnPrEP.RecordSample("WomenOnPrEP.txt");
-	FSWonPrEP.RecordSample("FSWonPrEP.txt");*/
+	FSWonPrEP.RecordSample("FSWonPrEP.txt");
 	TotOnPrEP.RecordSample("TotOnPrEP.txt");
 	TotOnCABLA.RecordSample("TotOnCABLA.txt");
-	/*WomenOnVM.RecordSample("WomenOnVM.txt");
+	WomenOnVM.RecordSample("WomenOnVM.txt");
 	AdolescOnPrEP.RecordSample("AdolescOnPrEP.txt");
 	FSWonART.RecordSample("FSWonART.txt");
-	//DiscordantARTelig.RecordSample("DiscordantARTelig.txt");
-	//DiscordantPrEPelig.RecordSample("DiscordantPrEPelig.txt");
 	OnARTover500.RecordSample("OnARTover500.txt");
 	OnART350to499.RecordSample("OnART350to499.txt");
 	OnART200to349.RecordSample("OnART200to349.txt");
@@ -17564,6 +21930,713 @@ void RunSample()
 	GetAddedOutputs("AddnalOutput.txt");
 	GetOutputsByAge("OutputByAge.txt");
 	GetOutputsByAge2("OutputByAge2.txt");
+	GetTBoutputs("SummaryTBoutput.txt");
+	GetAddedTBoutputs("AddnalTBoutput.txt");
+	GetTBoutputsByAge("TBoutputByAge.txt");
+}
+
+double CalcAdultTBmortLogL()
+{
+	// Assuming the TB death data that have been entered are already adjusted for completeness
+	// (We may need to revisit this when running the model for the provinces?)
+
+	// Although we are adjusting for completeness of all-cause mortality data, there may still
+	// be under-/over-counting of TB deaths due to problems with cause of death recording,
+	// hence the need for the TBmortAdj factor.
+
+	int ia, ig, iy, UpperAge;
+	double TempLogL, Temp1, Temp2, ErrorVar, TBmortAdj, Temp3[2], Temp4[2];
+
+	TempLogL = 0.0;
+
+	// First calculate ModelTBdeathsA, after interpolation
+	UpperAge = (90 / 5) - 3;
+	Temp1 = 0.0;
+	Temp2 = 0.0;
+	for (iy = 0; iy < 23; iy++) {
+		for (ia = 1; ia < UpperAge; ia++) {
+			for (ig = 0; ig < 2; ig++) {
+				ModelTBdeathsA[ia][iy][ig] = 0.5 * (TBadultMortBy5yr[iy + 11][ia][ig] +
+					TBadultMortBy5yr[iy + 12][ia][ig]);
+				Temp1 += ModelTBdeathsA[ia][iy][ig];
+				Temp2 += RecordedTBdeathsA[ia][iy][ig];
+			}
+		}
+	}
+	TBmortAdj = Temp1 / Temp2;
+	if (TBmortAdj < 0.93) { TBmortAdj = 0.93; }
+	if (TBmortAdj > 2.00) { TBmortAdj = 2.00; }
+
+	ErrorVar = 0.01; // Previously 0.09 in age-disaggregated analysis
+
+	// Calculate likelihood
+	TempLogL = 0.0;
+	for (iy = 0; iy < 23; iy++) {
+		if (iy == 21) { ErrorVar *= 0.25; } // To impose a better fit to the most recent data
+		for (ig = 0; ig < 2; ig++) {
+			Temp3[ig] = 0.0;
+			Temp4[ig] = 0.0;
+		}
+		for (ia = 1; ia < UpperAge; ia++) {
+			for (ig = 0; ig < 2; ig++) {
+				Temp3[ig] += ModelTBdeathsA[ia][iy][ig];
+				Temp4[ig] += RecordedTBdeathsA[ia][iy][ig] * TBmortAdj;
+				//Temp1 = log(ModelTBdeathsA[ia][iy][ig]) - log(RecordedTBdeathsA[ia][iy][ig] * TBmortAdj);
+				//TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) +
+				//	pow(Temp1, 2.0) / ErrorVar);
+			}
+		}
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) +
+			pow(log(Temp3[0]) - log(Temp4[0]), 2.0) / ErrorVar);
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) +
+			pow(log(Temp3[1]) - log(Temp4[1]), 2.0) / ErrorVar);
+	}
+	if (FixedUncertainty == 1) {
+		TBlogL.out[CurrSim - 1][0] = TempLogL;
+		VRbiasTB.out[CurrSim - 1][0] = TBmortAdj;
+	}
+
+	return TempLogL;
+}
+
+double CalcTBmortPLHIVlogL()
+{
+	int iy;
+	double TempLogL, Temp, ErrorVar;
+
+	TempLogL = 0.0;
+	for (iy = 0; iy < 14; iy++) {
+		Temp = log(TBdeathsAdultHIV[iy + 12]) - log(ExpectedTBdeathsPLHIV[iy]);
+		ErrorVar = SE_TBdeathsPLHIV[iy] * SE_TBdeathsPLHIV[iy];
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) +
+			pow(Temp, 2.0) / ErrorVar);
+	}
+	if (FixedUncertainty == 1) {
+		TBlogL.out[CurrSim - 1][8] = TempLogL;
+	}
+
+	return TempLogL;
+}
+
+double CalcETRmortLogL()
+{
+	int iy, ig, ia;
+	double TempLogL, Temp1, ErrorVar, TBmortAdj, TBcases, TempDeaths, MortPropn[13][2];
+
+	TempLogL = 0.0;
+
+	// First calculate TBmortAdj and MortPropn, after interpolation
+	TBmortAdj = 0.0;
+	for (iy = 0; iy < 13; iy++) {
+		for (ig = 0; ig < 2; ig++) {
+			TBcases = 0.0;
+			for (ia = 0; ia < 16; ia++) {
+				TBcases += 0.5 * (TBadultRxBy5yr[iy + 18][ia][ig] +
+					TBadultRxBy5yr[iy + 19][ia][ig]);
+			}
+			TempDeaths = 0.5 * (TBadultMortOnRx[iy + 18][ig] + TBadultMortOnRx[iy + 19][ig]);
+			MortPropn[iy][ig] = TempDeaths / TBcases;
+			TBmortAdj += log(MortPropn[iy][ig] / (1.0 - MortPropn[iy][ig])) -
+				log(ETRmortPropn[iy][ig] / (1.0 - ETRmortPropn[iy][ig]));
+		}
+	}
+	TBmortAdj = TBmortAdj / (13.0 * 2.0);
+	if (TBmortAdj < 0.32) { TBmortAdj = 0.32; } // Previously used a lower limit of 0
+	if (TBmortAdj > 0.66) { TBmortAdj = 0.66; } // Previously no upper limit
+
+	ErrorVar = 0.01; // Roughly equivalent to a 10% CoV if ETR mort propn is 0.05
+
+	// Calculate likelihood
+	TempLogL = 0.0;
+	for (iy = 0; iy < 13; iy++) {
+		for (ig = 0; ig < 2; ig++) {
+			Temp1 = log(MortPropn[iy][ig] / (1.0 - MortPropn[iy][ig])) -
+				log(ETRmortPropn[iy][ig] / (1.0 - ETRmortPropn[iy][ig]));
+			TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) +
+				pow(Temp1 - TBmortAdj, 2.0) / ErrorVar);
+		}
+	}
+
+	if (FixedUncertainty == 1) { ETRbias.out[CurrSim - 1][2] = TBmortAdj; }
+	if (FixedUncertainty == 1) { TBlogL.out[CurrSim - 1][1] = TempLogL; }
+
+	return TempLogL;
+}
+
+double CalcAdultTBcasesLogL()
+{
+	// TBcaseAdj is to allow for possibility that ETR totals might be under-estimates (some studies
+	// suggest under-reporting, especially in tertiary care, and the ETR totals also don't include
+	// cases of drug-resistant TB) or over-estimates (because some of the individuals treated for
+	// TB don't actually have TB).
+
+	int ia, ig, iy, UpperAge;
+	double TempLogL, Temp1, Temp2, ErrorVar, TBcaseAdj, TBcaseAdjMax, TempAdj, Temp3[2], Temp4[2];
+
+	TempLogL = 0.0;
+
+	// First calculate ModelTBcasesA, after interpolation
+	UpperAge = 16;
+	Temp1 = 0.0;
+	Temp2 = 0.0;
+	for (iy = 0; iy < 13; iy++) {
+		for (ia = 1; ia < UpperAge; ia++) {
+			for (ig = 0; ig < 2; ig++) {
+				ModelTBcasesA[ia][iy][ig] = 0.5 * (TBadultRxBy5yr[iy + 18][ia][ig] +
+					TBadultRxBy5yr[iy + 19][ia][ig]);
+				if (ModelTBcasesA[ia][iy][ig] < 0.0) { ModelTBcasesA[ia][iy][ig] = 0.0001; }
+				//if (iy == 0 || iy >= 5){
+				Temp1 += ModelTBcasesA[ia][iy][ig];
+				Temp2 += RecordedTBcasesA[ia][iy][ig];
+				//}
+			}
+		}
+		/*if (iy == 0){
+			TBcaseAdjMax = Temp1 / Temp2;
+			Temp1 = 0.0;
+			Temp2 = 0.0;
+		}*/
+	}
+	TBcaseAdj = Temp1 / Temp2;
+	TBcaseAdjMax = TBcaseAdj;
+	if (TBcaseAdj < 1.0) { TBcaseAdj = 1.0; }
+	if (TBcaseAdj > 1.3) { TBcaseAdj = 1.3; }
+
+	ErrorVar = 0.01; // Previously 0.04
+
+	// Calculate likelihood
+	TempLogL = 0.0;
+	for (iy = 0; iy < 13; iy++) {
+		TempAdj = TBcaseAdj;
+		// The code below is from when we previously allowed for a changing bias over time.
+		//if (iy >= 5){ TempAdj = TBcaseAdj; }
+		//else{ TempAdj = TBcaseAdj + (TBcaseAdjMax - TBcaseAdj) * (5.0 - iy) / 5.0; }
+		for (ig = 0; ig < 2; ig++) {
+			Temp3[ig] = 0.0;
+			Temp4[ig] = 0.0;
+		}
+		for (ia = 1; ia < UpperAge; ia++) {
+			for (ig = 0; ig < 2; ig++) {
+				Temp3[ig] += ModelTBcasesA[ia][iy][ig];
+				Temp4[ig] += RecordedTBcasesA[ia][iy][ig] * TempAdj;
+				//Temp1 = log(ModelTBcasesA[ia][iy][ig]) - log(RecordedTBcasesA[ia][iy][ig] * TBcaseAdj);
+				//TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) +
+				//	pow(Temp1, 2.0) / ErrorVar);
+			}
+		}
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) +
+			pow(log(Temp3[0]) - log(Temp4[0]), 2.0) / ErrorVar);
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) +
+			pow(log(Temp3[1]) - log(Temp4[1]), 2.0) / ErrorVar);
+	}
+
+	if (FixedUncertainty == 1) {
+		ETRbias.out[CurrSim - 1][0] = TBcaseAdj;
+		ETRbias.out[CurrSim - 1][1] = TBcaseAdjMax;
+		TBlogL.out[CurrSim - 1][2] = TempLogL;
+	}
+
+	return TempLogL;
+}
+
+double CalcAdultTBlabDiagLogL()
+{
+	int iy;
+	double TempLogL, ModelAdj, Temp1, Temp2, ErrorVar;
+
+	// Likelihood for 2004-2012 period
+	ErrorVar = pow(0.2, 2.0); // Previously 0.01
+	TempLogL = 0.0;
+	for (iy = 0; iy < 9; iy++) {
+		Temp1 = log(0.5 * (ModelTBtests[iy + 18] + ModelTBtests[iy + 19])) - log(RecordedTBlabA[iy] *
+			0.85 / (1.0 - PrivateTBdiagPropn));
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) + pow(Temp1, 2.0) / ErrorVar);
+	}
+
+	// Likelihood for 2013-2016 period
+	ErrorVar = pow(0.09, 2.0);
+	for (iy = 9; iy < 13; iy++) {
+		Temp1 = log(0.5 * (ModelTBtests[iy + 18] + ModelTBtests[iy + 19])) - log(RecordedTBlabA[iy] *
+			0.85 / (1.0 - PrivateTBdiagPropn));
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) + pow(Temp1, 2.0) / ErrorVar);
+	}
+
+	// Likelihood for 2018-2024 period
+	ErrorVar = pow(0.09, 2.0); // Previously 0.01
+	for (iy = 13; iy < 20; iy++) {
+		Temp1 = log(0.5 * (ModelTBtests[iy + 19] + ModelTBtests[iy + 20])) - log(RecordedTBlabA[iy] *
+			0.85 / (1.0 - PrivateTBdiagPropn));
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) + pow(Temp1, 2.0) / ErrorVar);
+	}
+
+	if (FixedUncertainty == 1) { TBlogL.out[CurrSim - 1][3] = TempLogL; }
+
+	return TempLogL;
+}
+
+double CalcHIVprevETRlogL()
+{
+	int iy, ia;
+	double TempLogL, ErrorVar, denom, temp1, temp2;
+
+	// Note that in the prevalence calculation we use the number of TRUE TB cases in both the
+	// numerator and denominator (potential inconsistency with ETR, which includes patients who
+	// might not actually have TB).
+
+	ErrorVar = pow(0.12, 2.0); // Previously 0.01
+
+	TempLogL = 0.0;
+	for (iy = 0; iy < 8; iy++) {
+		denom = 0.0;
+		for (ia = 0; ia < 16; ia++) {
+			denom += TBadultRxBy5yr[iy + 24][ia][0] + TBadultRxBy5yr[iy + 24][ia][1];
+		}
+		temp1 = (TBadultRxHIV[iy + 24][0] + TBadultRxHIV[iy + 24][1]) / denom;
+		temp2 = log(temp1 / (1 - temp1)) - log(ETR_HIVprev[iy] / (1.0 - ETR_HIVprev[iy]));
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) + pow(temp2, 2.0) / ErrorVar);
+	}
+	if (FixedUncertainty == 1) { TBlogL.out[CurrSim - 1][5] = TempLogL; }
+
+	return TempLogL;
+}
+
+double CalcTBprevLogL()
+{
+	int ig;
+	double TempLogL, Temp1, Temp2, ErrorVar;
+
+	// Calculate likelihood
+	TempLogL = 0.0;
+	for (ig = 0; ig < 2; ig++) {
+		ErrorVar = 0.2 * pow(TBprevSurveySE[ig] / (TBprevSurvey[ig] * (1.0 - TBprevSurvey[ig])), 2.0);
+		Temp1 = TBprev2018[ig];
+		Temp2 = log(Temp1 / (1.0 - Temp1)) - log(TBprevSurvey[ig] / (1.0 - TBprevSurvey[ig]));
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) + pow(Temp2, 2.0) / ErrorVar);
+	}
+	if (FixedUncertainty == 1) { TBlogL.out[CurrSim - 1][4] = TempLogL; }
+
+	return TempLogL;
+}
+
+double CalcRifResLogL()
+{
+	int ii;
+	double TempLogL, Temp1[2], Temp2, ErrorVar, RRdetected, Bias;
+
+	// Calculate model estimates
+	Temp1[0] = (TotSmPosRR_TB[16] + TotSmNegRR_TB[16]) / (TotSmPosTB[16] + TotSmNegTB[16]);
+	Temp1[1] = (TotSmPosRR_TB[28] + TotSmNegRR_TB[28]) / (TotSmPosTB[28] + TotSmNegTB[28]);
+
+	// Calculate likelihood for survey data
+	TempLogL = 0.0;
+	for (ii = 0; ii < 2; ii++) {
+		ErrorVar = pow(DataRifResSE[ii] / (DataRifResPrev[ii] * (1.0 - DataRifResPrev[ii])), 2.0);
+		Temp2 = log(Temp1[ii] / (1.0 - Temp1[ii])) - log(DataRifResPrev[ii] / (1.0 - DataRifResPrev[ii]));
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) + pow(Temp2, 2.0) / ErrorVar);
+	}
+
+	// Calculate likelihood for reported diagnoses
+	Bias = 0.0;
+	for (ii = 0; ii < 11; ii++) {
+		Bias += log(TotRifResDiagnosed[ii] / (RifResFoundPreRx[ii + 25] + RifResFoundOnRx[ii + 25]));
+	}
+	Bias = Bias / 11.0;
+	if (FixedUncertainty == 1) { ETRbias.out[CurrSim - 1][3] = exp(Bias); }
+	for (ii = 0; ii < 11; ii++) {
+		ErrorVar = pow(0.1, 2.0);
+		/*RRdetected = (TBadultLabDiag[ii + 25] - FalseTBadultLabDiag[ii + 25]) * ((NewRR_TBprevRx[ii + 24] +
+			FailTB_Rx_RR[ii + 24]) * DSTcoveragePrevTB[ii + 25] + NewRR_TBnaive[ii + 24] *
+			DSTcoverageNewTB[ii + 25]) / (NewRR_TBprevRx[ii + 24] + FailTB_Rx_RR[ii + 24] +
+			NewRS_TBprevRx[ii + 24] + FailTB_Rx_RS[ii + 24] + NewRR_TBnaive[ii + 24] +
+			NewRS_TBnaive[ii + 24]) + RifResFoundOnRx[ii + 25];*/
+		RRdetected = RifResFoundPreRx[ii + 25] + RifResFoundOnRx[ii + 25];
+		Temp2 = log(TotRifResDiagnosed[ii]) - log(RRdetected) - Bias;
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) + pow(Temp2, 2.0) / ErrorVar);
+	}
+
+	// Calculate likelihood for reported numbers starting 2nd-line treatment
+	Bias = 0.0;
+	for (ii = 0; ii < 13; ii++) {
+		Bias += log(Recorded2ndLineTB[ii] / (New2ndLineTB_F[ii + 22] + New2ndLineTB_NF[ii + 22]));
+	}
+	Bias = Bias / 13.0;
+	if (Bias > 0.0) { Bias = 0.0; }
+	if (FixedUncertainty == 1) { ETRbias.out[CurrSim - 1][4] = exp(Bias); }
+	for (ii = 0; ii < 13; ii++) {
+		ErrorVar = pow(0.1, 2.0);
+		Temp2 = log(Recorded2ndLineTB[ii] / (New2ndLineTB_F[ii + 22] + New2ndLineTB_NF[ii + 22])) -
+			Bias;
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) + pow(Temp2, 2.0) / ErrorVar);
+	}
+
+	if (FixedUncertainty == 1) { TBlogL.out[CurrSim - 1][6] = TempLogL; }
+
+	return TempLogL;
+}
+
+double CalcSmPosHHlogL()
+{
+	double ModelPrev[4], RandomError[4], VarRandEffects, TempLogL;
+	int ic, year;
+
+	// Calculate ModelPrev and RandomError
+	for (ic = 0; ic < 4; ic++) {
+		year = SmPosStudyDetails[ic][0];
+		ModelPrev[ic] = UntreatedSmPosPropn[year - StartYear];
+		RandomError[ic] = 1.0 / (SmPosStudyDetails[ic][1] * SmPosStudyDetails[ic][2] *
+			(1.0 - SmPosStudyDetails[ic][2]));
+	}
+
+	VarRandEffects = 0.207;
+
+	// Calculate likelihood
+	TempLogL = 0.0;
+	for (ic = 0; ic < 4; ic++) {
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * (RandomError[ic] + VarRandEffects)) +
+			pow(log(SmPosStudyDetails[ic][2] / (1.0 - SmPosStudyDetails[ic][2])) -
+				log(ModelPrev[ic] / (1.0 - ModelPrev[ic])), 2.0) /
+			(RandomError[ic] + VarRandEffects));
+	}
+
+	if (FixedUncertainty == 1) { TBlogL.out[CurrSim - 1][6] = TempLogL; }
+
+	return TempLogL;
+}
+
+double CalcRRscreenLogL()
+{
+	double ModelRR[4], RandomError[4], VarRandEffects, TempLogL;
+	int ic, year;
+
+	// Calculate ModelPrev and RandomError
+	for (ic = 0; ic < 4; ic++) {
+		year = SmPosStudyDetails[ic][0];
+		ModelRR[ic] = TBsymptomScreened[year - StartYear] / TBsymptomScreened2[year - StartYear];
+		RandomError[ic] = SmPosStudyDetails[ic][2]; // Variance is already on the log scale
+	}
+
+	VarRandEffects = 0.0758;
+
+	// Calculate likelihood
+	TempLogL = 0.0;
+	for (ic = 0; ic < 4; ic++) {
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * (RandomError[ic] + VarRandEffects)) +
+			pow(RRscreenStudyDetails[ic][1] - log(ModelRR[ic]), 2.0) /
+			(RandomError[ic] + VarRandEffects));
+	}
+
+	if (FixedUncertainty == 1) { TBlogL.out[CurrSim - 1][7] = TempLogL; }
+
+	return TempLogL;
+}
+
+double CalcTB_HIV_ORlogL()
+{
+	double ModelOR, StudyVar, VarRandEffects, TempLogL;
+	int ic, year;
+
+	VarRandEffects = 0.1352;
+
+	// Calculate likelihood
+	TempLogL = 0.0;
+	for (ic = 0; ic < 9; ic++) {
+		year = TB_HIV_ORdetails[ic][0] - StartYear;
+		ModelOR = OddsTB_HIV[year];
+		StudyVar = pow(TB_HIV_ORdetails[ic][2], 2.0);
+		TempLogL += -0.5 * (log(2.0 * 3.141592654 * (StudyVar + VarRandEffects)) +
+			pow(TB_HIV_ORdetails[ic][1] - log(ModelOR), 2.0) /
+			(StudyVar + VarRandEffects));
+	}
+
+	if (FixedUncertainty == 1) { TBlogL.out[CurrSim - 1][9] = TempLogL; }
+
+	return TempLogL;
+}
+
+void SimulateTBparams()
+{
+	int i, is, iy, MCMCindex;
+	double Temp, Temp2;
+
+	if (FixedUncertainty == 0) {
+		int32 seed = 8222 + CurrSim * 53;
+		TRandomMersenne rg(seed);
+		for (i = 0; i < MCMCdim; i++) {
+			RandPrior[i] = rg.Random();
+			RandomUniform.out[CurrSim - 1][i] = RandPrior[i];
+		}
+	}
+	else {
+		for (i = 0; i < RandomUniform.columns; i++) {
+			RandPrior[i] = RandomUniform.out[CurrSim - 1][i];
+		}
+	}
+
+	if (InclPriors[0][0] == 1) {
+		TBtransmProb = SamplePrior(0);
+	}
+	if (InclPriors[1][0] == 1) {
+		PropFastProg = SamplePrior(1);
+	}
+	if (InclPriors[2][0] == 1) {
+		Reactivation = SamplePrior(2);
+	}
+	if (InclPriors[3][0] == 1) {
+		RR_TBper100CD4increase = SamplePrior(3);
+	}
+	if (InclPriors[4][0] == 1) {
+		RR_TBtreatedHIV = SamplePrior(4);
+	}
+	if (InclPriors[5][0] == 1) {
+		PartialImmunHIVneg = SamplePrior(5);
+	}
+	if (InclPriors[6][0] == 1) {
+		RRimmunePer100CD4increase = SamplePrior(6);
+	}
+	if (InclPriors[7][0] == 1) {
+		NaturalRecSmPos = SamplePrior(7);
+	}
+	if (InclPriors[8][0] == 1) {
+		NaturalRecSmNeg = SamplePrior(8);
+	}
+	if (InclPriors[9][0] == 1) {
+		SmNegInfectiousness = SamplePrior(9);
+	}
+	if (InclPriors[10][0] == 1) {
+		RelapseST = SamplePrior(10);
+	}
+	if (InclPriors[11][0] == 1) {
+		PastTBfactor = SamplePrior(11) + 1.0;
+	}
+	if (InclPriors[12][0] == 1) {
+		MortalitySmNeg = SamplePrior(12);
+	}
+	if (InclPriors[13][0] == 1) {
+		MortalitySmPos = SamplePrior(13);
+		if (InclPriors[12][0] == 0) { MortalitySmNeg = 0.25 * MortalitySmPos; }
+	}
+	if (InclPriors[14][0] == 1) {
+		RR_TBmortPer10yrAge = SamplePrior(14);
+	}
+	if (InclPriors[15][0] == 1) {
+		RR_TBmortPer50CD4 = SamplePrior(15);
+	}
+	if (InclPriors[16][0] == 1) {
+		RR_TBmortTreatedHIV = SamplePrior(16);
+	}
+	if (InclPriors[17][0] == 1) {
+		HealthSeekingTB = SamplePrior(17);
+	}
+	if (InclPriors[18][0] == 1) {
+		HealthSeekingGen = SamplePrior(18);
+	}
+	if (InclPriors[19][0] == 1) {
+		HealthSeekingTBLS = SamplePrior(19);
+	}
+	if (InclPriors[20][0] == 1) {
+		EmpiricRx[1][1] = SamplePrior(20) * 0.1;
+	}
+	if (InclPriors[21][0] == 1) {
+		EmpiricRxNeg[1][1] = SamplePrior(21);
+	}
+	if (InclPriors[22][0] == 1) {
+		RRempiricOtherHealth = SamplePrior(22);
+	}
+	if (InclPriors[23][0] == 1) {
+		RRempiricNoTB = SamplePrior(23);
+	}
+	if (InclPriors[24][0] == 1) {
+		TBpartialRxCure = SamplePrior(24);
+	}
+	if (InclPriors[25][0] == 1) {
+		UltTBsymptomScreen = SamplePrior(25);
+	}
+	if (InclPriors[26][0] == 1) {
+		RRhealthSeekingFem = SamplePrior(26);
+	}
+	if (InclPriors[27][0] == 1) {
+		AnnMortTB_Rx[0] = SamplePrior(27);
+		if (InclPriors[28][0] == 0) { AnnMortTB_Rx[1] = AnnMortTB_Rx[0]; }
+	}
+	if (InclPriors[28][0] == 1) {
+		Temp = SamplePrior(28); // Male to female ratio
+		AnnMortTB_Rx[1] = AnnMortTB_Rx[0] / Temp;
+	}
+	if (InclPriors[29][0] == 1) {
+		InitActiveTBsmPos[0] = SamplePrior(29);
+		InitActiveTBsmPos[1] = InitActiveTBsmPos[0] * 0.33 / 0.52;
+	}
+	if (InclPriors[30][0] == 1) {
+		RRhealthSeekingHIV = SamplePrior(30);
+	}
+	if (InclPriors[31][0] == 1) {
+		RRscreenSymptomsBase = SamplePrior(31);
+		//EffectScreenRate2 = -0.28 * pow(RRscreenSymptomsBase, 1.79);
+	}
+	if (InclPriors[32][0] == 1) {
+		EmpiricRednXpert = SamplePrior(32);
+	}
+	if (InclPriors[33][0] == 1) {
+		RRsymptomsSmPos = SamplePrior(33);
+	}
+	if (InclPriors[34][0] == 1) {
+		Cough2wkActiveSmNeg = SamplePrior(34);
+	}
+	if (InclPriors[35][0] == 1) {
+		RRscreenSymptomsUlt = SamplePrior(35);
+	}
+	if (InclPriors[36][0] == 1) {
+		RR_TBalcohol = SamplePrior(36) + 1.0;
+	}
+	if (InclPriors[37][0] == 1) {
+		RR_TBdiabetes = SamplePrior(37) + 1.0;
+	}
+	if (InclPriors[38][0] == 1) {
+		RR_TBcurrSmoke = SamplePrior(38) + 1.0;
+	}
+	if (InclPriors[39][0] == 1) {
+		RR_TBsmoke10yr = SamplePrior(39) + 1.0;
+	}
+	if (InclPriors[40][0] == 1) {
+		RR_TBlowBMI = SamplePrior(40) + 1.0;
+	}
+	if (InclPriors[41][0] == 1) {
+		InitRR_TBprev = SamplePrior(41);
+	}
+	if (InclPriors[42][0] == 1) {
+		DOTSeffectivenessAdj = SamplePrior(42);
+	}
+	if (InclPriors[43][0] == 1) {
+		RifResInfectiousness = SamplePrior(43);
+	}
+	if (InclPriors[44][0] == 1) {
+		AcquireRifResIfFail = SamplePrior(44);
+	}
+	if (InclPriors[45][0] == 1) {
+		ORacquireRifRes100CD4 = SamplePrior(45);
+	}
+	if (InclPriors[46][0] == 1) {
+		ORfailureRifRes = SamplePrior(46);
+	}
+	if (InclPriors[47][0] == 1) {
+		ProbDSTifFailingRx3 = SamplePrior(47);
+	}
+	if (InclPriors[48][0] == 1) {
+		ProbDSTifFailingRx2 = SamplePrior(48) * ProbDSTifFailingRx3;
+	}
+	if (InclPriors[49][0] == 1) {
+		ProbDSTifFailingRx1 = SamplePrior(49) * ProbDSTifFailingRx2;
+	}
+	if (InclPriors[50][0] == 1) {
+		RR_DSTdropout = SamplePrior(50);
+	}
+	if (InclPriors[51][0] == 1) {
+		InitialLTFU[1] = SamplePrior(51);
+		InitialLTFU[0] = InitialLTFU[1] * 1.22;
+	}
+	if (InclPriors[52][0] == 1) {
+		RatioMinToBaseTBmort = SamplePrior(52);
+	}
+	if (InclPriors[53][0] == 1) {
+		RatioMinToBaseInfectivity = SamplePrior(53);
+	}
+	if (InclPriors[54][0] == 1) {
+		RR_TBadultM = SamplePrior(54);
+	}
+	if (InclPriors[55][0] == 1) {
+		PrivateTBdiagPropn = SamplePrior(55);
+		for (iy = 0; iy <= TBtestYear - StartYear; iy++) {
+			TotPosTBtestsAdult[iy] = TotPosTBtestsAdult1[iy] * 0.85 / (1.0 - PrivateTBdiagPropn);
+		}
+	}
+	if (InclPriors[56][0] == 1) {
+		RecordedTB80sAdj = SamplePrior(56);
+		if (InclPriors[55][0] == 0) {
+			for (iy = 0; iy < 5; iy++) {
+				TotPosTBtestsAdult[iy] = TotPosTBtestsAdult1[iy] * RecordedTB80sAdj;
+			}
+			for (iy = 5; iy <= 10; iy++) {
+				TotPosTBtestsAdult[iy] = TotPosTBtestsAdult[4] + (TotPosTBtestsAdult1[11] -
+					TotPosTBtestsAdult[4]) * (iy - 4.0) / 7.0;
+			}
+		}
+		else {
+			for (iy = 0; iy < 5; iy++) {
+				TotPosTBtestsAdult[iy] *= RecordedTB80sAdj;
+			}
+			for (iy = 5; iy <= 10; iy++) {
+				TotPosTBtestsAdult[iy] = TotPosTBtestsAdult[4] + (TotPosTBtestsAdult[11] -
+					TotPosTBtestsAdult[4]) * (iy - 4.0) / 7.0;
+			}
+		}
+	}
+	if (InclPriors[57][0] == 1) {
+		ContactRednCOVID[2] = SamplePrior(57) * ContactRednCOVID[1];
+	}
+	if (InclPriors[58][0] == 1) {
+		IPTuptakeUlt = SamplePrior(58);
+	}
+	if (InclPriors[59][0] == 1) {
+		UltTBsymptomScreen = SamplePrior(59);
+	}
+	if (InclPriors[60][0] == 1) {
+		UltTBdefaultAdj = SamplePrior(60);
+	}
+	if (InclPriors[61][0] == 1) {
+		UltARTdelay[0] = SamplePrior(61);
+	}
+	if (InclPriors[62][0] == 1) {
+		UltARTdelay[1] = SamplePrior(62);
+	}
+	if (InclPriors[63][0] == 1) {
+		LogEmpiricToMicro = SamplePrior(63);
+	}
+	if (InclPriors[64][0] == 1) {
+		RateART_TBscreened[40] = SamplePrior(64);
+		RateART_TBscreened[38] = RateART_TBscreened[40] * 0.6;
+		RateART_TBscreened[39] = RateART_TBscreened[40] * 0.9;
+		for (iy = 41; iy < 86; iy++) {
+			RateART_TBscreened[iy] = RateART_TBscreened[40];
+		}
+	}
+	RRcontactPre2000 = 1.0;
+
+	// Set empirical treatment parameters
+	if (InclPriors[22][0] == 1 && InclPriors[23][0] == 1) {
+		EmpiricRx[0][0] = EmpiricRx[1][1] * RRempiricOtherHealth * RRempiricNoTB;
+		EmpiricRx[0][1] = EmpiricRx[1][1] * RRempiricOtherHealth;
+		EmpiricRx[1][0] = EmpiricRx[1][1] * RRempiricNoTB;
+		EmpiricRxNeg[0][0] = EmpiricRxNeg[1][1] * RRempiricOtherHealth * RRempiricNoTB;
+		EmpiricRxNeg[0][1] = EmpiricRxNeg[1][1] * RRempiricOtherHealth;
+		EmpiricRxNeg[1][0] = EmpiricRxNeg[1][1] * RRempiricNoTB;
+	}
+	if (InclPriors[22][0] == 1 && InclPriors[23][0] == 0) {
+		EmpiricRx[0][0] = EmpiricRx[1][0] * RRempiricOtherHealth;
+		EmpiricRx[0][1] = EmpiricRx[1][1] * RRempiricOtherHealth;
+		EmpiricRxNeg[0][0] = EmpiricRxNeg[1][0] * RRempiricOtherHealth;
+		EmpiricRxNeg[0][1] = EmpiricRxNeg[1][1] * RRempiricOtherHealth;
+	}
+	if (InclPriors[22][0] == 0 && InclPriors[23][0] == 1) {
+		EmpiricRx[0][0] = EmpiricRx[0][1] * RRempiricNoTB;
+		EmpiricRx[1][0] = EmpiricRx[1][1] * RRempiricNoTB;
+		EmpiricRxNeg[0][0] = EmpiricRxNeg[0][1] * RRempiricNoTB;
+		EmpiricRxNeg[1][0] = EmpiricRxNeg[1][1] * RRempiricNoTB;
+	}
+
+	if (FixedUncertainty == 0 && IMISind == 1) {
+		for (i = 0; i < MCMCdim; i++) {
+			if (PriorTypes[i] == 0) { // Beta prior
+				RandomParameterIMIS[i][CurrSim - 1] = log(ModelParameters.out[CurrSim - 1][i] /
+					(1.0 - ModelParameters.out[CurrSim - 1][i]));
+			}
+			else if (PriorTypes[i] == 1) { // Gamma prior
+				RandomParameterIMIS[i][CurrSim - 1] = log(ModelParameters.out[CurrSim - 1][i]);
+			}
+			else { // Normal prior
+				RandomParameterIMIS[i][CurrSim - 1] = ModelParameters.out[CurrSim - 1][i];
+			}
+		}
+	}
 }
 
 void ReadPriors()
@@ -17573,7 +22646,8 @@ void ReadPriors()
 
 	ii = 0;
 
-	file.open("Priors.txt");
+	if (IncludeTB == 0) { file.open("Priors.txt"); }
+	else { file.open("TBpriors.txt"); }
 	if (file.fail()) {
       cerr << "Could not open Priors.txt\n";
       exit(1);
@@ -18204,15 +23278,24 @@ void OneIMISstep(double CumSteps)
 		if(i==1){
 			ReadAllFiles();}
 		if(IMISind==0 || (IMISind==1 && FixedUncertainty==0 && CurrIMISstep==0)){
-			SimulateParameters();}
+			if (IncludeTB == 0) { SimulateParameters(); }
+			else{ SimulateTBparams(); }
+		}
 		else{
-			SimulateParameters_IMIS();}
+			if (IncludeTB == 0) { SimulateParameters_IMIS(); }
+			else{ SimulateTBparamsIMIS(); }
+		}
 		UpdateNonAIDSmort();
 		SetInitialParameters();
 		SetCD4byARTdur();
 		CalcInterruptions();
 		SetActivityByStage();
 		SetInitSexActivity();
+		if (IncludeTB == 1) {
+			InitializeTBprofiles();
+			CalcHIVeffectTB();
+			//CalcTBincAdjByAgeSex();
+		}
 		UpdateMixingST();
 		SetCurrYearParameters();
 		SetFertByStage();
@@ -18782,6 +23865,8 @@ void SimulateParameters_IMIS()
 		RR_ART1stMo2011 = GetParameter(142) * RR_ARTstart1stMo;}
 	if (InclPriors[143][0] == 1){
 		IncreaseGammaMeanF = GetParameter(143);}
+	if (InclPriors[144][0] == 1){
+		UntestedRescreen = GetParameter(144);}
 	
 	// Update natural history calculations
 	CD4duration[1] = (1.0/CD4decline[0]) - CD4duration[0];
@@ -18874,6 +23959,287 @@ void SimulateParameters_IMIS()
 	InitTransmARTpre200 = 0.0;*/
 }
 
+void SimulateTBparamsIMIS()
+{
+	int i, is, iy, offset, MCMCindex;
+	double Temp, Temp2;
+	double r[MCMCdim]; // Random variables from U(0, 1)
+	double MultNorm[MCMCdim]; // Sampled parameters from multivariate normal dbn
+
+	if (FixedUncertainty == 0) {
+		offset = InitSample + (CurrIMISstep - 1) * StepSample + CurrSim - 1;
+		int32 seed = 1784 + CurrSim * 73 + (CurrIMISstep * StepSample) * 29;
+		TRandomMersenne rg(seed);
+		for (i = 0; i < MCMCdim; i++) {
+			r[i] = rg.Random();
+		}
+		GetMultNorm(r, MultNorm);
+		for (i = 0; i < MCMCdim; i++) {
+			RandomUniform.out[CurrSim - 1][i] = r[i];
+			RandomParameterIMIS[i][offset] = MultNorm[i];
+			// Transform the multivariate normal values back to the original scale
+			if (PriorTypes[i] == 0) { // Beta prior
+				MultNorm[i] = 1.0 / (1.0 + exp(-MultNorm[i]));
+			}
+			if (PriorTypes[i] == 1) { // Gamma prior
+				MultNorm[i] = exp(MultNorm[i]);
+			}
+			// No adjustment necessary if the prior is normal
+			ModelParameters.out[CurrSim - 1][i] = MultNorm[i];
+		}
+	}
+	if (InclPriors[0][0] == 1) {
+		TBtransmProb = GetParameter(0);
+	}
+	if (InclPriors[1][0] == 1) {
+		PropFastProg = GetParameter(1);
+	}
+	if (InclPriors[2][0] == 1) {
+		Reactivation = GetParameter(2);
+	}
+	if (InclPriors[3][0] == 1) {
+		RR_TBper100CD4increase = GetParameter(3);
+	}
+	if (InclPriors[4][0] == 1) {
+		RR_TBtreatedHIV = GetParameter(4);
+	}
+	if (InclPriors[5][0] == 1) {
+		PartialImmunHIVneg = GetParameter(5);
+	}
+	if (InclPriors[6][0] == 1) {
+		RRimmunePer100CD4increase = GetParameter(6);
+	}
+	if (InclPriors[7][0] == 1) {
+		NaturalRecSmPos = GetParameter(7);
+	}
+	if (InclPriors[8][0] == 1) {
+		NaturalRecSmNeg = GetParameter(8);
+	}
+	if (InclPriors[9][0] == 1) {
+		SmNegInfectiousness = GetParameter(9);
+	}
+	if (InclPriors[10][0] == 1) {
+		RelapseST = GetParameter(10);
+	}
+	if (InclPriors[11][0] == 1) {
+		PastTBfactor = GetParameter(11) + 1.0;
+	}
+	if (InclPriors[12][0] == 1) {
+		MortalitySmNeg = GetParameter(12);
+	}
+	if (InclPriors[13][0] == 1) {
+		MortalitySmPos = GetParameter(13);
+		if (InclPriors[12][0] == 0) { MortalitySmNeg = 0.25 * MortalitySmPos; }
+	}
+	if (InclPriors[14][0] == 1) {
+		RR_TBmortPer10yrAge = GetParameter(14);
+	}
+	if (InclPriors[15][0] == 1) {
+		RR_TBmortPer50CD4 = GetParameter(15);
+	}
+	if (InclPriors[16][0] == 1) {
+		RR_TBmortTreatedHIV = GetParameter(16);
+	}
+	if (InclPriors[17][0] == 1) {
+		HealthSeekingTB = GetParameter(17);
+	}
+	if (InclPriors[18][0] == 1) {
+		HealthSeekingGen = GetParameter(18);
+	}
+	if (InclPriors[19][0] == 1) {
+		HealthSeekingTBLS = GetParameter(19);
+	}
+	if (InclPriors[20][0] == 1) {
+		EmpiricRx[1][1] = GetParameter(20) * 0.1;
+	}
+	if (InclPriors[21][0] == 1) {
+		EmpiricRxNeg[1][1] = GetParameter(21);
+	}
+	if (InclPriors[22][0] == 1) {
+		RRempiricOtherHealth = GetParameter(22);
+	}
+	if (InclPriors[23][0] == 1) {
+		RRempiricNoTB = GetParameter(23);
+	}
+	if (InclPriors[24][0] == 1) {
+		TBpartialRxCure = GetParameter(24);
+	}
+	if (InclPriors[25][0] == 1) {
+		UltTBsymptomScreen = GetParameter(25);
+	}
+	if (InclPriors[26][0] == 1) {
+		RRhealthSeekingFem = GetParameter(26);
+	}
+	if (InclPriors[27][0] == 1) {
+		AnnMortTB_Rx[0] = GetParameter(27);
+		if (InclPriors[28][0] == 0) { AnnMortTB_Rx[1] = AnnMortTB_Rx[0]; }
+	}
+	if (InclPriors[28][0] == 1) {
+		Temp = GetParameter(28); // Male to female ratio
+		AnnMortTB_Rx[1] = AnnMortTB_Rx[0] / Temp;
+	}
+	if (InclPriors[29][0] == 1) {
+		InitActiveTBsmPos[0] = GetParameter(29);
+		InitActiveTBsmPos[1] = InitActiveTBsmPos[0] * 0.33 / 0.52;
+	}
+	if (InclPriors[30][0] == 1) {
+		RRhealthSeekingHIV = GetParameter(30);
+	}
+	if (InclPriors[31][0] == 1) {
+		RRscreenSymptomsBase = GetParameter(31);
+		//EffectScreenRate2 = -0.28 * pow(RRscreenSymptomsBase, 1.79);
+	}
+	if (InclPriors[32][0] == 1) {
+		EmpiricRednXpert = GetParameter(32);
+	}
+	if (InclPriors[33][0] == 1) {
+		RRsymptomsSmPos = GetParameter(33);
+	}
+	if (InclPriors[34][0] == 1) {
+		Cough2wkActiveSmNeg = GetParameter(34);
+	}
+	if (InclPriors[35][0] == 1) {
+		RRscreenSymptomsUlt = GetParameter(35);
+	}
+	if (InclPriors[36][0] == 1) {
+		RR_TBalcohol = GetParameter(36) + 1.0;
+	}
+	if (InclPriors[37][0] == 1) {
+		RR_TBdiabetes = GetParameter(37) + 1.0;
+	}
+	if (InclPriors[38][0] == 1) {
+		RR_TBcurrSmoke = GetParameter(38) + 1.0;
+	}
+	if (InclPriors[39][0] == 1) {
+		RR_TBsmoke10yr = GetParameter(39) + 1.0;
+	}
+	if (InclPriors[40][0] == 1) {
+		RR_TBlowBMI = GetParameter(40) + 1.0;
+	}
+	if (InclPriors[41][0] == 1) {
+		InitRR_TBprev = GetParameter(41);
+	}
+	if (InclPriors[42][0] == 1) {
+		DOTSeffectivenessAdj = GetParameter(42);
+	}
+	if (InclPriors[43][0] == 1) {
+		RifResInfectiousness = GetParameter(43);
+	}
+	if (InclPriors[44][0] == 1) {
+		AcquireRifResIfFail = GetParameter(44);
+	}
+	if (InclPriors[45][0] == 1) {
+		ORacquireRifRes100CD4 = GetParameter(45);
+	}
+	if (InclPriors[46][0] == 1) {
+		ORfailureRifRes = GetParameter(46);
+	}
+	if (InclPriors[47][0] == 1) {
+		ProbDSTifFailingRx3 = GetParameter(47);
+	}
+	if (InclPriors[48][0] == 1) {
+		ProbDSTifFailingRx2 = GetParameter(48) * ProbDSTifFailingRx3;
+	}
+	if (InclPriors[49][0] == 1) {
+		ProbDSTifFailingRx1 = GetParameter(49) * ProbDSTifFailingRx2;
+	}
+	if (InclPriors[50][0] == 1) {
+		RR_DSTdropout = GetParameter(50);
+	}
+	if (InclPriors[51][0] == 1) {
+		InitialLTFU[1] = GetParameter(51);
+		InitialLTFU[0] = InitialLTFU[1] * 1.22;
+	}
+	if (InclPriors[52][0] == 1) {
+		RatioMinToBaseTBmort = GetParameter(52);
+	}
+	if (InclPriors[53][0] == 1) {
+		RatioMinToBaseInfectivity = GetParameter(53);
+	}
+	if (InclPriors[54][0] == 1) {
+		RR_TBadultM = GetParameter(54);
+	}
+	if (InclPriors[55][0] == 1) {
+		PrivateTBdiagPropn = GetParameter(55);
+		for (iy = 0; iy <= TBtestYear - StartYear; iy++) {
+			TotPosTBtestsAdult[iy] = TotPosTBtestsAdult1[iy] * 0.85 / (1.0 - PrivateTBdiagPropn);
+		}
+	}
+	if (InclPriors[56][0] == 1) {
+		RecordedTB80sAdj = GetParameter(56);
+		if (InclPriors[55][0] == 0) {
+			for (iy = 0; iy < 5; iy++) {
+				TotPosTBtestsAdult[iy] = TotPosTBtestsAdult1[iy] * RecordedTB80sAdj;
+			}
+			for (iy = 5; iy <= 10; iy++) {
+				TotPosTBtestsAdult[iy] = TotPosTBtestsAdult[4] + (TotPosTBtestsAdult1[11] -
+					TotPosTBtestsAdult[4]) * (iy - 4.0) / 7.0;
+			}
+		}
+		else {
+			for (iy = 0; iy < 5; iy++) {
+				TotPosTBtestsAdult[iy] *= RecordedTB80sAdj;
+			}
+			for (iy = 5; iy <= 10; iy++) {
+				TotPosTBtestsAdult[iy] = TotPosTBtestsAdult[4] + (TotPosTBtestsAdult[11] -
+					TotPosTBtestsAdult[4]) * (iy - 4.0) / 7.0;
+			}
+		}
+	}
+	if (InclPriors[57][0] == 1) {
+		ContactRednCOVID[2] = GetParameter(57) * ContactRednCOVID[1];
+	}
+	if (InclPriors[58][0] == 1) {
+		IPTuptakeUlt = GetParameter(58);
+	}
+	if (InclPriors[59][0] == 1) {
+		UltTBsymptomScreen = GetParameter(59);
+	}
+	if (InclPriors[60][0] == 1) {
+		UltTBdefaultAdj = GetParameter(60);
+	}
+	if (InclPriors[61][0] == 1) {
+		UltARTdelay[0] = GetParameter(61);
+	}
+	if (InclPriors[62][0] == 1) {
+		UltARTdelay[1] = GetParameter(62);
+	}
+	if (InclPriors[63][0] == 1) {
+		LogEmpiricToMicro = GetParameter(63);
+	}
+	if (InclPriors[64][0] == 1) {
+		RateART_TBscreened[40] = GetParameter(64);
+		RateART_TBscreened[38] = RateART_TBscreened[40] * 0.6;
+		RateART_TBscreened[39] = RateART_TBscreened[40] * 0.9;
+		for (iy = 41; iy < 86; iy++) {
+			RateART_TBscreened[iy] = RateART_TBscreened[40];
+		}
+	}
+	RRcontactPre2000 = 1.0;
+
+	// Set empirical treatment parameters
+	if (InclPriors[22][0] == 1 && InclPriors[23][0] == 1) {
+		EmpiricRx[0][0] = EmpiricRx[1][1] * RRempiricOtherHealth * RRempiricNoTB;
+		EmpiricRx[0][1] = EmpiricRx[1][1] * RRempiricOtherHealth;
+		EmpiricRx[1][0] = EmpiricRx[1][1] * RRempiricNoTB;
+		EmpiricRxNeg[0][0] = EmpiricRxNeg[1][1] * RRempiricOtherHealth * RRempiricNoTB;
+		EmpiricRxNeg[0][1] = EmpiricRxNeg[1][1] * RRempiricOtherHealth;
+		EmpiricRxNeg[1][0] = EmpiricRxNeg[1][1] * RRempiricNoTB;
+	}
+	if (InclPriors[22][0] == 1 && InclPriors[23][0] == 0) {
+		EmpiricRx[0][0] = EmpiricRx[1][0] * RRempiricOtherHealth;
+		EmpiricRx[0][1] = EmpiricRx[1][1] * RRempiricOtherHealth;
+		EmpiricRxNeg[0][0] = EmpiricRxNeg[1][0] * RRempiricOtherHealth;
+		EmpiricRxNeg[0][1] = EmpiricRxNeg[1][1] * RRempiricOtherHealth;
+	}
+	if (InclPriors[22][0] == 0 && InclPriors[23][0] == 1) {
+		EmpiricRx[0][0] = EmpiricRx[0][1] * RRempiricNoTB;
+		EmpiricRx[1][0] = EmpiricRx[1][1] * RRempiricNoTB;
+		EmpiricRxNeg[0][0] = EmpiricRxNeg[0][1] * RRempiricNoTB;
+		EmpiricRxNeg[1][0] = EmpiricRxNeg[1][1] * RRempiricNoTB;
+	}
+}
+
 double GetParameter(int PriorIndex)
 {
 	int MCMCindex;
@@ -18899,7 +24265,7 @@ double ReturnNegLogL(double ParameterSet[20])
 
 	CurrSim += 1;
 	// Set parameters
-	if (CalibARTtotals == 1){
+	/*if (CalibARTtotals == 1) {
 		BsplineCoef[0] = ParameterSet[0]; // 2000 coefficient
 		BsplineCoef[1] = ParameterSet[1] + BsplineCoef[0]; // 2002 coefficient
 		for (i = 2; i < 10; i++){ // 2004 to 2018 coefficients
@@ -18919,6 +24285,24 @@ double ReturnNegLogL(double ParameterSet[20])
 		ImmARTcorrectionP = ParameterSet[10];
 		PaedARTuptakeEID = BaseARTuptakeEID * ImmARTcorrectionP;
 		GetAnnNewART();
+	}*/
+	if (IncludeTB == 1) {
+		TBtransmProb = 1.0 / (1.0 + exp(-ParameterSet[0])); // 1
+		//PropFastProg = 1.0 / (1.0 + exp(-ParameterSet[1])); // 2
+		//Reactivation = 1.0 / (1.0 + exp(-ParameterSet[2])); // 3
+		//RR_TBper100CD4increase = 1.0 / (1.0 + exp(-ParameterSet[1])); // 4
+		//RR_TBtreatedHIV = 1.0 / (1.0 + exp(-ParameterSet[2])); // 5
+		//MortalitySmNeg = exp(ParameterSet[1]); // 13
+		MortalitySmPos = exp(ParameterSet[1]); // 14
+		RR_TBmortPer10yrAge = exp(ParameterSet[2]); // 15
+		//RR_TBmortPer50CD4 = 1.0 / (1.0 + exp(-ParameterSet[3])); // 16
+		//HealthSeekingTB = exp(ParameterSet[4]); // 18
+		AnnMortTB_Rx[0] = exp(ParameterSet[3]); // 28
+		AnnMortTB_Rx[1] = AnnMortTB_Rx[0];
+		//RRscreenSymptomsBase = exp(ParameterSet[1]); // 32
+		//RRscreenSymptomsUlt = exp(ParameterSet[2]); // 36
+		InitialLTFU[1] = 1.0 / (1.0 + exp(-ParameterSet[4])); // 52
+		InitialLTFU[0] = InitialLTFU[1] * 1.0;
 	}
 
 	CurrYear = StartYear;
@@ -18928,6 +24312,11 @@ double ReturnNegLogL(double ParameterSet[20])
 	CalcInterruptions();
 	SetActivityByStage();
 	SetInitSexActivity();
+	if (IncludeTB == 1) {
+		InitializeTBprofiles();
+		CalcHIVeffectTB();
+		//CalcTBincAdjByAgeSex();
+	}
 	UpdateMixingST();
 	SetCurrYearParameters();
 	SetFertByStage();
