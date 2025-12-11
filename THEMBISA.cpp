@@ -1,25 +1,16 @@
 // This is the main project file for VC++ application project 
 // generated using an Application Wizard.
 
-//#include "stdafx.h"
-//#using <mscorlib.dll>
-//using namespace System;
-
-#ifdef _WIN32
-    #include "stdafx.h"
-    #using <mscorlib.dll>
-    using namespace System;
-#else
-    #include <iostream>
-    using namespace std;
-#endif
+#include "stdafx.h"
+#using <mscorlib.dll>
+using namespace System;
 
 #include "THEMBISA.h"
 #include "StatFunctions.h"
 #include "randomc.h"
-
 #include <time.h>
 #include <cstdlib>
+//#include <omp.h>
 #include <cstring>
 #include <sstream>
 #include <string>
@@ -75,7 +66,7 @@ std::string getOutputPath(const std::string& filename,
     return OUT_PATH + subdir + "/" + filename;
 }
 
-int main()
+int _tmain()
 {
 	int iy; 
 	clock_t start, finish;
@@ -144,6 +135,7 @@ int main()
 	finish = clock();
 	elapsed_time = (finish - start);
 	cout<<"Time taken: "<<elapsed_time<<endl;
+	system(“PAUSE”);
 	return 0;
 }
 
