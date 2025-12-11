@@ -99,6 +99,8 @@ If you are not using Windows and Visual Studio, please ensure you follow the mod
 
 # National HIV Model
 
+## Simulation
+
 For the national HIV simulation of the model, ensure that in **`THEMBISA.cpp`** , the following lines are commented and uncommented respectively: 
 
 ```{bash, eval=FALSE}
@@ -126,6 +128,13 @@ const int IncludeTB = 0;
 const int IncludeDR_TB = 0; 
 ```
 
+Please also ensure: 
+
+```{bash, eval=FALSE}
+const int MCMCdim = 49; ///< Number of parameters in uncertainty analysis
+const int MaxPriors = 145; ///< Number of input rows in Priors file (145 for HIV, 63 for TB)
+```
+
 # Provincial HIV Model
 
 ## Simulation
@@ -151,6 +160,13 @@ string ProvID = "KZ"; // Choose from EC, FS, GT, KZ, LM, MP, NC, NW, WC
 const int UseBrassLogit = 0;
 const int IncludeTB = 0; 
 const int IncludeDR_TB = 0; 
+```
+
+Please also ensure: 
+
+```{bash, eval=FALSE}
+const int MCMCdim = 40; ///< Number of parameters in uncertainty analysis
+const int MaxPriors = 145; ///< Number of input rows in Priors file (145 for HIV, 63 for TB)
 ```
 
 # National TB Model
@@ -187,6 +203,12 @@ const int IncludeDR_TB = 0;
 const int FixedTBscreening = 0;
 double RRtestingDiagnosed = 1.0; 
 
+```
+Please also ensure: 
+
+```{bash, eval=FALSE}
+const int MCMCdim = 21; ///< Number of parameters in uncertainty analysis
+const int MaxPriors = 65; ///< Number of input rows in Priors file (145 for HIV, 63 for TB)
 ```
 
 # Variables that should not be changed 
