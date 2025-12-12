@@ -19,34 +19,55 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
+<<<<<<< HEAD
     <VCProjectVersion>18.0</VCProjectVersion>
     <ProjectGuid>{B422E8D3-2E50-3B4F-A3AC-B5C83B78019A}</ProjectGuid>
+=======
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <ProjectGuid>{32705BF7-EDFF-42C5-BD6B-87AE1A42C476}</ProjectGuid>
+>>>>>>> 4be9e9867bba4f81db5dd0c73aa8c53f5f0ac4f7
     <Keyword>ManagedCProj</Keyword>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
+<<<<<<< HEAD
     <PlatformToolset>v145</PlatformToolset>
+=======
+    <PlatformToolset>v142</PlatformToolset>
+>>>>>>> 4be9e9867bba4f81db5dd0c73aa8c53f5f0ac4f7
     <CLRSupport>true</CLRSupport>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
+<<<<<<< HEAD
     <PlatformToolset>v145</PlatformToolset>
+=======
+    <PlatformToolset>v142</PlatformToolset>
+>>>>>>> 4be9e9867bba4f81db5dd0c73aa8c53f5f0ac4f7
     <CLRSupport>true</CLRSupport>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
+<<<<<<< HEAD
     <PlatformToolset>v145</PlatformToolset>
     <CLRSupport>true</CLRSupport>
+=======
+    <PlatformToolset>v142</PlatformToolset>
+>>>>>>> 4be9e9867bba4f81db5dd0c73aa8c53f5f0ac4f7
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
+<<<<<<< HEAD
     <PlatformToolset>v145</PlatformToolset>
     <CLRSupport>true</CLRSupport>
+=======
+    <PlatformToolset>v142</PlatformToolset>
+>>>>>>> 4be9e9867bba4f81db5dd0c73aa8c53f5f0ac4f7
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -69,6 +90,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
+<<<<<<< HEAD
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
@@ -94,6 +116,21 @@
       <WarningLevel>Level3</WarningLevel>
     </ClCompile>
     <Link>
+=======
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+    </ClCompile>
+    <Link>
+      <TargetMachine>MachineX86</TargetMachine>
+>>>>>>> 4be9e9867bba4f81db5dd0c73aa8c53f5f0ac4f7
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
     </Link>
@@ -101,6 +138,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+<<<<<<< HEAD
       <WarningLevel>Level3</WarningLevel>
     </ClCompile>
     <Link>
@@ -116,6 +154,14 @@
       <WarningLevel>Level3</WarningLevel>
     </ClCompile>
     <Link>
+=======
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+    <Link>
+      <TargetMachine>MachineX86</TargetMachine>
+>>>>>>> 4be9e9867bba4f81db5dd0c73aa8c53f5f0ac4f7
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
