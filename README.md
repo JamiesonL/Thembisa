@@ -22,9 +22,9 @@ Thembisa is written in C++ and primarily designed for Windows using Microsoft Vi
 # Project Directory Structure
 
 ```
-├── ./
-│   .DS_Store  
-│   .gitignore  
+├── ./ 
+│   .gitignore
+│   .gitattributes
 │   AssemblyInfo.cpp  
 │   README.md  
 │   StatFunctions.cpp  
@@ -37,7 +37,10 @@ Thembisa is written in C++ and primarily designed for Windows using Microsoft Vi
 │   mersenne.cpp  
 │   randomc.h  
 │   stdafx.cpp  
-│   stdafx.h  
+│   stdafx.h
+│   THEMBISA.sln
+│   THEMBISA.vcxproj
+│   THEMBISA.vcxproj.filters
 │   ├── calibration-outputs/
 │   │   ├── HIV/
 │   │   ├── TB/
