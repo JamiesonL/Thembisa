@@ -70,13 +70,15 @@ Thembisa is written in C++ and primarily designed for Windows using Microsoft Vi
 
 If you are not using Windows in Visual Studio, please ensure you follow the modifications to the specific files in the table below:
 
-| File               | Lines    | Windows                                                                       | Linux/MacOS                                                                  |
-|--------------------|----------|-------------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| `Thembisa.cpp`     | 4–6      | `#include "stdafx.h"`<br>`#using <mscorlib.dll>`<br>`using namespace System;` | `using namespace std;`<br>`#include <iostream>`<br>`#include <cstring>`<br>`#include <sstream>`<br>`#include <string>` |
-| `Thembisa.h`       | 7        | `#using <mscorlib.dll>`                                                       | _Delete_ or comment out                                                      |
-| `StatFunctions.cpp`| 13–15    | `#include "stdafx.h"`<br>`#using <mscorlib.dll>`                              | _Delete_ or comment out                                                      |
-| `StatFunctions.h`  | 8        | `#using <mscorlib.dll>`                                                       | _Delete_ or comment out                                                      |
-| `mersenne.cpp`     | 8        | `#include "stdafx.h`                                                          | _Delete_ or comment out                                                      |
+| File                | Lines  | Windows                                                                 | Linux/macOS                                                               |
+|---------------------|--------|-------------------------------------------------------------------------|----------------------------------------------------------------------------|
+| `Thembisa.cpp`      | 4–6    | `#include "stdafx.h"`<br>`#using <mscorlib.dll>`<br>`using namespace System;` | `using namespace std;`<br>`#include <iostream>`<br>`#include <cstring>`<br>`#include <sstream>`<br>`#include <string>` |
+| `Thembisa.cpp`      | 26     | `int _tmain`                                                            | `int main`                                                                |
+| `Thembisa.h`        | 7      | `#using <mscorlib.dll>`                                                 | Delete or comment out                                                     |
+| `StatFunctions.cpp` | 13–15  | `#include "stdafx.h"`<br>`#using <mscorlib.dll>`                        | Delete or comment out                                                     |
+| `StatFunctions.h`   | 8      | `#using <mscorlib.dll>`                                                 | Delete or comment out                                                     |
+
+
 
 **3. Compilation**
 
