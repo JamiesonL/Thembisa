@@ -5,7 +5,7 @@
 1	0	20.18	268.15
 3. Annual rate of reactivation in HIV-negative individuals
 0	1	25.0	16666.7
-4. Reduction in TB incidence per 100 increase in CD4
+4. Relative rate of TB incidence per 100 increase in CD4
 0	0	19.52	7.974
 5. Relative rate of TB incidence on ART (controlling for CD4)
 0	0	49.05	11.51
@@ -70,7 +70,7 @@
 35. Prevalence of cough >2 weeks in people with smear-negative TB
 0	0	3.00	12.00
 36. RR of screening in TB patients seeking Rx for TB symptoms, compared to those seeking Rx for other conditions (high screening, RRscreenSymptomsUlt)
-1	1	11.11	2.778
+1	1	6.25	2.08
 37. RR - 1 for effect of risky drinking on TB incidence
 1	1	8.91	4.59
 38. RR - 1 for effect of diabetes on TB incidence
