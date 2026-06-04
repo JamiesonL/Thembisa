@@ -10,8 +10,8 @@
 # include <cmath>
 # include <ctime>
 
-#include "stdafx.h"
-#using <mscorlib.dll>
+//#include "stdafx.h"
+//#using <mscorlib.dll>
 #include "StatFunctions.h"
 
 using namespace std;

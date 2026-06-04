@@ -4,7 +4,7 @@
 #include <fstream>
 #include <cmath>
 #include <string>
-#using <mscorlib.dll>
+//#using <mscorlib.dll>
 
 using namespace std;
 
@@ -23,7 +23,7 @@ const int VaryFutureInterventions = 0; ///< 0 = fix the future rollout at Rollou
 const int VaryFutureInterventionsTB = 0; ///< 0 = fix the future rollout at TBrollout.txt values
 const int FixedARTinitiation = 0; ///< 1 = fix the rates of ART initiation at the values generated in
 								  ///< the uncertainty analysis (only valid if FixedUncertainty = 1)
-const int InputARTinitiationRates = 1; ///< 1 = specify rates of ART initiation in Rollout.txt
+const int InputARTinitiationRates = 0; ///< 1 = specify rates of ART initiation in Rollout.txt
 									   ///< 0 = specify numbers starting ART in Rollout.txt
 const int PropnalImmART = 1; ///< 1 if immediate ART start is proportional to later rate of ART start
 const int ExcludeInterrupters = 1; ///< 1 = exclude temporary ART interrupters when calculating
@@ -42,36 +42,36 @@ double RRtestingDiagnosed = 1.0; ///< Relative rate of consent to testing if ind
 								 ///< positive (relevant in calibration to HSRC data)
 
 const int CalibPaedPrev = 0;
-const int CalibAdultPrev = 0; ///< 1 = calibrate to adult HIV prevalence data from HSRC & DHS surveys
-const int CalibANCprev = 0; ///< 1 = calibrate to HIV prevalence data from antenatal surveys
+const int CalibAdultPrev = 1; ///< 1 = calibrate to adult HIV prevalence data from HSRC & DHS surveys
+const int CalibANCprev = 1; ///< 1 = calibrate to HIV prevalence data from antenatal surveys
 const int InclANCpre1997 = 1; ///< 1 = include ANC prevalence data prior to 1997
 const int InclAS_ANCprov = 1; ///< 1 = include age-specific ANC prevalence data in prov calibration
 const int CalibYouthPrev = 0; ///< 1 = include HIV prevalence for 15-24 year olds
-const int CalibFSWprev = 0; ///< 1 = calibrate to HIV prevalence data from sex worker surveys
-const int CalibMSMprev = 0; ///< 1 = calibrate to HIV prevalence data from MSM surveys
+const int CalibFSWprev = 1; ///< 1 = calibrate to HIV prevalence data from sex worker surveys
+const int CalibMSMprev = 1; ///< 1 = calibrate to HIV prevalence data from MSM surveys
 const int CalibPWIDprev = 0; ///< 1 = calibrate to HIV prevalence data from PWID surveys
 const int CalibCD4 = 0; ///< 1 = calibrate to CD4 distributions in household/workforce surveys
 const int CalibCD4ANC = 0; ///< 1 = calibrate to CD4 distributions in antenatal surveys
-const int CalibHCT_HH = 0; ///< 1 = calibrate to propn ever tested in HSRC surveys
+const int CalibHCT_HH = 1; ///< 1 = calibrate to propn ever tested in HSRC surveys
 const int CalibHCT_ANC = 0; ///< 1 = calibrate to propn ever tested in antenatal surveys
-const int CalibHCTprev = 0; ///< 1 = calibrate to HIV prevalence in adults receiving HCT
-const int CalibHCTprevP = 0; ///< 1 = calibrate to HIV prevalence in children receiving HCT
+const int CalibHCTprev = 1; ///< 1 = calibrate to HIV prevalence in adults receiving HCT
+const int CalibHCTprevP = 1; ///< 1 = calibrate to HIV prevalence in children receiving HCT
 const int CalibHCTtotP = 0; ///< 1 = calibrate to recorded number of kids receiving HCT
 const int CalibHCTageSex = 0; ///< 1 = calibrate to proportions tested by age/sex and prev by age/sex
-const int CalibDeathsA = 0; ///< 1 = calibrate to recorded numbers of adult deaths
+const int CalibDeathsA = 1; ///< 1 = calibrate to recorded numbers of adult deaths
 const int AgeLimitMortCalib = 60; ///< Death data below this age are used in mort calibration
 								  ///< Should be multiple of 5 (set to 95 if all ages included)
-const int CalibDeathsP = 0; ///< 1 = calibrate to recorded numbers of paediatric deaths
+const int CalibDeathsP = 1; ///< 1 = calibrate to recorded numbers of paediatric deaths
 const int CalibAIDStrend = 0; ///< 1 = calibrate to reported new AIDS cases in adults (1990-4)
 const int CalibAIDSage = 0; ///< 1 = calibrate to reported new AIDS cases by age and sex (1993-4)
 const int CalibARTtotals = 0; ///< 1 = calibrate to reported total numbers of ART patients
 const int CalibARTtotalsP = 0; ///< 1 = calibrate to reported total numbers of children on ART
 const int CalibCD4atARTstart = 0; ///< 1 = calibrate to recorded # starting ART by CD4 (WC only)
-const int CalibARTbyAge = 0; ///< 1 = calibrate to age distribution of adults on ART
+const int CalibARTbyAge = 1; ///< 1 = calibrate to age distribution of adults on ART
 const int CalibARTbyAgeP = 0; ///< 1 = calibrate to age distribution of kids starting ART
 const int CalibARTbyAgeP2 = 0; ///< 1 = calibrate to age distribution of kids on ART
 const int CalibChildPIP = 0; ///< 1 = calibrate to child deaths in facilities
-const int CalibARTcoverage = 0; ///< 1 = calibrate to ARV metabolite data
+const int CalibARTcoverage = 1; ///< 1 = calibrate to ARV metabolite data
 const int CalibMarriageData = 0; ///< 1 = calibrate to marriage data
 const int CalibANC_ART = 0; ///< 1 = calibrate to % of HIV+ ANC attenders previously on ART
 const int CalibAHDpaedART = 0; ///< 1 = calibrate to % of kids starting ART w severe immunodeficiency
@@ -1473,8 +1473,8 @@ double TBprev2018[2]; ///< Modelled pulmonary TB prevalence in 2018, by sex
 ///< Priors and likelihood
 
 double LogLikelihood;
-const int MCMCdim = 16; ///< Number of parameters in uncertainty analysis
-const int MaxPriors = 149; ///< Number of input rows in Priors file (148 for HIV, 65 for TB)
+const int MCMCdim = 51; ///< Number of parameters in uncertainty analysis
+const int MaxPriors = 149; ///< Number of input rows in Priors file (149 for HIV, 65 for TB)
 int InclPriors[MaxPriors][2]; ///< Indicator of which priors are included (1st index) and if
 							  ///< included their index in MCMCdim (2nd index)
 double RandPrior[MCMCdim]; ///< Random numbers used to sample from prior in current simulation

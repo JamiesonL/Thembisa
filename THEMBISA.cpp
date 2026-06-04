@@ -1,9 +1,11 @@
 // This is the main project file for VC++ application project 
 // generated using an Application Wizard.
 
-#include "stdafx.h"
-#using <mscorlib.dll>
-using namespace System;
+//#include "stdafx.h"
+//#using <mscorlib.dll>
+//using namespace System;
+
+using namespace std;
 
 #include "THEMBISA.h"
 #include "StatFunctions.h"
@@ -14,6 +16,7 @@ using namespace System;
 #include <cstring>
 #include <sstream>
 #include <string>
+#include <iostream>
 
 #ifdef _WIN32
   #include <direct.h>             // _mkdir on Windows
@@ -23,7 +26,7 @@ using namespace System;
   #define MKDIR(path) mkdir((path).c_str(), 0755)
 #endif
 
-int _tmain()
+int main()
 {
 	int iy; 
 	clock_t start, finish;
@@ -8470,8 +8473,6 @@ void UpdatePrEPandVM()
 				married = CurrBehavDbnMSM[ia][2 + ii] / (CurrBehavDbnMSM[ia][ii] + CurrBehavDbnMSM[ia][2 + ii]);
 				if (ii == 0) { MarriedAdj = RRpartnerMarried[0]; }
 				else { MarriedAdj = 0.0; }
-				RR_PrEP_Het[ia][ii][ig] *= (married * MarriedAdj + 1.0 - married); // ST partners
-				RR_PrEP_Het[ia][ii][ig] += married; // LT partners
 				PartnerHIV = 1.0 - (MHU_STM.NegNoHCT[ia] + MHU_STM.NegPastHCT[ia] + MHU_STM.RegHCT[ia] +
 					MHU_STM.RegPrEP[ia] + MHC_STM.NegNoHCT[ia] + MHC_STM.NegPastHCT[ia] + MHC_STM.RegHCT[ia] +
 					MHC_STM.RegPrEP[ia] + MLU_STM.NegNoHCT[ia] + MLU_STM.NegPastHCT[ia] + MLU_STM.RegHCT[ia] +
@@ -16704,7 +16705,7 @@ void GetMarriageAndDivorceRates()
 
 	for(ia=0; ia<76; ia++){
 		// Marriage rates
-		for(ii=0; ii<3; ii++){
+		for(ii=0; ii<2; ii++){
 			for(ig=0; ig<3; ig++){
 				ProbMarriageSE[ia][ii][ig] = MarriageRate[ia][ig];}
 		}
@@ -16756,7 +16757,7 @@ void GetMarriageAndDivorceRates()
 	}
 
 	// Calculate remaining parameters in Mixing sheet (balancing factor and risk group prefs)
-	for(ig=0; ig<2; ig++){
+	for(ig=0; ig<3; ig++){
 		for(ii=0; ii<2; ii++){
 			NewMarriages[ii][ig] = 0.0;
 			for(ia=0; ia<76; ia++){
@@ -18603,7 +18604,7 @@ void TBresultsAtEndOfYr()
 		}
 		temp1 = 0.0;
 		temp2 = 0.0;
-		for (ii = 0; ii < 5; ii++) { // ii is years prior to current
+		for (ii = 0; ii < 5 && ii <= iy; ii++) { // ii is years prior to current; guard against negative index
 			temp1 += exp(-(ii + 0.5) / DurTBadult.out[CurrSim - 1][iy]) *
 				NewActiveTBadult.out[CurrSim - 1][iy - ii];
 			temp2 += exp(-(ii + 0.5) / DurTBadult.out[CurrSim - 1][iy]);

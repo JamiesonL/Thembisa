@@ -5,7 +5,7 @@
 // on 4 March 2005. Last revised 22 June 2004.
 
 #include "cmath"
-#using <mscorlib.dll>
+//#using <mscorlib.dll>
 using namespace std;
 
 double algdiv ( double *a, double *b );
