@@ -2559,7 +2559,7 @@ void OutputArray::RecordSample(const char* filout, int n)
 	for(i=0; i<ResampleSize; i++){
 		file<<setw(6)<<right<<i<<"	"<<setw(6)<<right<<SampleID[i];
 		for(c=0; c<columns; c++){
-			file<<"	"<<setw(10)<<right<<out[i][c];}
+			file<<"	"<<setw(10)<<right <<out[i][c];}
 		file<<endl;
 	}
 	file.close();
@@ -2592,7 +2592,7 @@ void PostOutputArray::RecordSample(const char* filout)
 	for(i=0; i<ResampleSize; i++){
 		file<<setw(6)<<right<<i<<"	"<<setw(6)<<right<<SampleID[i];
 		for(c=0; c<columns; c++){
-			file << "	" << setw(10) << right << out[i][c];
+			file << "	" << setw(10) << right << fixed << out[i][c];
 		}
 		file<<endl;
 	}
@@ -23036,6 +23036,10 @@ void RunSample()
 
 	PWIDbyAge.RecordSample(getOutputPath("PWIDbyAge.txt", IncludeTB, ProvModel, ProvID).c_str());
 	MSMbyAge.RecordSample(getOutputPath("PWIDbyAge.txt", IncludeTB, ProvModel, ProvID).c_str());
+
+
+	LYlostAIDS.RecordSample("LYlostAIDS.txt");
+
 
 	// Investment case outputs
 	/*NonAIDSdeaths.RecordSample("NonAIDSdeaths.txt");
