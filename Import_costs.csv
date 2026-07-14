@@ -1,0 +1,122 @@
+Intervention, Unit Cost ,Cost Unit
+dummy,0,dummy
+ART Adults (1st line 1st year),5166.481482,per patient year
+ART Adults (1st line followup),3145.619807,per patient year
+ART Adults (2nd line followup),3991.153129,per patient year
+ART Paeds Neonates,1844.241322,per patient year
+ART Paeds Kids <1,4942.988454,per patient year
+ART Paeds Kids 1-2 (1st year),6636.970271,per patient year
+ART Paeds Kids 1-2 (followup),4677.521973,per patient year
+ART Paeds Kids 3-5 (1st year),7309.842086,per patient year
+ART Paeds Kids 3-5 (followup),5350.393788,per patient year
+ART Paeds Kids 6-9 (1st year),6919.214728,per patient year
+ART Paeds Kids 6-9 (followup),4959.76643,per patient year
+ART Paeds Kids 10-14 (1st year),5037.545988,per patient year
+ART Paeds Kids 10-14 (followup),3078.097691,per patient year
+Additional CD4 counts required,87.8782824,per test
+Incremental POCVL costs across all populations,147.82,per patient year
+Medical male circumcision,1546.324769,per circumcision
+Early infant male circumcision,773.16,per circumcision
+Condom distribution in clinics,0.97,per condom
+Condom distribution in non-traditional outlets (hotels; shops; malls),1.13,per condom distributed
+PrEP women,1031.339637,per client initiated
+PrEP FSW,1050.487754,per client initiated
+PrEP men,1026.840726,per client initiated
+PrEP MSM,1318.815304,per client initiated
+CABLA FSW (12m),1665.471024,per client initiated
+CABLA NonFSW (12m),1665.471024,per client initiated
+CABLA women (12m),1665.471024,per client initiated
+CABLA men (12m),1572.769509,per client initiated
+CABLA MSM (12m),1550.099754,per client initiated
+PMTCT (mother not on any ART),251.0430661,per mother-baby pair
+PMTCT (mother not on lifelong ART),1792.027184,per mother-baby pair
+Testing at birth,585.2977431,per test
+Testing at 10 weeks,550.9636088,per test
+Testing at 6 months,550.9636088,per test
+General HCT (negative),75.87890932,per test
+General HCT (positive),110.6996646,per test
+Adolescent testing (negative),149.2140744,per test
+Adolescent testing (positive),158.6769934,per test
+ANC testing (negative),65.7971723,per test
+ANC testing (positive),100.2367298,per test
+Partner notification (negative),69.63844485,per test
+Partner notification (positive),111.0644922,per test
+PITC (negative),75.88,per test
+PITC (positive),110.7,per test
+Mobile testing (negative),107.3298721,per test
+Mobile testing (positive),124.34,per test
+Home based testing (negative),107.45,per test
+Home based testing (positive),116.71,per test
+Rapid HIV tests in U15 (negative),75.88,per test
+Rapid HIV tests in U15 (positive),110.7,per test
+ST distributed (fixed point),150.46,per test distributed
+ST distributed (taxi),135.08,per test distributed
+ST distributed (ANC),291.75,per test distributed
+ST distributed (index),277.79,per test distributed
+ST distributed (workplace),144.83,per test distributed
+ST distributed (PHC),147.74,per test distributed
+Post-Exposure Prophylaxis (PEP),1319.14,per patient year
+Combination prevention package service provision through outreach to CSW,1167.76,per patient year
+Palliative care,0,per patient
+Inpatient care (ART; <200 cells/microl),8311.18,per patient year
+Inpatient care (ART; 200-349 cells/microl),2623.84,per patient year
+Inpatient care (ART; 350-500 cells/microl),773.65,per patient year
+Inpatient care (ART; >500 cells/microl),773.65,per patient year
+Inpatient care (pre-ART; <200 cells/microl),3235.21,per patient year
+Inpatient care (pre-ART; 200-349 cells/microl),1735.03,per patient year
+Inpatient care (pre-ART; 350-500 cells/microl),968.55,per patient year
+Inpatient care (pre-ART; >500 cells/microl),968.55,per patient year
+Supply chain management reform 1: Stock Visibility Solution,50782249.24,per year
+Supply chain management reform 2: Command Centre,23841759.02,per year
+Supply chain management reform 3: Prov'l Control Tower,4641666.5,per year
+Pharmacovigilance,71119534.42,per year
+RetentionIntervention,2042035829,per year
+Retention Intervention per person,2126.497237,per person
+U=U messaging to men,43.55,per person
+Mens clinics (non-ART cost),31.49,per person
+ART clients with Peer Navigators,1543.56,per person
+POC VL testing,589.97,per test
+Isoniazid Preventive Therapy (IPT) for PLHIV,173.91,per patient
+Isoniazid Preventive Therapy (IPT) for household contacts,173.91,per patient
+3HP for PLHIV,370.85,per patient
+TB Screening General PHC,11.58,per patient
+TB Screening PLHIV on ART,11.58,per patient
+TB Screening (Household contacts and other close contacts),23.29,per patient
+TB Screening (Door-to-door),13.24,per patient
+TB Screening (Door-to-door2),13.24,per patient
+TB Screening (Door-to-door TSwbNAAT Super-opt),43.99,per patient
+TB Screening (Door-to-door TSwbNAAT Super-opt),43.99,per patient
+TB Screening (Door-to-door Xpert for all),13.24,per patient
+TB Screening: Digital Chest X-ray,125,per patient
+TB Screening: Digital Chest X-ray V2,125,per patient
+TB Screening: Digital Chest X-ray (x0.5),250,per patient
+TB Screening: Digital Chest X-ray V2 (x0.5),250,per patient
+Testing: Smear Microscopy,0,per patient
+Testing: Xpert MTB/RIF Ultra,133.23,per patient
+Testing: Culture in liquid medium (Xpert neg),92.19,per patient
+Testing: Culture in liquid medium (Xpert neg PLHIV),92.19,per patient
+Testing: Culture in liquid medium (Xpert neg previous TB),92.19,per patient
+Testing: TUTT for PLHIV (screening + follow-up),303.49,per patient
+Testing: TUTT for previous TB (screening + follow-up),303.49,per patient screened
+Testing: TUTT for HH (screening + follow-up),306.68,per patient
+Testing: TUTT for PLHIV (follow-up),36.93,per patient
+Testing: TUTT for previous TB (follow-up),36.93,per patient screened
+Testing: TUTT for HH (follow-up),40.24,per patient
+Testing: Xpert D2D,266.56,per patient
+Testing: Xpert D2D DCXR,266.56,per patient
+Testing: Xpert D2D TSwb,266.56,per patient
+Testing: Xpert D2D TSwb2,266.56,per patient
+Treatment DS-TB (Outpatient),2098.92,per patient
+Treatment: DS-TB (Inpatient),4786.56,per patient
+Treatment: DR-TB (In- and Outpatient),95586.93,per patient
+Treatment: Drug-resistant (Inpatient),0,per patient
+Treatment monitoring: Smear microscopy,77.74,per test
+Treatment: Childhood,1545.73,per patient
+Treatment Linkage,25.8,per patient diagnosed
+Treatment initiations: TUTT (PLHIV on ART),0,per patient
+Treatment initiations: TUTT (TB hx),0,per patient
+Treatment initiations: TUTT (hh),0,per patient
+Treatment initiations: D2D,0,per patient
+Treatment initiations: dXCR,0,per patient
+Treatment initiations: dXCR,0,per patient linked
+RetIntCost_opt,687,per patient
