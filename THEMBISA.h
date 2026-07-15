@@ -1734,6 +1734,7 @@ class PostOutputArray
 	double Means[86][3]; ///< Mean, 95% LL and 95% UL
 
 	void RecordSample(const char* filout);
+	void RecordSampleOpt(char* filout); //LJ added this for optimisation
 	void GetMeans(); ///< Calculate Means and 95% CIs
 };
 
@@ -2950,3 +2951,430 @@ OutputByAge MaleTBdeathsAS(16, 56);
 OutputByAge FemTBdeathsAS(16, 56);
 OutputByAge MaleTBtreatAS(16, 56);
 OutputByAge FemTBtreatAS(16, 56);
+
+
+
+
+
+
+//***************************************************************************Added by Lise for HIV IC
+#include <sstream>
+
+
+//******************************************************************************************Parameters
+int Optimise = 0; //0=no optimisation, 1=optimisation for HIV IC, 2= for calibrating parameters
+const int intercount = 96; //How many additional interventions to run
+const int maxinter = 96; //use to make sure arrays are large enough for additional testing
+
+const int ICstart = 2025 - 1985;  //should be 2027 for HIV IC
+const int BudgetYr1 = ICstart + 1985, BudgetYr2 = BudgetYr1+1, BudgetYr3 = BudgetYr2+2;
+const int timehorizon = 52;  //NB should be 20 years.
+
+double pvtsector = 0.058; //proportion of population getting HIV testing and care in private sector
+
+//int Zero2030 = 0; //indicator to run analysis where several interventions get reduced to 0%
+
+double PropMessaging = 0.0; //U=U messaging, assumed baseline coverage 0%
+double AttritionRR = 0.71; //Men's clinics attrition
+double PropInClinics = 0.0; // Men's clinics proportion- ultimate
+double prop_menclinics = 0.0; //- running coverage for scale up
+
+double RetentionOR_PN = 1.78; //Peer Nav
+double PropWithPN = 0.0;   //Peer Nav coverage- ultimate
+double prop_peernav = 0.0;   //Peer Nav coverage- running coverage for scale up
+
+double OriginalIedeaEffect = 0.0; //for POC VL testing intervention
+double PropWithPOCVL = 0.0; //POC VL coverage- ultimate
+double prop_pocvl = 0.0;  //POC VL - running coverage for scale up
+double RetentionRR_POCVL = 1.06; //POC VL retention impact
+
+double prop_acc = 0.0;  //should be 0 or 1 applying to all
+double PropAcc = 0.0; //Accelerator 2 improve retention coverage
+double RetentionRR_Acc = 1.0; //Accelerator 2 retention improvement
+
+
+
+
+//const int CEAstart = 2015, CEAstop = 2034;
+string effectmeasure = "LYL"; //Choose effective measure to be used in ICER calculation: LYL, HIV, DALY
+int newint, newnegint, NWnewint; //values for number of interventions in pool to be considered (excl those which were excluded)
+string InterventionName[ResampleSize][maxinter]; //Names for all interventions
+int InterventionExclude[ResampleSize][maxinter]; //Which interventions to exclude because they fall in the NW quandrant
+
+int RunIntervention; //to loop through different interventions
+string IntName = "";
+int CountInt[ResampleSize]; //Running counter for interventions added to baseline
+int FlagNegICER[ResampleSize]; //used to flag number of negative ICERS - different algorithm followed if there are 2 or more negative
+
+int calcICER[ResampleSize]; //used to flag whether an icer should be calculated or not
+int BaseIntOrder[maxinter + 1]; //Running order of interventions as they get assigned to the baseline scenario. Used to keep track of what has happened
+//as interventions get added so we can adjust for compounding effects between interventions
+int NoNonNWleft[ResampleSize]; //Loop criteria: For each set, whether there are any non-NW quandrant interventions left 0=Yes there are, 1=No more left
+
+string BaseIntName[ResampleSize][maxinter]; //Baseline Interventions - corresponds to BaseIntToggle with names added
+long long BaseIntCost[ResampleSize][maxinter]; //Total Cost of baseline interventions
+long long BaseIntEffect[ResampleSize][maxinter]; //Effect of baseline interventions
+double BaseIntICER[ResampleSize][maxinter]; //ICER of baseline interventions
+
+int BaseIntToggle[ResampleSize][maxinter]; //Baseline Intervention toggle - indicates which of the interventions are included in new baseline. Where second
+//part of array indicates the no. of the intervention applied to baseline, in order.
+//i.e. 0 = 1st intervention, 1 = 2nd, 2 = 3rd, etc. Order is important
+int BaseInt[ResampleSize][maxinter]; //Baseline Intervention order - array to record the order of interventions where second part of array references
+//intervention number, eg. 0=Condom 90%, 1=Condom 30%, etc.
+int DelayConsider[ResampleSize][maxinter]; //An array that indicates which interventions should be delayed until the very next time an intervention
+//gets considered. We use this when there is a specific pattern related to defaulting an intervention
+int IntAllow[ResampleSize][maxinter]; //Like delay consider but works in absolute 0=No, 1=Yes terms - for very specific scenarios
+int IntDefault[ResampleSize][maxinter]; //0=No, 1=Yes corresponding with the interventions to show which are defaults. used for new algorithm
+int IntNWquad[ResampleSize][maxinter]; //Records whether the interventions have a NW ICER - used to end while loop
+int OutPool[ResampleSize][maxinter]; //Checks whether an intervention is out of the pool during runsample, to be used to break loop; resets before each set
+int reduceCountInt[ResampleSize]; //flag to reduce CountInt after best intervention is not added to baseline interventions;
+const int StopLoopForBudget = 0; //Trigger to tell program to stop loop if budget constraints are hit in 2016/17/18; 0=No, 1=Yes
+int BudgetReached[ResampleSize]; //Loop criteria: For each set, whether the budget has been reached 0=No, 1=Yes
+
+long long IntIncEffRrollover[ResampleSize][maxinter];
+long long IntIncCostRrollover[ResampleSize][maxinter];
+double InterventionICERrollover[ResampleSize][maxinter]; //this array never gets cleared - it stores the last ICER from the previous runs and 
+//only gets updated when a new ICER is calculated for the corresponding intervention
+//used in defaulting algorithm
+
+long long InitialBaseCost[ResampleSize]; //Baseline cost before any interventions added
+long long InitialBaseEff[ResampleSize]; //Baseline effect before any interventions added
+
+
+long long InterventionTotCost[ResampleSize][maxinter]; //Total cost for intervention
+long long InterventionEffect[ResampleSize][maxinter]; //Effect for intervention
+long long InterventionIncCost[ResampleSize][maxinter]; //Incremental costs for all interventions
+long long InterventionEff[ResampleSize][maxinter]; //Incremental effect for all interventions
+double InterventionICER[ResampleSize][maxinter]; //ICERs for all interventions
+long long ICERranking[ResampleSize][maxinter][4]; //used to store ranked ICERs, minus excluded interventions; index for ResampleSize,interventions to be sorted; storing [][][0] ICER and [][][1] inter number
+long long ICERrankingneg[ResampleSize][maxinter][7]; //used to store ranked negative ICERs, minus excluded interventions; index for ResampleSize,interventions to be sorted; storing [][][0] ICER and [][][1] inter number
+//5th element score Cost, 6th effect, 7th final
+
+double ICERranking_d[ResampleSize][maxinter]; //used for ranking, but double type so we can see the decimals points of ICER
+double ICERrankingneg_d[ResampleSize][maxinter]; //used for ranking, but double type so we can see the decimals points of ICER
+long long ICERNW[ResampleSize][maxinter][4]; //used to store NW ICERs, 0=ICER; 1=intervention number; 2=Cost; 3=Effect
+
+string inter[100][5];
+//string costlitl[150]; //labels for literature costs
+//double costlit[150];  //values for literature costs
+string costingl[150]; //labels for ingredient costs
+double costing[150];  //values for ingredient costs
+//string NACMl[47][2];
+//double NACM[47][7];
+
+//double NACMCD4[20][4]; //values for CD4 distribution per year. array of 20: 2016, 2017,... etc / array of 4: <200,200-349,350-499,500. 
+//double rocmAFLF[6], rocmASLF[6], rocmASL[6], rocmATL[6], rocfAFLF[6], rocfASLF[6], rocfASL[6], rocfATL[6]; //used to calculate rate of change from 2016 - 2021
+//double rocCFLF[6], rocCSL[6]; //used to calculate rate of change from 2016 - 2021
+
+int costpopsize;
+string costpopl[150]; //labels for cost population
+long long costpop[150][93]; //values for cost population, array denote types and year, 55+1 to adjust for flow variables
+string unitcostl[150][5]; //labels for unit cost - (0) Intervention (1) Ingredient / Literature (2) IN/OUT (3) TE/INT (4) programme area
+double unitcost[150];
+string totalcostl[150];//labels for total cost
+double unitcost2[150]; //used in output of total costs
+long long totalcost[150][54]; //values for total cost, array denote types and year
+long long CostforICER[ResampleSize][maxinter + 1];
+long long TotalCost[ResampleSize]; //Totalcost
+
+double LYLforICER[ResampleSize]; //LYL for ICER  - changed from long long to double 20 jan 16
+double DALYforICER[ResampleSize]; //DALY for ICER
+long long HIVforICER[ResampleSize]; //HIV infections for ICER&&
+long long baselinecost[ResampleSize]; //Baseline TotalCost
+double baselineEff[ResampleSize]; //Effectiveness measure for baseline - changed from long long to double 20 jan 16
+
+int UTTretention = 0;
+double RetIntCost = 0;
+int CABlong = 0;
+int LENlong = 0;
+int LENmodel = 0;
+int CABmodel = 0;
+
+string LENdur = "NA";
+string CABdur = "NA";
+
+
+int flagcount = 0;
+double ParmsA[intercount + 1][30]; //parameters not time-dependent, +1 for baseline
+double ParmsB[intercount + 1][30][timehorizon]; //parameters time-dependent, +1 for baseline
+
+long long CostforBudget1[maxinter + 1][ResampleSize];
+long long CostforBudget2[maxinter + 1][ResampleSize];
+long long CostforBudget3[maxinter + 1][ResampleSize];
+long long MaxBudget1, MaxBudget2, MaxBudget3;
+double BudgetFraction = 1.0;
+
+long long CostforBudget1_NoOpt[ResampleSize];
+long long CostforBudget2_NoOpt[ResampleSize];
+long long CostforBudget3_NoOpt[ResampleSize];
+long long budget[10][3]; //budget for SA and national
+
+
+//LJ: Variables to save default parameter estimates when using function GetDefaultAssump()
+double OnARThalfIntDur_def[6][2];
+double HCT_ARTuptake_def[93];
+double HCT1stTimeF25_def[93];
+double NeonatalMMC_def[93];
+double RR_MMCpromo10_def[93]; // RR of MMC promotion at ages 10-14
+double RR_MMCpromo15_def[93]; // RR of MMC promotion at ages 15-19
+double RR_MMCpromo20_def[93]; // RR of MMC promotion at ages 20-24
+double RR_MMCpromo25_def[93]; // RR of MMC promotion at ages 25-49
+double RR_MMCpromo50_def[93]; // RR of MMC promotion at ages 50+
+
+double RR_ARTinterruption_def[93];
+
+double ORcondomModel2_FSW_def[93]; // ratio of odds of condom use in model 2 to model 1 (FSW)
+double ORcondomModel2_ST_def[93]; // ratio of odds of condom use in model 2 to model 1 (ST)
+double ORcondomModel2_LT_def[93]; // ratio of odds of condom use in model 2 to model 1 (LT)
+
+double UltPrEPrateFSW_def;
+double UltCABLArateFSW_def;
+double RR_PrEPstartMSM_def[93];
+double RR_PrEPstartF20_def[93];
+double CABLApregnant_def[93];
+double PrEPpregnant_def[93];
+double MatARTuptake_def[93];
+double PCR6week_def[93];
+double PCR6month_def[93];
+
+
+int LastAdolTest;
+int LastMMC;
+int LastHCT, LastSTpack;
+double AdolHCTMultiplier = 1; //used to adjust testing rates for adolescents
+double AdolHCTMultiplierPM = 1; //used to adjust testing rates for adolescents
+
+double YAHCTMultiplier = 1; //used to adjust testing rates for 20-24 year olds
+double NewlyTestedNeg15_19; // Adolescents who tested negative through HCT in current year (by sex)
+double NewlyTestedPos15_19;
+double NewlyTestedNeg20_24; // Adolescents who tested negative through HCT in current year (by sex)
+double NewlyTestedPos20_24;
+
+double NewlyTestedNeg15_24F; // AGYW through HCT in current year (by sex)
+double NewlyTestedPos15_24F;
+
+
+double LastCondomMultiplier;
+double LastCondomAdjMultiplier;
+double LastCondomPerc;
+double TempNeg15_19, TempPos15_19;
+double TempNeg15_24F, TempPos15_24F;
+
+double NewCABLA_nonMSM;
+double NewCABLA_nonFSW;
+double NewPrEP_nonMSM;
+double NewPrEP_nonFSW;
+
+
+
+//*************************************************************Functions
+void SimInvestmentCase();
+void SimInvestmentCaseOpt();
+void SetSQ();
+void SaveParmNormal(); //save key parameters in a normal run
+void RecordParameters(int chosen); //Used to save all parameters used for particular optimisation set, from 2015 onwards only.
+void GetDefaultAssump(); //Get default parameter asfsumptions at start of program and save them for later use (when reverting to default interventions
+void EliminateLowerCoverage(int iy); //Eliminate lower coverage for previous intervention, argument is simulation (Resamplesize) number
+void EliminateCurrentDefault(int iy); //Eliminate current default as previous intervention will become the new default
+void ReleaseBaseInt(int Best, int iy); //Releasing BaseInt values after a reversion won, arguments BestIntervention/NextBest and simulation (Resamplesize) number
+void AssessBudget(int chosen, int iy); //Determines whether budget has been reached, given chosen intervention and simulation (Resamplesize)
+int IsNextDefault(int chosen, int iy);
+int IsNextNotDefault(int chosen, int iy);
+int IsNextNotLowerCov(int chosen, int iy);
+int IsNextLowerCov(int chosen, int iy);
+
+int DontRunModel();
+int IsLowerNotDefault(int arrint, int iy); //for looping through icer ranking for finding next best intervention
+double NewlyTestedNeg_PrEP[2];
+
+void SetupCosts();
+void CalcCostModel();
+void CalcEffect();
+
+void InitializeBudget();
+
+void Int_MMCBm2();
+void Int_MMCBm1();
+void Int_MMCDefault();
+void Int_MMCBp1();
+void Int_MMCBp2();
+void Int_MMCBp3();
+
+void Int_MMCMax();
+void Int_EIMCBm2();
+void Int_EIMCBm1();
+void Int_EIMCDefault();
+void Int_EIMCBp1();
+void Int_EIMCBp2();
+void Int_EIMCBp3();
+void Int_EIMCMax();
+void Int_CondomSupplyBm2();
+void Int_CondomSupplyBm1();
+void Int_CondomSupplyDefault();
+void Int_CondomSupplyBp1();
+void Int_CondomSupplyBp2();
+void Int_CondomSupplyBp3();
+void Int_CondomSupplyMax();
+void Int_Test6monthsBm2();
+void Int_Test6monthsBm1();
+void Int_Test6monthsDefault();
+void Int_Test6monthsBp1();
+void Int_Test6monthsBp2();
+void Int_Test6monthsBp3();
+void Int_Test6monthsMax();
+void Int_Test10weeksBm2();
+void Int_Test10weeksBm1();
+void Int_Test10weeksDefault();
+void Int_Test10weeksBp1();
+void Int_Test10weeksBp2();
+void Int_Test10weeksBp3();
+void Int_Test10weeksMax();
+void Int_OralPrepDefault();
+void Int_OralPrepMedium();
+void Int_OralPrepHigh();
+void Int_OralPrepPregDefault();
+void Int_OralPrepPregBp1();
+void Int_OralPrepPregBp2();
+void Int_OralPrepPregBp3();
+void Int_OralPrepPregMax();
+void Int_CABLADefault();
+void Int_CABLAMinMedium();
+void Int_CABLAMaxMedium();
+void Int_CABLAMaxHigh();
+void Int_CABLAMinHigh();
+
+
+void Int_LENndohDefault();
+void Int_LENndohBp1();
+void Int_LENndohBp2();
+void Int_LENndohBp3();
+void Int_LENndohMax();
+
+
+void Int_LENOptDefault();
+void Int_LENOptBp0();
+void Int_LENOptBp1();
+void Int_LENOptBp2();
+void Int_LENOptBp3();
+void Int_LENOptMax();
+
+
+void Int_CABLAPregDefault();
+void Int_CABLAPregBp1();
+void Int_CABLAPregBp2();
+void Int_CABLAPregBp3();
+void Int_CABLAPregMax();
+void Int_TestAdolDefault();
+void Int_TestAdolBp1();
+void Int_TestAdolBp2();
+void Int_TestAdolBp3();
+void Int_TestAdolMax();
+void Int_HCTBm2();
+void Int_HCTBm1();
+void Int_HCTDefault();
+void Int_HCTBp1();
+void Int_HCTBp2();
+void Int_HCTBp3();
+void Int_HCTMax();
+void Int_ARTuniversalBm2();
+void Int_ARTuniversalBm1();
+void Int_ARTuniversalDefault();
+void Int_ARTuniversalBp1();
+void Int_ARTuniversalBp2();
+void Int_ARTuniversalBp3();
+void Int_ARTuniversalBp4();
+void Int_ARTuniversalBp5();
+void Int_ARTuniversalBp6();
+
+void Int_ARTuniversalMax();
+void Int_STpackDefault();
+void Int_STpackBp1();
+void Int_STpackBp2();
+void Int_STpackBp3();
+void Int_STpackMax();
+void Int_Test18monthsBm2();
+void Int_Test18monthsBm1();
+void Int_Test18monthsDefault();
+void Int_Test18monthsBp1();
+void Int_Test18monthsBp2();
+void Int_Test18monthsBp3();
+void Int_Test18monthsMax();
+void Int_POCVL_Inactive();
+void Int_POCVL_Active();
+void Int_UU_Inactive();
+void Int_UU_Active();
+void Int_MensClinics_Inactive();
+void Int_MensClinics_Active();
+void Int_PeerNav_Inactive();
+void Int_PeerNav_Active();
+
+
+void RecordOutputOpt();
+
+//Outputs
+PostOutputArray TotOnCABLA_M(67);
+PostOutputArray TotOnCABLA_F(67);
+PostOutputArray F25_34onCABLA(67);
+
+
+double CABLAeligOtherG[93][2]; // Proportion of other groups eligible to initiate PrEP by sex
+double PrEPeligOtherG[93][2]; // Proportion of other groups eligible to initiate PrEP by sex
+
+double RR_ARTinit[93]; //reduce ART initation rates in adults, annual by sex
+double RR_ARTinitSex[93][2]; //reduce ART initation rates in adults, annual by sex
+
+
+
+//double RR_ARTinitP[21]; //reduce ART initation rates in children, annual
+int RR_ARTinityr = 2026; //starting point where RR are applied
+
+PostOutputArray PrEPcoverageNonMSM(92);
+
+PostOutputArray CABLAcoverageMSM(67);
+PostOutputArray CABLAcoverageNonMSM(67);
+PostOutputArray CABLAcoverageFSW(67);
+PostOutputArray CABLAcoverageAGYW(67);
+PostOutputArray CABLAcoverageAllF(67);
+PostOutputArray CABLAcoverageAllM(67);
+
+PostOutputArray CondomUsageAdjFactor(92);
+PostOutputArray CondomUsageAdjFactor_def(92);
+PostOutputArray CovNeonatalCirc(92);
+PostOutputArray CovNeonatalCirc_def(92);
+PostOutputArray TotSTestprimaryPHC(92);
+PostOutputArray CovPregWomenTest(92);
+PostOutputArray TotalHIVtestsPrEP(92);
+PostOutputArray HIVtestsPosNoPrEP(92);
+
+PostOutputArray CovPCR10weeks(92);
+PostOutputArray CovPCR6months(92);
+PostOutputArray CovBirthTest(92);
+
+PostOutputArray TotalHIVtests15_19(92);
+PostOutputArray TotalHIVtests15_24F(92);
+
+PostOutputArray TotalHIVtestsNeg15_19(92);
+PostOutputArray TotalHIVtestsPos15_19(92);
+
+PostOutputArray Total15_19(92);
+
+PostOutputArray TotalART1to2(92);
+PostOutputArray TotalART3to5(92);
+PostOutputArray TotalART6to9(92);
+PostOutputArray TotalART10to14(92);
+PostOutputArray StartingART6to9(92);
+PostOutputArray StartingART10to14(92);
+
+PostOutputArray NewCABLAinNonMSM(92);
+PostOutputArray NewCABLAinNonFSW(92);
+
+PostOutputArray NewPrEPinNonMSM(92);
+PostOutputArray NewPrEPinNonFSW(92);
+
+PostOutputArray NonMSMonPrEP(92);
+PostOutputArray NonMSMonCABLA(92);
+
+double TotARTbase[20];
+
+int bl;  //0=old baseline, 1=baseline+LEN GF, 2=PEPFAR minimum scenario
+
