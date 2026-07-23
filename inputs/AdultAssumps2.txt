@@ -262,7 +262,7 @@ CondomRednPrEP[2]
 FreqHCTinPrEP[2]
 4.00	4.00
 PrEPdur[2]
-1.00	0.50
+0.25	0.25    0.50
 PrEPdurPreg
 0.50
 PrEPdataYr 
@@ -280,7 +280,7 @@ CABLAefficacyPreg
 CondomRednCABLA[2]
 0.10	0.10
 CABLAdur[2]
-2.25	2.25
+0.50    0.50    1.00
 CABLAdurPreg
 2.25
 CABLAdataYr

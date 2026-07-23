@@ -1649,7 +1649,13 @@ void Adult::GetEndProfile()
 		UpperAge = 20;}
 	if(PrEPorVM==1){
 		StopCABLA = 1.0 - exp(-1.0/(12.0 * CABLAdur[Sex]));
+		if (MSMind == 1) { //LJ added MSM specific duration
+			StopCABLA = 1.0 - exp(-1.0 / (12.0 * CABLAdur[2]));
+		}
 		StopPrEP = 1.0 - exp(-1.0/(12.0 * PrEPdur[Sex]));
+		if (MSMind == 1) { //LJ added MSM specific duration
+			StopPrEP = 1.0 - exp(-1.0 / (12.0 * PrEPdur[2]));
+		}
 		StopVM = 1.0 - exp(-1.0/(12.0 * VMdur));
 	}
 	else{
@@ -3419,7 +3425,7 @@ void ReadAdultAssumps()
 	file>>FreqHCTinPrEP[0]>>FreqHCTinPrEP[1];
 	file.ignore(255,'\n');
 	file.ignore(255,'\n');
-	file>>PrEPdur[0]>>PrEPdur[1];
+	file>>PrEPdur[0]>>PrEPdur[1] >> PrEPdur[2]; //LJ
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	file >> PrEPdurPreg;
@@ -3446,7 +3452,7 @@ void ReadAdultAssumps()
 	file >> CondomRednCABLA[0] >> CondomRednCABLA[1];
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
-	file >> CABLAdur[0] >> CABLAdur[1];
+	file >> CABLAdur[0] >> CABLAdur[1] >> CABLAdur[2]; //LJ
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	file >> CABLAdurPreg;
@@ -3768,7 +3774,10 @@ void ReadRollout()
 	file.ignore(255,'\n');
 	file.ignore(255,'\n');
 	for (iy = 0; iy<86; iy++){
-		file >> PrEPeligOther[iy];}
+		file >> PrEPeligOther[iy];
+		PrEPeligOtherG[iy][0] = PrEPeligOther[iy]; 
+		PrEPeligOtherG[iy][1] = PrEPeligOther[iy]; 	
+	}
 	file.ignore(255,'\n');
 	file.ignore(255,'\n');
 	for(iy=0; iy<86; iy++){
@@ -3800,7 +3809,10 @@ void ReadRollout()
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	for (iy = 0; iy<86; iy++){
-		file >> CABLAeligOther[iy];}
+		file >> CABLAeligOther[iy];
+		CABLAeligOtherG[iy][0] = CABLAeligOther[iy]; 
+		CABLAeligOtherG[iy][1] = CABLAeligOther[iy]; 
+	}
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	for (iy = 0; iy<86; iy++){
@@ -6643,6 +6655,10 @@ void CalcInterruptions()
 
 	iy = CurrYear - StartYear;
 
+
+
+
+
 	// Age and sex multipliers to interruption rates
 	if (iy == 0){
 		PaedRatio = ARTinterruptionPaed / ARTinterruptionRate;
@@ -7922,12 +7938,21 @@ void UpdateCondomUse()
 	for(ia=0; ia<81; ia++){
 		ProbCondomST[ia][1] = CondomUse20 * pow(AgeEffectCondom, ia - 10.0);
 		if (ProbCondomST[ia][1] > 0.9999){ ProbCondomST[ia][1] = 0.9999; }
+		if (CurrYear >= ICstart + 1985 - 1) {
+			ProbCondomST[ia][1] = 1.0 / (1.0 + (1.0 - ProbCondomST[ia][1]) / (ProbCondomST[ia][1] * LastCondomMultiplier)); //LJ
+		}
 		if(ia>=5){
 			ProbCondomLT[ia][1] = ProbCondomST[ia][1] * RRcondomMarital;
 			if (ProbCondomLT[ia][1] > 0.9999){ ProbCondomLT[ia][1] = 0.9999; }
+			if (CurrYear >= ICstart + 1985 - 1) {
+				ProbCondomLT[ia][1] = 1.0 / (1.0 + (1.0 - ProbCondomLT[ia][1]) / (ProbCondomLT[ia][1] * LastCondomMultiplier)); //LJ
+			}
 		}
 	}
 	ProbCondomFSW = 1.0 / (1.0 + (1.0 - CondomUse20) / (CondomUse20 * ORcondomFSW));
+	if (CurrYear >= ICstart + 1985 - 1) {
+		ProbCondomFSW = 1.0 / (1.0 + (1.0 - ProbCondomFSW) / (ProbCondomFSW * LastCondomMultiplier)); //LJ
+	}
 
 	// Calculate male rates of condom use
 	for(ia=0; ia<81; ia++){
@@ -8565,8 +8590,8 @@ void UpdatePrEPandVM()
 						RR_PrEP_Het[ia][ii][ig] *= PrEPeligAGYW[iy];
 					}
 					else{ 
-						RR_CABLA_Het[ia][ii][ig] = RR_PrEP_Het[ia][ii][ig] * CABLAeligOther[iy];
-						RR_PrEP_Het[ia][ii][ig] *= PrEPeligOther[iy];
+						RR_CABLA_Het[ia][ii][ig] = RR_PrEP_Het[ia][ii][ig] * CABLAeligOtherG[iy][ig];
+						RR_PrEP_Het[ia][ii][ig] *= PrEPeligOtherG[iy][ig];
 					}
 				}
 			}
@@ -23250,8 +23275,19 @@ void RunSample()
 	PWIDbyAge.RecordSample(getOutputPath("PWIDbyAge.txt", IncludeTB, ProvModel, ProvID).c_str());
 	MSMbyAge.RecordSample(getOutputPath("PWIDbyAge.txt", IncludeTB, ProvModel, ProvID).c_str());
 
-
 	LYlostAIDS.RecordSample("LYlostAIDS.txt");
+
+	NewCABLAinNonMSM.RecordSample("NewCABLAinNonMSM.txt");
+	NewCABLAinMSM.RecordSample("NewCABLAinMSM.txt");	
+	NewCABLAinNonFSW.RecordSample("NewCABLAinNonFSW.txt");
+	NewCABLAinFSW.RecordSample("NewCABLAinFSW.txt");
+	NewCABLAinPWID.RecordSample("NewCABLAinPWID.txt");
+
+	NewPrEPinNonMSM.RecordSample("NewPrEPinNonMSM.txt");
+	NewPrEPinMSM.RecordSample("NewPrEPinMSM.txt");	
+	NewPrEPinNonFSW.RecordSample("NewPrEPinNonFSW.txt");
+	NewPrEPinFSW.RecordSample("NewPrEPinFSW.txt");
+	NewPrEPinPWID.RecordSample("NewPrEPinPWID.txt");
 
 
 	// Investment case outputs
