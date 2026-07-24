@@ -18,6 +18,7 @@ int ProjectionTerm = 65; ///< Note that entering term of 10 will give you result
 int CurrYear;
 int CurrMonth; ///< 0 to 11
 
+
 int FixedUncertainty = 1;
 const int VaryFutureInterventions = 0; ///< 0 = fix the future rollout at Rollout.txt values
 const int VaryFutureInterventionsTB = 0; ///< 0 = fix the future rollout at TBrollout.txt values
@@ -2452,22 +2453,22 @@ PostOutputArray CumARTtot(65);
 PostOutputArray CumART15F(65);
 PostOutputArray CumART15M(65);
 PostOutputArray CumARTunder15(65);
-PostOutputArray PreARTunder200M(51);
-PostOutputArray PreART200to349M(51);
-PostOutputArray PreART350to499M(51);
-PostOutputArray PreARTover500M(51);
-PostOutputArray PreARTunder200F(51);
-PostOutputArray PreART200to349F(51);
-PostOutputArray PreART350to499F(51);
-PostOutputArray PreARTover500F(51);
+PostOutputArray PreARTunder200M(65);
+PostOutputArray PreART200to349M(65);
+PostOutputArray PreART350to499M(65);
+PostOutputArray PreARTover500M(65);
+PostOutputArray PreARTunder200F(65);
+PostOutputArray PreART200to349F(65);
+PostOutputArray PreART350to499F(65);
+PostOutputArray PreARTover500F(65);
 PostOutputArray OnARTcurrUnder200(65);
 PostOutputArray OnARTcurr200to349(65);
 PostOutputArray OnARTcurr350to499(65);
 PostOutputArray OnARTcurrOver500(65);
-PostOutputArray DiscontinuedART_M(51);
-PostOutputArray DiscontinuedART_F(51);
-PostOutputArray TotNewNeed500M(51);
-PostOutputArray TotNewNeed500F(51);
+PostOutputArray DiscontinuedART_M(65);
+PostOutputArray DiscontinuedART_F(65);
+PostOutputArray TotNewNeed500M(65);
+PostOutputArray TotNewNeed500F(65);
 PostOutputArray ARTcoverage(65);
 PostOutputArray ARTcoverage15M(65);
 PostOutputArray ARTcoverage15F(65);
@@ -2664,8 +2665,8 @@ PostOutputArray PrEPcoverageAGYW(65);
 PostOutputArray PrEPcoverageAllM(65);
 PostOutputArray PrEPcoverageAllF(65);
 PostOutputArray PrEPcoverageAll(65);
-PostOutputArray AdolescOnPrEP(51);
-PostOutputArray WomenOnVM(51);
+PostOutputArray AdolescOnPrEP(65);
+PostOutputArray WomenOnVM(65);
 PostOutputArray NewAIDSdiagTrend(5);
 PostOutputArray NewAIDSdiagAge(20);
 PostOutputArray MSMpropn18to24(65);
@@ -2878,39 +2879,39 @@ PostOutputArray MarriedPropn50plusF(65);
 PostOutputArray MarriedMSM(65);
 PostOutputArray MarriedPropnAllMSM(65);
 PostOutputArray PropnMarriedM_MSM(65);
-PostOutputArray NewARTunder200F(51);
-PostOutputArray NewART200to349F(51);
-PostOutputArray NewART350to499F(51);
-PostOutputArray NewARTover500F(51);
-PostOutputArray StartingART1to2(51);
-PostOutputArray StartingART3to5(51);
-PostOutputArray StartingART6to13(51);
-PostOutputArray TotLateUnder15(51);
-PostOutputArray TotEarlyInfants(51);
-PostOutputArray TotEarly1to4(51);
-PostOutputArray TotSexActs(51);
-PostOutputArray TotProtSexActs(51);
-PostOutputArray TotProtSexActs18(51);
+PostOutputArray NewARTunder200F(65);
+PostOutputArray NewART200to349F(65);
+PostOutputArray NewART350to499F(65);
+PostOutputArray NewARTover500F(65);
+PostOutputArray StartingART1to2(65);
+PostOutputArray StartingART3to5(65);
+PostOutputArray StartingART6to13(65);
+PostOutputArray TotLateUnder15(65);
+PostOutputArray TotEarlyInfants(65);
+PostOutputArray TotEarly1to4(65);
+PostOutputArray TotSexActs(65);
+PostOutputArray TotProtSexActs(65);
+PostOutputArray TotProtSexActs18(65);
 PostOutputArray BirthsDiagHIV(65);
-PostOutputArray BirthsOver500(51);
-PostOutputArray Births350to499(51);
-PostOutputArray Births200to349(51);
-PostOutputArray BirthsUnder200(51);
-PostOutputArray SWsexActs(51);
-PostOutputArray SWsexActsProt(51);
-PostOutputArray FSWonART(51);
-PostOutputArray DiscordantARTelig(51);
-PostOutputArray DiscordantPrEPelig(51);
-PostOutputArray OnARTover500(51);
-PostOutputArray OnART350to499(51);
-PostOutputArray OnART200to349(51);
-PostOutputArray OnARTunder200(51);
-PostOutputArray DiscARTover500(51);
-PostOutputArray DiscART350to499(51);
-PostOutputArray DiscART200to349(51);
-PostOutputArray DiscARTunder200(51);
-PostOutputArray ChildrenOnExtNVP(51);
-PostOutputArray TotBirthDiagnosed(51);
+PostOutputArray BirthsOver500(65);
+PostOutputArray Births350to499(65);
+PostOutputArray Births200to349(65);
+PostOutputArray BirthsUnder200(65);
+PostOutputArray SWsexActs(65);
+PostOutputArray SWsexActsProt(65);
+PostOutputArray FSWonART(65);
+PostOutputArray DiscordantARTelig(65);
+PostOutputArray DiscordantPrEPelig(65);
+PostOutputArray OnARTover500(65);
+PostOutputArray OnART350to499(65);
+PostOutputArray OnART200to349(65);
+PostOutputArray OnARTunder200(65);
+PostOutputArray DiscARTover500(65);
+PostOutputArray DiscART350to499(65);
+PostOutputArray DiscART200to349(65);
+PostOutputArray DiscARTunder200(65);
+PostOutputArray ChildrenOnExtNVP(65);
+PostOutputArray TotBirthDiagnosed(65);
 
 ///< Age-specific output tables: HIV
 OutputByAge MalePopAS(91, 56);
@@ -2962,11 +2963,11 @@ OutputByAge FemTBtreatAS(16, 56);
 
 
 //******************************************************************************************Parameters
-int Optimise = 0; //0=no optimisation, 1=optimisation for HIV IC, 2= for calibrating parameters
+int Optimise = 2; //0=no optimisation, 1=optimisation for HIV IC, 2= for calibrating parameters
 const int intercount = 96; //How many additional interventions to run
 const int maxinter = 96; //use to make sure arrays are large enough for additional testing
 
-const int ICstart = 2025 - 1985;  //should be 2027 for HIV IC
+const int ICstart = 2027 - 1985;  //should be 2027 for HIV IC
 const int BudgetYr1 = ICstart + 1985, BudgetYr2 = BudgetYr1+1, BudgetYr3 = BudgetYr2+2;
 const int timehorizon = 52;  //NB should be 20 years.
 
@@ -3378,3 +3379,16 @@ double TotARTbase[20];
 
 int bl;  //0=old baseline, 1=baseline+LEN GF, 2=PEPFAR minimum scenario
 
+//for HIV IC calibration of parameters
+
+double ptest;// , pbase; //for calibration for HIV IC
+int yrtest;
+const int tnum = 8; //number of target values
+int target_curr;
+const int yr = 2; //from 2026 to 2027
+double parmyear[tnum][yr]; //to capture all parameters from 2028, initalized to zero, (we know the 2026 and 27 parms)
+int styr = 2026; //starting year
+
+const int fswnum = 8; //number of targets for fsw
+int fsw_curr;
+double parmSETFSWyear[2][fswnum]; //to parmaterize FSW LEN by year (2026 and 2027) for each target for fsw

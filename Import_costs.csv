@@ -19,15 +19,16 @@ Medical male circumcision,1546.324769,per circumcision
 Early infant male circumcision,773.16,per circumcision
 Condom distribution in clinics,0.97,per condom
 Condom distribution in non-traditional outlets (hotels; shops; malls),1.13,per condom distributed
-PrEP women,1031.339637,per client initiated
+PrEP NonFSW,1031.339637,per client initiated
 PrEP FSW,1050.487754,per client initiated
 PrEP men,1026.840726,per client initiated
 PrEP MSM,1318.815304,per client initiated
-CABLA FSW (12m),1665.471024,per client initiated
-CABLA NonFSW (12m),1665.471024,per client initiated
-CABLA women (12m),1665.471024,per client initiated
-CABLA men (12m),1572.769509,per client initiated
-CABLA MSM (12m),1550.099754,per client initiated
+PrEP PWID,1050.487754,per client initiated
+LAPrEP FSW,1665.471024,per client initiated
+LAPrEP NonFSW,1665.471024,per client initiated
+LAPrEP men,1572.769509,per client initiated
+LAPrEP MSM,1550.099754,per client initiated
+LAPrEP PWID,1665.471024,per client initiated
 PMTCT (mother not on any ART),251.0430661,per mother-baby pair
 PMTCT (mother not on lifelong ART),1792.027184,per mother-baby pair
 Testing at birth,585.2977431,per test

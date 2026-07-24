@@ -81,9 +81,107 @@ int main()
 	}
 
 	
+	if (Optimise == 2) { //Model calibration for HIV IC (more automated)
+		ofstream filesim;
+
+		filesim.open("ParamLog.txt");		
+		filesim << "target	year	ptest	LENinit" << endl; //column names
 	
+		int stop = 0;
+
+		//check inc/dec values periodically: can be inefficient if the dec/inc is too big, then it can pass by this and go into an infinite loop			
+		double inc = 0.001;  //HCT: 0.00001, 0.001 AGYW
+		double dec = 0.001; //used 0.002 for FSW, 0.0002 for AGYW
+		int direction; //-1 decrease, +1 increase, we change this if we are way off.
+		int abssens = 1000; //how close to get?
+		int iter; //count the number of iterations
 	
+		double targets[8] = {4500,	9000,	13500,	18000,	22500,	27000,	36000,	45000}; //FSW
+
+		double pbase = 0.01 - inc;
+		double newpbase;			
+			
+		//chosen parameters for other subpopulations
+		/*
+		double temp[fswnum][yr] = {
+				{0.101307,0.0718701,0.0477424,0.0362486,0.0352486,0.0352486,0.0352486,0.0352486,0.0352486,0.0342486,0.0342486,0.0342486,0.0342486,0.0342486,0.0332486,0.0322486,0.0322486,0.0312486,0.0312486,0.0302486},//optimal
+				{0.101307,0.0718701,0.0477424,0.0362486,0.0352486,0.0352486,0.0352486,0.0352486,0.0352486,0.0342486,0.0342486,0.0342486,0.0342486,0.0342486,0.0332486,0.0322486,0.0322486,0.0312486,0.0312486,0.0302486}//optimal
+		};*/
+
+		/*
+		for (int i = 0; i < fswnum; i++) {
+			for (int j = 0; j < yr; j++) {
+				parmSETFSWyear[i][j] = temp[i][j];
+			}
+		}*/
+		
 	
+		for (int ti = 0; ti < tnum; ti++) {
+			target_curr = ti;
+
+			//initialize for each new target
+			for (int i = 0; i < yr; i++) {
+				for (int j = 0; j < tnum; j++) {
+					parmyear[j][i] = 0;
+				}
+			}
+			
+			for (int yi = 0; yi < yr; yi++) {
+				yrtest = styr + yi;
+				//ptest = pbase[ti];
+				direction = 1; //reset direction
+				//ti = yi; //each year has a different value target value
+
+				if (yi == 0) { ptest = pbase; } //starting from pbase again
+				if (yi > 0) { ptest = newpbase - inc; } //for each new year, start where you left off.
+				stop = 0;
+				iter = 0;
+				while (stop == 0) {
+					//ptest += inc;
+					if (direction == -1) { ptest -= dec; } 
+					if (direction == 1) { ptest += inc; }
+
+					cout << "target: " << targets[ti] << "| year: " << yrtest << " | parm: " << ptest;
+					RunSample();
+
+					double LENinit = NewCABLAinFSW.out[CurrSim - 1][(yrtest-1985)]; //NewCABLAinNonFSW; NewCABLAinFSW; NewCABLAinNonMSM; NewCABLAinMSM	
+					//double LENinit = NewCABLAinMSM.out[CurrSim - 1][(yrtest - 1985)]; //NewCABLAinNonFSW; NewCABLAinFSW; NewCABLAinNonMSM; NewCABLAinMSM	
+
+					cout << " | LENinit: " << LENinit << endl;
+
+					if (LENinit < (targets[ti] - 1000) && direction == -1) { //way off, parameter too low to start, change direction to increase -  targets[ti]
+						direction = 1;
+					}
+										
+					if (LENinit > (targets[ti] + 1000) && direction == 1) { //way off, parameter too high to start, change direction to increase -  targets[ti]
+						direction = -1;
+					}
+					
+					//reverse direction if its bound to go in the wrong direction from the start
+					if (iter == 0) {
+						if (LENinit > targets[ti] && direction == 1) { direction = -1; }
+						if (LENinit < targets[ti] && direction == -1) { direction = 1; }
+					}
+					iter += 1;
+					
+					if (abs(LENinit - targets[ti]) <= abssens) {  // targets[ti]
+					//if (LENinit <= targets[ti] || (0 < (LENinit - targets[ti]) && (LENinit - targets[ti]) < 1000)) {
+						filesim << targets[ti] << "	" << yrtest << "	" << ptest << "	" << LENinit << endl;
+							parmyear[ti][yrtest - styr] = ptest;
+							newpbase = ptest;
+							stop = 1;
+					}
+					//if init is more than 20% off, adjust ptest proportionally
+					if (stop == 0 && (abs(LENinit - targets[ti]) / targets[ti]) >= 0.10){ 
+						//ptest = ptest * (targets[ti] / LENinit); 
+						if (direction == -1) { ptest = ptest * (targets[ti] / LENinit) + dec; }
+						if (direction == 1) { ptest = ptest * (targets[ti] / LENinit) - inc; }
+					}
+				}
+			}
+		}
+		filesim.close();
+	}
 	
 	
 	//runIMIS(0.0);
@@ -22923,18 +23021,18 @@ void RunSample()
 			file1>>RandomUniform.out[i][c];}
 	}
 	file1.close();*/
-	cout<<"Read input files"<<endl;
-
+	if (Optimise == 0) {
+		cout<<"Read input files"<<endl;
+	}
 
 	//LJ
 	for (int ic = 0; ic < ResampleSize; ic++) { 
 		for (iy = 0; iy < 86; iy++) {				
-			CondomUsageAdjFactor.out[ic][iy] = 2.75;  //calculated as # condoms distributed (HST DHB) divide by TotProtSexacts in the same year
+			CondomUsageAdjFactor.out[ic][iy] = 5.57;  //calculated as # condoms distributed (HST DHB) divide by TotProtSexacts in the same year
 			CovPregWomenTest.out[ic][iy] = 0.98;      //Default Value of CovPregWomenTest
 			TotSTestprimaryPHC.out[ic][iy] = 0;
 		}
 	}
-
 
 
 	// Run the model for each of the sampled parameter combinations
@@ -22978,7 +23076,8 @@ void RunSample()
 		ARTerrorInd = 0;
 		CurrYear = StartYear-1;
 		for(iy=0; iy<ProjectionTerm; iy++){
-			if (Optimise == 0) { SimInvestmentCase(); }
+			if (Optimise == 0 || Optimise == 2) { SimInvestmentCase(); }
+		
 			OneYear();
 		}
 		CalcLikelihood(); // For getting bias
@@ -23289,7 +23388,8 @@ void RunSample()
 	NewPrEPinFSW.RecordSample("NewPrEPinFSW.txt");
 	NewPrEPinPWID.RecordSample("NewPrEPinPWID.txt");
 
-
+	TotSexActs.RecordSample("TotSexActs.txt");
+	TotProtSexActs.RecordSample("TotProtSexActs.txt");
 	// Investment case outputs
 	/*NonAIDSdeaths.RecordSample("NonAIDSdeaths.txt");
 	AIDSdeathsART.RecordSample("AIDSdeathsART.txt");
@@ -26296,7 +26396,7 @@ void SetSQ() {
 
 	}
 
-	//bl = 1;   //0=old baseline, 1=baseline+LEN GF, 2=PEPFAR minimum scenario, 3=BL old + GF LEN + 50% OP to LEN planned, 4=PM + GF LEN + 50% OP to LEN planned
+	bl = -1;   //0=old baseline, 1=baseline+LEN GF, 2=PEPFAR minimum scenario, 3=BL old + GF LEN + 50% OP to LEN planned, 4=PM + GF LEN + 50% OP to LEN planned
 
 
 
@@ -26713,8 +26813,55 @@ void SetSQ() {
 }
 
 void SimInvestmentCase() {
+	LastCondomMultiplier = 1;
 
-	SetSQ();
+	//SetSQ();	
+	CABLAdur[0] = 1 + 0.5;   //men nonMSM
+	CABLAdur[1] = 1 + 0.5;   //women
+	CABLAdur[2] = 1 + 0.5;   //MSM
+	CABLAdurPreg = 1 + 0.5;  //pregnant women	
+	
+	//cout << "used:" << ptest << endl;
+	//testing parameters for FSW
+	if (CurrYear >= (styr-1) && CurrYear <= (2027-1)) {		//from 2028-2046 onwards (offset=1)
+		if (CurrYear == (yrtest-1)) {
+			UltCABLArateFSW = ptest; // current test yr uses ptest
+			//cout << endl << UltCABLArateFSW << endl;
+		}
+		else {
+			int id = CurrYear - (styr-1);
+			UltCABLArateFSW = parmyear[target_curr][id];
+			//cout << UltCABLArateFSW << endl;
+		}
+	}
+	if (CurrYear >= (2028-1)){UltCABLArateFSW = 0;}
+
+	for (int iy = ICstart + 1; iy < 86; iy++) {
+		PrEPeligMSM[iy] = 0;
+		PrEPeligOtherG[iy][1] = 0; //other women	
+		PrEPeligOtherG[iy][0] = 0; //other women	
+		PrEPeligAGYW[iy] = 1;
+		RR_PrEPstartMSM[iy] = 0; //MSM
+		RR_PrEPstartF20[iy] = 0; //AGYW
+		PrEPpregnant[iy] = 0; //PBFW
+	}
+
+
+/*
+		if (iy == yrtest - 1985) {
+			//RR_CABLAstartMSM[iy] = ptest;
+			RR_PrEPstartF20[iy] = ptest; //AGYW
+			//CABLApregnant[iy] = ptest; //PBFW
+
+		}
+		else {
+			int id = iy - (styr - 1);
+			//RR_CABLAstartMSM[iy] = parmyear[target_curr][id]; //MSM
+			RR_PrEPstartF20[iy] = parmyear[target_curr][id]; //AGYW
+			//CABLApregnant[iy] = parmyear[target_curr][id]; //PBFW
+		}*/
+	
+
 
 }
 
@@ -27278,9 +27425,7 @@ void CalcCostModel()
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(TotBirths.out[CurrSim - 1][ly - 1] * 0.50388674747718*NeonatalMMC[ly]);
 		cc++;
-
-
-
+			
 		//20% of total condoms (80% via normal distribution channels)
 		costpopl[cc] = "Condom distribution in non-traditional outlets (hotels; shops; malls)"; //FLOW
 		costpop[cc][ly] = 0;
@@ -27307,7 +27452,7 @@ void CalcCostModel()
 		costpop[cc][ly] = round(TotProtSexActs.out[CurrSim - 1][ly - 1] / TotSexActs.out[CurrSim - 1][ly - 1] * 1000);
 		cc++;
 
-		costpopl[cc] = "PrEP women"; //STOCK 
+		costpopl[cc] = "PrEP NonFSW"; //STOCK 
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(NewPrEPinNonFSW.out[CurrSim - 1][ly]);
 		cc++;
@@ -27327,161 +27472,50 @@ void CalcCostModel()
 		costpop[cc][ly] = round(NewPrEPinMSM.out[CurrSim - 1][ly]);
 		cc++;
 
+		costpopl[cc] = "PrEP PWID"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewPrEPinPWID.out[CurrSim - 1][ly]);
+		cc++;
+
 		costpopl[cc] = "PrEP total"; //STOCK 
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(NewPrEPinNonFSW.out[CurrSim - 1][ly] + NewPrEPinFSW.out[CurrSim - 1][ly] + 
-			NewPrEPinNonMSM.out[CurrSim - 1][ly] + NewPrEPinMSM.out[CurrSim - 1][ly]);
+			NewPrEPinNonMSM.out[CurrSim - 1][ly] + NewPrEPinMSM.out[CurrSim - 1][ly] + NewPrEPinPWID.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "LAPrEP FSW"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewCABLAinFSW.out[CurrSim - 1][ly]);
+		cc++;		
+	
+		costpopl[cc] = "LAPrEP NonFSW"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewCABLAinNonFSW.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "LAPrEP men"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewCABLAinNonMSM.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "LAPrEP MSM"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewCABLAinMSM.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "LAPrEP PWID"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewCABLAinPWID.out[CurrSim - 1][ly]);
+		cc++;
+
+			
+	costpopl[cc] = "LAPrEP Total"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewCABLAinFSW.out[CurrSim - 1][ly] + NewCABLAinNonFSW.out[CurrSim - 1][ly] +
+			NewCABLAinMSM.out[CurrSim - 1][ly] + NewCABLAinNonMSM.out[CurrSim - 1][ly] + NewCABLAinPWID.out[CurrSim - 1][ly]);
 		cc++;
 
 
-		//if no LEN, assume CAB
-		if (LENmodel == 0) {
-
-			if (CABdur == "NA") {  //this is default
-				costpopl[cc] = "CABLA women (6m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonFSW.out[CurrSim - 1][ly] + NewCABLAinFSW.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA men (6m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonMSM.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA MSM (12m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinMSM.out[CurrSim - 1][ly]);
-				cc++;
-			}
-
-			if (CABdur == "4-8m") {
-				costpopl[cc] = "CABLA women (4m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonFSW.out[CurrSim - 1][ly] + NewCABLAinFSW.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA men (4m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonMSM.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA MSM (8m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinMSM.out[CurrSim - 1][ly]);
-				cc++;
-			}
-			if (CABdur == "12-18m") {
-				costpopl[cc] = "CABLA women (12m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonFSW.out[CurrSim - 1][ly] + NewCABLAinFSW.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA men (12m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonMSM.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA MSM (18m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinMSM.out[CurrSim - 1][ly]);
-				cc++;
-			}
-			if (CABdur == "6-12m") {
-				costpopl[cc] = "CABLA women (6m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonFSW.out[CurrSim - 1][ly] + NewCABLAinFSW.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA men (6m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonMSM.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA MSM (12m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinMSM.out[CurrSim - 1][ly]);
-				cc++;
-			}
-			if (CABdur == "8-16m") {
-				costpopl[cc] = "CABLA women (8m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonFSW.out[CurrSim - 1][ly] + NewCABLAinFSW.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA men (8m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonMSM.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA MSM (16m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinMSM.out[CurrSim - 1][ly]);
-				cc++;
-			}
-		}
-
-
-
-
-		//LEN
-		if (LENmodel == 1 && CABmodel == 0) {
-			if (LENdur == "6-12m") {
-				costpopl[cc] = "CABLA women (6m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonFSW.out[CurrSim - 1][ly] + NewCABLAinFSW.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA men (6m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonMSM.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA MSM (12m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinMSM.out[CurrSim - 1][ly]);
-				cc++;
-			}
-			
-			if (LENdur == "12-24m") {
-				costpopl[cc] = "CABLA women (12m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonFSW.out[CurrSim - 1][ly] + NewCABLAinFSW.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA men (12m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonMSM.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA MSM (24m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinMSM.out[CurrSim - 1][ly]);
-				cc++;
-			}
-			if (LENdur == "12m") {
-				costpopl[cc] = "CABLA women (12m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonFSW.out[CurrSim - 1][ly] + NewCABLAinFSW.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA men (12m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonMSM.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA MSM (12m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinMSM.out[CurrSim - 1][ly]);
-				cc++;
-
-				costpopl[cc] = "CABLA Total (12m)"; //STOCK 
-				costpop[cc][ly] = 0;
-				costpop[cc][ly] = round(NewCABLAinNonFSW.out[CurrSim - 1][ly] + NewCABLAinFSW.out[CurrSim - 1][ly] + 
-					NewCABLAinNonMSM.out[CurrSim - 1][ly] + NewCABLAinMSM.out[CurrSim - 1][ly]);
-				cc++;
-
-			}
-		}
 
 		costpopl[cc] = "Women using the vaginal ring"; //STOCK 
 		costpop[cc][ly] = 0;
@@ -31251,43 +31285,43 @@ void Int_EIMCMax() {
 void Int_CondomSupplyBm2() {
 	LastCondomMultiplier = 0.5;
 	for (int iy = ICstart; iy < 86; iy++) {
-		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 2.75;
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
 	}
 }
 void Int_CondomSupplyBm1() {
 	LastCondomMultiplier = 0.8;
 	for (int iy = ICstart; iy < 86; iy++) {
-		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 2.75;
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
 	}
 }
 void Int_CondomSupplyDefault() {
 	LastCondomMultiplier = 1.00;
 	for (int iy = ICstart; iy < 86; iy++) {
-		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 2.75;
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
 	}
 }
 void Int_CondomSupplyBp1() {
 	LastCondomMultiplier = 1.5;
 	for (int iy = ICstart; iy < 86; iy++) {
-		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 2.75;
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
 	}
 }
 void Int_CondomSupplyBp2() {
 	LastCondomMultiplier = 2;
 	for (int iy = ICstart; iy < 86; iy++) {
-		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 2.75;
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
 	}
 }
 void Int_CondomSupplyBp3() {
 	LastCondomMultiplier = 2.5;
 	for (int iy = ICstart; iy < 86; iy++) {
-		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 2.75;
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
 	}
 }
 void Int_CondomSupplyMax() {
 	LastCondomMultiplier = 3;
 	for (int iy = ICstart; iy < 86; iy++) {
-		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 2.75;
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
 	}
 }
 
