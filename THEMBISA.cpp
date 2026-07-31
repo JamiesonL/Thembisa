@@ -85,22 +85,28 @@ int main()
 		ofstream filesim;
 
 		filesim.open("ParamLog.txt");		
-		filesim << "target	year	ptest	LENinit" << endl; //column names
+		filesim << "FSWtarget	Poptarget	year	ptest	LENinit" << endl; //column names
 	
 		int stop = 0;
 
 		//check inc/dec values periodically: can be inefficient if the dec/inc is too big, then it can pass by this and go into an infinite loop			
-		double inc = 0.001;  //HCT: 0.00001, 0.001 AGYW
-		double dec = 0.001; //used 0.002 for FSW, 0.0002 for AGYW
+		double inc = 1;  //HCT: 0.00001, 0.001 AGYW
+		double dec = 0.2; //used 0.002 for FSW, 0.0002 for AGYW
 		int direction; //-1 decrease, +1 increase, we change this if we are way off.
 		int abssens = 1000; //how close to get?
 		int iter; //count the number of iterations
 	
-		double targets[8] = {4500,	9000,	13500,	18000,	22500,	27000,	36000,	45000}; //FSW
+		//double targets[8] = {4500,	9000,	13500,	18000,	22500,	27000,	36000,	45000}; //FSW
+		double fswtargets[9] = {0, 4500,	9000,	13500,	18000,	22500,	27000,	36000,	45000}; //FSW
+		double targets[10] = {9360,18720,28080,37440,46800,56160,65520,74880,84240,93600}; //MSM
+		//double targets[10] = {41500,83000,124500,166000,207500,249000,290500,332000,373500,415000}; //AGYW
 
-		double pbase = 0.01 - inc;
+
+
+		double pbase = 0.5 - inc;
 		double newpbase;			
 			
+
 		//chosen parameters for other subpopulations
 		/*
 		double temp[fswnum][yr] = {
@@ -109,13 +115,21 @@ int main()
 		};*/
 
 		/*
+		double temp[2][fswnum] = {
+			{0.0025,	0.0431473800749345,	0.0895919212834805,	0.140045545316004,	0.195105221326365,	0.255670910516435,	0.323272275274926,	0.488311855298692,	0.713204473774093},
+			{0.0025,	0.0202515694775601,	0.0435175425457182,	0.0707156795306143,	0.103020026907676,	0.142201038130744,	0.191209730437152,	0.339619070800907,	0.637055317300535}
+		};
+		
 		for (int i = 0; i < fswnum; i++) {
 			for (int j = 0; j < yr; j++) {
-				parmSETFSWyear[i][j] = temp[i][j];
+				parmSETFSWyear[j][i] = temp[j][i];
 			}
 		}*/
 		
-	
+
+	for (int fi = 0; fi < 1; fi++){ //<fswnum
+		fsw_curr = fi; //current FSW target
+
 		for (int ti = 0; ti < tnum; ti++) {
 			target_curr = ti;
 
@@ -141,11 +155,12 @@ int main()
 					if (direction == -1) { ptest -= dec; } 
 					if (direction == 1) { ptest += inc; }
 
-					cout << "target: " << targets[ti] << "| year: " << yrtest << " | parm: " << ptest;
+					//cout << "target: " << targets[ti] << "| year: " << yrtest << " | parm: " << ptest;
+					cout << "FSW target: " << fswtargets[fsw_curr] << " | Pop. target: " << targets[ti] << " | year: " << yrtest << " | parm: " << ptest;
 					RunSample();
 
-					double LENinit = NewCABLAinFSW.out[CurrSim - 1][(yrtest-1985)]; //NewCABLAinNonFSW; NewCABLAinFSW; NewCABLAinNonMSM; NewCABLAinMSM	
-					//double LENinit = NewCABLAinMSM.out[CurrSim - 1][(yrtest - 1985)]; //NewCABLAinNonFSW; NewCABLAinFSW; NewCABLAinNonMSM; NewCABLAinMSM	
+					//double LENinit = NewCABLAinNonFSW.out[CurrSim - 1][(yrtest-1985)]; //NewCABLAinNonFSW; NewCABLAinFSW; NewCABLAinNonMSM; NewCABLAinMSM	
+					double LENinit = NewCABLAinMSM.out[CurrSim - 1][(yrtest - 1985)]; //NewCABLAinNonFSW; NewCABLAinFSW; NewCABLAinNonMSM; NewCABLAinMSM	
 
 					cout << " | LENinit: " << LENinit << endl;
 
@@ -166,13 +181,15 @@ int main()
 					
 					if (abs(LENinit - targets[ti]) <= abssens) {  // targets[ti]
 					//if (LENinit <= targets[ti] || (0 < (LENinit - targets[ti]) && (LENinit - targets[ti]) < 1000)) {
-						filesim << targets[ti] << "	" << yrtest << "	" << ptest << "	" << LENinit << endl;
-							parmyear[ti][yrtest - styr] = ptest;
-							newpbase = ptest;
-							stop = 1;
+						filesim << fswtargets[fsw_curr] <<"	" << targets[ti] << "	" << yrtest << "	 " << ptest << "	" << LENinit << endl;
+						
+						
+						parmyear[ti][yrtest - styr] = ptest;
+						newpbase = ptest;
+						stop = 1;
 					}
 					//if init is more than 20% off, adjust ptest proportionally
-					if (stop == 0 && (abs(LENinit - targets[ti]) / targets[ti]) >= 0.10){ 
+					if (stop == 0 && (abs(LENinit - targets[ti]) / targets[ti]) > 0.02){ 
 						//ptest = ptest * (targets[ti] / LENinit); 
 						if (direction == -1) { ptest = ptest * (targets[ti] / LENinit) + dec; }
 						if (direction == 1) { ptest = ptest * (targets[ti] / LENinit) - inc; }
@@ -180,8 +197,9 @@ int main()
 				}
 			}
 		}
-		filesim.close();
 	}
+	filesim.close();
+}
 	
 	
 	//runIMIS(0.0);
@@ -23085,8 +23103,11 @@ void RunSample()
 		x1 = CurrSim/100.0;
 		CalcCostModel(); //LJ
 		DoubleIntDif1 = modf(x1, &intpart1);
-		if(DoubleIntDif1==0.0){
-			cout<<"Completed simulation "<<CurrSim<<endl;}
+		//if(DoubleIntDif1==0.0){
+		if (Optimise == 0){
+			cout<<"Completed simulation "<<CurrSim<<endl;
+		}
+		//}
 	}
 
 	// Write prevalence outputs to text files
@@ -26820,10 +26841,95 @@ void SimInvestmentCase() {
 	CABLAdur[1] = 1 + 0.5;   //women
 	CABLAdur[2] = 1 + 0.5;   //MSM
 	CABLAdurPreg = 1 + 0.5;  //pregnant women	
+	//CABLAdataYr = 2019;
+	for (int iy = 0; iy<86; iy++){
+		TotStartingCABLA[iy]=0.0;}
+
+	//reset everything to zero
+	UltCABLArateFSW = 0.0;
+	for (int iy = 0; iy < 86; iy++) {
+		CABLAeligMSM[iy] = 0;
+		CABLAeligOtherG[iy][1] = 0; //other women	
+		CABLAeligOtherG[iy][0] = 0; //other women	
+		CABLAeligAGYW[iy] = 0;
+		RR_CABLAstartPWID[iy]=0;//PWID
+		RR_CABLAstartMSM[iy] = 0; //MSM
+		RR_CABLAstartF20[iy] = 0; //AGYW
+		CABLApregnant[iy] = 0; //PBFW
+	}
+
+/*
+double fswtemp[2][8] = {
+		{0.0431473800749345,	0.0895919212834805,	0.140045545316004,	0.195105221326365,	0.255670910516435,	0.323272275274926,	0.488311855298692,	0.713204473774093},
+		{0.0202515694775601,	0.0435175425457182,	0.0707156795306143,	0.103020026907676,	0.142201038130744,	0.191209730437152,	0.339619070800907,	0.637055317300535}
+	};
+
+
 	
+	//10 MSM targets under 9 FSW targets for 2 years
+double temp[8][2][10] = {
+   {{0.328318,0.656636,0.984954,1.31327,1.64159,1.96991,2.30823,2.65654,3.00486,3.35318},
+	{0.328318,0.656636,0.984954,1.31327,1.64159,1.96991,2.30823,2.65654,3.00486,3.35318}},
+
+	{{0.159017,0.318033,0.49,0.636067,0.795083,0.9541,1.11312,1.28213,1.45115,1.62017},
+	{0.159017,0.318033,0.47,0.626067,0.775083,0.9341,1.09312,1.25213,1.41115,1.57017}},
+
+	{{0.10235,0.204699,0.307049,0.409399,0.51,0.614098,0.716448,0.818798,0.931147,1.0335},
+	{0.10235,0.194699,0.287049,0.379399,0.48,0.574098,0.666448,0.768798,0.871147,0.963497}},
+
+	{{0.0739499,0.1479,0.22185,0.295799,0.369749,0.443699,0.51,0.591599,0.665549,0.749499},
+	{0.0639552,0.12842,0.193391,0.258866,0.324841,0.391315,0.458103,0.525745,0.593697,0.66247}},
+
+	{{0.0568354,0.113671,0.170506,0.227342,0.284177,0.341012,0.397848,0.45,0.51,0.568354},
+	{0.0463447,0.0930808,0.140206,0.187718,0.235614,0.283892,0.33255,0.38146,0.430952,0.480783}},
+
+	{{0.0453039,0.0906079,0.135912,0.181216,0.22652,0.271824,0.317127,0.362431,0.407735,0.453039},
+	{0.0344766,0.0692651,0.104363,0.139769,0.175481,0.211497,0.247815,0.284434,0.32135,0.358564}},
+	
+	{{0.0305569,0.0611137,0.0896706,0.119227,0.149784,0.179341,0.209898,0.240455,0.271012,0.301569},
+	{0.0194282,0.0390664,0.0588925,0.0789257,0.0991745,0.119607,0.140259,0.160112,0.181165,0.201416}},
+
+	{{0.0214383,0.0418767,0.061315,0.0817533,0.102192,0.12263,0.143068,0.164507,0.184945,0.206383},
+	{0.010375,0.0208902,0.031534,0.0423222,0.0532467,0.0633063,0.0744998,0.0858524,0.0963135,0.106938}}
+};
+
+
+int FSWindex = CurrSim, MSMindex = CurrSim;		
+	FSWindex = (FSWindex - 1) / 10; 
+	MSMindex = (MSMindex - 1) % 10;
+
+//if (CurrYear == 2028){	
+//	cout << "INDEX - CurrSim " << CurrSim << " | FSW index: " << FSWindex << " | MSM index: " << MSMindex << endl;	
+//}
+
+	if (CurrYear == 2026) { UltCABLArateFSW =  fswtemp[0][FSWindex]; }
+	if (CurrYear == 2027) { UltCABLArateFSW =  fswtemp[1][FSWindex]; }
+	if (CurrYear > 2027) { UltCABLArateFSW =  0.0; }
+
+	CABLAeligMSM[2027-1985] = 1;
+	CABLAeligMSM[2028-1985] = 1;
+
+	RR_CABLAstartMSM[2027-1985] = temp[FSWindex][0][MSMindex];
+	RR_CABLAstartMSM[2028-1985] = temp[FSWindex][1][MSMindex];
+
+*/
+
+
+	
+	double temp[2][9] = {
+		{0.0025,	0.0431473800749345,	0.0895919212834805,	0.140045545316004,	0.195105221326365,	0.255670910516435,	0.323272275274926,	0.488311855298692,	0.713204473774093},
+		{0.0025,	0.0202515694775601,	0.0435175425457182,	0.0707156795306143,	0.103020026907676,	0.142201038130744,	0.191209730437152,	0.339619070800907,	0.637055317300535}
+	};
+
+	if (CurrYear == 2026) { UltCABLArateFSW =  temp[0][fsw_curr]; }
+	if (CurrYear == 2027) { UltCABLArateFSW =  temp[1][fsw_curr]; }
+	if (CurrYear > 2027) { UltCABLArateFSW =  0.0; }
+	
+
+	/*
 	//cout << "used:" << ptest << endl;
 	//testing parameters for FSW
-	if (CurrYear >= (styr-1) && CurrYear <= (2027-1)) {		//from 2028-2046 onwards (offset=1)
+	if (CurrYear >= (styr-1) && CurrYear <= (styr+1-1)) {		//from 2027 onwards (offset=1)
 		if (CurrYear == (yrtest-1)) {
 			UltCABLArateFSW = ptest; // current test yr uses ptest
 			//cout << endl << UltCABLArateFSW << endl;
@@ -26834,32 +26940,32 @@ void SimInvestmentCase() {
 			//cout << UltCABLArateFSW << endl;
 		}
 	}
-	if (CurrYear >= (2028-1)){UltCABLArateFSW = 0;}
+	if (CurrYear >= (styr+2-1)){UltCABLArateFSW = 0;}*/
 
-	for (int iy = ICstart + 1; iy < 86; iy++) {
-		PrEPeligMSM[iy] = 0;
-		PrEPeligOtherG[iy][1] = 0; //other women	
-		PrEPeligOtherG[iy][0] = 0; //other women	
-		PrEPeligAGYW[iy] = 1;
-		RR_PrEPstartMSM[iy] = 0; //MSM
-		RR_PrEPstartF20[iy] = 0; //AGYW
-		PrEPpregnant[iy] = 0; //PBFW
-	}
+	
+	for (int iy = ICstart; iy < 86; iy++) {
+		CABLAeligMSM[iy] = 1;
+		CABLAeligOtherG[iy][1] = 0; //other women	
+		CABLAeligOtherG[iy][0] = 0; //other women	
+		CABLAeligAGYW[iy] = 0;
+		RR_CABLAstartMSM[iy] = 0; //MSM
+		RR_CABLAstartF20[iy] = 0; //AGYW
+		CABLApregnant[iy] = 0; //PBFW
 
-
-/*
 		if (iy == yrtest - 1985) {
-			//RR_CABLAstartMSM[iy] = ptest;
-			RR_PrEPstartF20[iy] = ptest; //AGYW
+			RR_CABLAstartMSM[iy] = ptest;
+			//RR_CABLAstartF20[iy] = ptest; //AGYW
 			//CABLApregnant[iy] = ptest; //PBFW
-
 		}
+
 		else {
 			int id = iy - (styr - 1);
-			//RR_CABLAstartMSM[iy] = parmyear[target_curr][id]; //MSM
-			RR_PrEPstartF20[iy] = parmyear[target_curr][id]; //AGYW
+			RR_CABLAstartMSM[iy] = parmyear[target_curr][id]; //MSM
+			//RR_CABLAstartF20[iy] = parmyear[target_curr][id]; //AGYW
 			//CABLApregnant[iy] = parmyear[target_curr][id]; //PBFW
-		}*/
+		}
+
+	}
 	
 
 
@@ -28071,17 +28177,7 @@ void CalcCostModel()
 				//if (col >= 5) { 
 				if (Optimise == 1) { CostforICER[CurrSim - 1][RunIntervention] = CostforICER[CurrSim - 1][RunIntervention] + totalcost[row][col]; }
 				if (Optimise == 0) { TotalCost[CurrSim - 1] = TotalCost[CurrSim - 1] + totalcost[row][col]; }
-				//if (Optimise == 1 && totalcostl[row].find("Inpatient care") == std::string::npos) {
-				//	if (col == BudgetYr1 - BudgetYr1) { CostforBudget1[RunIntervention][CurrSim - 1] = CostforBudget1[RunIntervention][CurrSim - 1] + totalcost[row][col]; }
-				//	if (col == BudgetYr2 - BudgetYr1) { CostforBudget2[RunIntervention][CurrSim - 1] = CostforBudget2[RunIntervention][CurrSim - 1] + totalcost[row][col]; }
-				//	if (col == BudgetYr3 - BudgetYr1) { CostforBudget3[RunIntervention][CurrSim - 1] = CostforBudget3[RunIntervention][CurrSim - 1] + totalcost[row][col]; }
-				//}
-				//if (Optimise == 0 && totalcostl[row].find("Inpatient care") == std::string::npos) {
-				//	if (col == BudgetYr1 - BudgetYr1) { CostforBudget1_NoOpt[CurrSim - 1] = CostforBudget1_NoOpt[CurrSim - 1] + totalcost[row][col]; }
-				//	if (col == BudgetYr2 - BudgetYr1) { CostforBudget2_NoOpt[CurrSim - 1] = CostforBudget2_NoOpt[CurrSim - 1] + totalcost[row][col]; }
-				//	if (col == BudgetYr3 - BudgetYr1) { CostforBudget3_NoOpt[CurrSim - 1] = CostforBudget3_NoOpt[CurrSim - 1] + totalcost[row][col]; }
-				//}
-				//}
+			
 			}
 		}
 

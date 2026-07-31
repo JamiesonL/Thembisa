@@ -2968,7 +2968,6 @@ const int intercount = 96; //How many additional interventions to run
 const int maxinter = 96; //use to make sure arrays are large enough for additional testing
 
 const int ICstart = 2027 - 1985;  //should be 2027 for HIV IC
-const int BudgetYr1 = ICstart + 1985, BudgetYr2 = BudgetYr1+1, BudgetYr3 = BudgetYr2+2;
 const int timehorizon = 52;  //NB should be 20 years.
 
 double pvtsector = 0.058; //proportion of population getting HIV testing and care in private sector
@@ -3383,12 +3382,12 @@ int bl;  //0=old baseline, 1=baseline+LEN GF, 2=PEPFAR minimum scenario
 
 double ptest;// , pbase; //for calibration for HIV IC
 int yrtest;
-const int tnum = 8; //number of target values
+const int tnum = 10; //number of target values
 int target_curr;
-const int yr = 2; //from 2026 to 2027
+const int yr = 2; //from 2027-2028
 double parmyear[tnum][yr]; //to capture all parameters from 2028, initalized to zero, (we know the 2026 and 27 parms)
-int styr = 2026; //starting year
+int styr = 2027; //starting year
 
-const int fswnum = 8; //number of targets for fsw
+const int fswnum = 9; //number of targets for fsw
 int fsw_curr;
 double parmSETFSWyear[2][fswnum]; //to parmaterize FSW LEN by year (2026 and 2027) for each target for fsw
