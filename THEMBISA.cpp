@@ -1,13 +1,20 @@
 // This is the main project file for VC++ application project 
 // generated using an Application Wizard.
 
-#include "stdafx.h"
-#using <mscorlib.dll>
-using namespace System;
+//#include "stdafx.h" // commented out to work in VS code
+//#using <mscorlib.dll> // commented out to work in VS code
+//using namespace System; // commented out to work in VS code
+using namespace std; // added to work in VS code
+#include <iostream> // added to work in VS code
+#include <cstring> // added to work in VS code
+#include <sstream> // added to work in VS code
+#include <string> // added to work in VS code
 
 #include "THEMBISA.h"
 #include "StatFunctions.h"
-#include "randomc.h"
+#include "randomc.h" 
+#include "stdafx.h" // MK  added to work in VS code
+//#using <mscorlib.dll> // MK  added to work in VS code
 #include <time.h>
 #include <cstdlib>
 //#include <omp.h>
@@ -23,7 +30,8 @@ using namespace System;
   #define MKDIR(path) mkdir((path).c_str(), 0755)
 #endif
 
-int _tmain()
+//int _tmain() // commented out to work in VS code
+int main()
 {
 	int iy; 
 	clock_t start, finish;

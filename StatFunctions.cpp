@@ -11,7 +11,7 @@
 # include <ctime>
 
 #include "stdafx.h"
-#using <mscorlib.dll>
+//#using <mscorlib.dll> // MK commented out to work on VS code
 #include "StatFunctions.h"
 
 using namespace std;

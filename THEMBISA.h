@@ -4,7 +4,7 @@
 #include <fstream>
 #include <cmath>
 #include <string>
-#using <mscorlib.dll>
+//#using <mscorlib.dll>
 
 using namespace std;
 
@@ -34,7 +34,7 @@ string ProvID = "NW"; ///< Choose from EC, FS, GT, KZ, LM, MP, NC, NW, WC
 const int UseBrassLogit = 0; ///< 1 if using Brass relational logit to get non-HIV mort over 1996-2018
 int PrEPorVM = 0; ///< 1 if allowing for PrEP or vaginal microbicides. Keep set to 0 as default; it
 				  ///< will automatically get recalculated if there is PrEP/VM rollout.
-const int IncludeTB = 0; ///< 1 if including TB simulations
+const int IncludeTB = 1; ///< 1 if including TB simulations // MK edits
 const int IncludeDR_TB = 0; ///< 1 if including drug-resisant (DR) TB 
 const int FixedTBscreening = 0; ///< 1 = fix the rates of TB screening at the values generated in
 								///< the uncertainty analysis (only valid if FixedUncertainty = 1)
@@ -1427,15 +1427,15 @@ double TBprev2018[2]; ///< Modelled pulmonary TB prevalence in 2018, by sex
 ///< Priors and likelihood
 
 double LogLikelihood;
-const int MCMCdim = 49; ///< Number of parameters in uncertainty analysis
-const int MaxPriors = 145; ///< Number of input rows in Priors file (145 for HIV, 63 for TB)
+const int MCMCdim = 21; ///< Number of parameters in uncertainty analysis // MK updated to 21 from 49 to run TB model
+const int MaxPriors = 145; ///< Number of input rows in Priors file (145 for HIV, 63 for TB) // MK updated to 63 from 145 to run TB model
 int InclPriors[MaxPriors][2]; ///< Indicator of which priors are included (1st index) and if
 							  ///< included their index in MCMCdim (2nd index)
 double RandPrior[MCMCdim]; ///< Random numbers used to sample from prior in current simulation
 double Cholesky1[MCMCdim][MCMCdim];
 double Covariance[MCMCdim][MCMCdim]; ///< The covariance matrix for the MCMC parameters
 const int InitSample = 10000;
-const int ResampleSize = 1000;
+const int ResampleSize = 2; // MK edit 
 int SampleID[ResampleSize];
 int CurrSim;
 double temp[ResampleSize][41]; ///< Previously local to the SampleInput function in OutputArray class
@@ -2855,3 +2855,89 @@ OutputByAge MaleTBdeathsAS(16, 56);
 OutputByAge FemTBdeathsAS(16, 56);
 OutputByAge MaleTBtreatAS(16, 56);
 OutputByAge FemTBtreatAS(16, 56);
+
+//DALY additional for post-TB
+PostOutputArray PostTB_HIVneg(56);
+PostOutputArray PostTB_HIVpos(56);
+PostOutputArray AdultYLdisabilityPostTB(56);
+PostOutputArray AdultLYlostPostTB(56);
+PostOutputArray AdultPostTBDALYs(56);
+PostOutputArray AdultEpisodePostTBDALYS(56);
+
+
+//******************************************************************************************************************************************************
+//************************************************************** TB-IC COST-MODEL **********************************************************************
+//******************************************************************************************************************************************************
+
+//NB: Nov 2024. In void RunSample() ensure that for running the for TB-IC, ReadAllFiles() is called at each re-sample.
+
+
+//Weights for TB DALYS and post-TB DALYS added July 2026
+double DWHIVpos = 0.408; // source: GBD
+double DWHIVneg = 0.33; // source: GBD
+//Borrowed from Nick Menzies 
+double DWpostTB_HIVneg = 0.089; // South Africa, country-specific (95% UI 0.040-0.151)
+double DWpostTB_HIVpos = 0.089; // same - source doesn't split by HIV status
+//double MortRR_postTB_HIVneg = 1.351; // South Africa, country-specific (95% UI 1.167-1.647)
+//double MortRR_postTB_HIVpos = 1.351;
+
+double DWpostTB = 0.089;
+double MortRR_postTB = 1.351;
+
+double AvgAIDSmortHIVpos[2] = { 0.0240, 0.0184 };  // male, female
+// TODO: unweighted average across AnnHIVmortART cells - likely overstates true rate;
+// also excludes not-yet-on-ART HIV+ individuals. Replace with population-weighted
+// version once ART-duration/CD4 population shares are available.
+
+// Functions
+void SetupCosts();
+void SimInvestmentCase();
+void CalcCostModel();
+void ImportTBParms();
+
+//Additional screeing 
+double p = 0.01;  // Example prevalence of TB in high-prevalence communities (1%)
+double SeScreenTool1; // Sensitivity of the TB screen (e.g., dCXR or Tongue swab)
+double SpScreenTool1; // Specificity of the TB screen
+double SeTestTool2; // Sensitivity of a secondary TB screen (if applicable)
+double SpTestTool2; // Specificity of the secondary TB screen (if applicable)
+double x2Prev = 2 * p; // Prevalence in a high-prevalence communities
+//double SpTB_dCXR;
+
+
+//Adding dcXR at PHC MK 30.12.2024
+double CurrSeTB_PHCdXCR[2];
+//Total_PHCdCXRscreensD2D.out[CurrSim - 1][iy]
+//CurrSeTB_dCXRPHC[0] = 0;
+//CurrSeTB_dCXRPHC[1] = 1;
+double seDCXR = 0.83;
+
+// Variables
+string costingl[100]; //labels for imported costs
+double costing[100];  //values for imported costs
+int cc;
+
+string costpopl[100]; //labels for cost population, to export
+
+double costpop[100][86]; //values for cost population, to export, array denote types and year //MK changed it to double
+double BaselineCost[86];
+double BaselineImpactNewTB[86];
+
+const int ROWS_TBOpt = 1024;//80;//384; //row[0] = labels;  row[1 to 16384] = coverage values
+const int COLS_TBOpt = 3; //17; //different intervention parameters 
+const int TBOptInd = 0; //indicator for when applying optimisation
+const int NumImportedParms = ROWS_TBOpt; //what ever the number is, shoud be plus 1
+
+int TBOptCounter = 0; //global counter
+int TBOptCounterMax = 0;
+double TBOptmiseParms[ROWS_TBOpt][COLS_TBOpt];
+
+double unitcost2[100]; //used in output of total costs
+string totalcostl[100];//labels for total cost, to export
+string unitlabel[100];//units for cost, to export
+
+long long totalcost[100][54]; //values for total cost, to export, array denote types and year
+long long TotalCost[ResampleSize]; //Totalcost over 20 years
+
+int ILTFU_indi; //indicator to activate intervention to reduce ILTFU
+//double Diagnosed_LinkedIN[100][86];
