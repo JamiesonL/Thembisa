@@ -1,0 +1,3 @@
+FSWtarget	Poptarget	year	ptest	LENinit
+4500	3000	2027	 1.22192	2915.79
+4500	3000	2028	 1.22192	2786.49

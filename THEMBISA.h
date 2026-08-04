@@ -1482,7 +1482,7 @@ double RandPrior[MCMCdim]; ///< Random numbers used to sample from prior in curr
 double Cholesky1[MCMCdim][MCMCdim];
 double Covariance[MCMCdim][MCMCdim]; ///< The covariance matrix for the MCMC parameters
 const int InitSample = 10000;
-const int ResampleSize = 1;
+const int ResampleSize = 72;
 int SampleID[ResampleSize];
 int CurrSim;
 double temp[ResampleSize][41]; ///< Previously local to the SampleInput function in OutputArray class
@@ -2963,7 +2963,7 @@ OutputByAge FemTBtreatAS(16, 56);
 
 
 //******************************************************************************************Parameters
-int Optimise = 2; //0=no optimisation, 1=optimisation for HIV IC, 2= for calibrating parameters
+int Optimise = 0; //0=no optimisation, 1=optimisation for HIV/TB IC, 2= for calibrating/identifying parameter values
 const int intercount = 96; //How many additional interventions to run
 const int maxinter = 96; //use to make sure arrays are large enough for additional testing
 
@@ -3382,7 +3382,7 @@ int bl;  //0=old baseline, 1=baseline+LEN GF, 2=PEPFAR minimum scenario
 
 double ptest;// , pbase; //for calibration for HIV IC
 int yrtest;
-const int tnum = 10; //number of target values
+const int tnum = 8; //number of target values
 int target_curr;
 const int yr = 2; //from 2027-2028
 double parmyear[tnum][yr]; //to capture all parameters from 2028, initalized to zero, (we know the 2026 and 27 parms)
