@@ -19034,6 +19034,23 @@ void TBresultsAtEndOfYr()
 				TBmortTreated[ia][0]) * WestLifeExpectA[ia][0] + (TBmortSmNeg[ia][1] +
 					TBmortSmPos[ia][1] + TBmortTreated[ia][1]) * WestLifeExpectA[ia][1];
 		}
+		//LJ
+		AdultLYlostTB_HIVpos.out[CurrSim - 1][iy] = 0.0;
+		AdultLYlostTB_HIVneg.out[CurrSim - 1][iy] = 0.0;
+		for (ia = 5; ia < 81; ia++) {
+			AdultLYlostTB_HIVpos.out[CurrSim - 1][iy] += TBdeathsAdultHIV_M[iy][ia] * WestLifeExpectA[ia][0] + 
+				TBdeathsAdultHIV_F[iy][ia] * WestLifeExpectA[ia][1];
+			AdultLYlostTB_HIVneg.out[CurrSim - 1][iy] = AdultLYlostTB.out[CurrSim - 1][iy] - AdultLYlostTB_HIVpos.out[CurrSim - 1][iy];
+			LYlostAIDSTB.out[CurrSim - 1][iy] = LYlostAIDS.out[CurrSim - 1][iy] + AdultLYlostTB_HIVneg.out[CurrSim - 1][iy];
+		}
+
+		//MK added
+		AdultYLdisabilityTB.out[CurrSim - 1][iy] = 0.0;
+		AdultYLdisabilityTB.out[CurrSim - 1][iy] += (NewActiveTB_HIVpos.out[CurrSim - 1][iy] * DurTBadultHIVpos.out[CurrSim - 1][iy] * DWHIVpos)
+			+ ((NewActiveTBadult.out[CurrSim - 1][iy] - NewActiveTB_HIVpos.out[CurrSim - 1][iy]) * DurTBadultHIVneg.out[CurrSim - 1][iy] * DWHIVneg);
+		AdultTBDALYs.out[CurrSim - 1][iy] = 0.0;
+		//Sum years of life lost and years live with disabilty 
+		AdultTBDALYs.out[CurrSim - 1][iy] += AdultLYlostTB.out[CurrSim - 1][iy] + AdultYLdisabilityTB.out[CurrSim - 1][iy];
 	}
 
 	// IPT outputs
@@ -27272,7 +27289,6 @@ void RecordParameters(int chosen) {
 	p++;
 
 
-
 	filepar << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "NeonatalMMC" << ",";
 	for (int iy = 0; iy < timehorizon + 1; iy++)
 	{
@@ -27492,9 +27508,6 @@ void CalcCostModel()
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(VLsuppressedU15.out[CurrSim - 1][ly]* 1000);
 		cc++;
-
-
-
 
 		costpopl[cc] = "All First95";
 		costpop[cc][ly] = 0;
@@ -28134,41 +28147,55 @@ void CalcCostModel()
 //-----------------------------------------------------------------------------------------------------------------------------
 		//Epi outputs for impact assessment
 		costpopl[cc] = "NewActiveTBadult";
-		costpop[cc][ly] = round(NewActiveTBadult.out[CurrSim - 1][ly]);
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewActiveTBadult.out[CurrSim - 1][ly-1]);
 		cc++;
 
 		costpopl[cc] = "TotTBdeathsAdult";
-		costpop[cc][ly] = round(TotTBdeathsAdult.out[CurrSim - 1][ly]);
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotTBdeathsAdult.out[CurrSim - 1][ly-1]);
 		cc++;
 
 		costpopl[cc] = "AdultLYlostTB";
-		costpop[cc][ly] = AdultLYlostTB.out[CurrSim - 1][ly];
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = AdultLYlostTB.out[CurrSim - 1][ly-1];
+		cc++;
+
+		costpopl[cc] = "LYlostAIDSTB"; // From LJam.
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(LYlostAIDSTB.out[CurrSim - 1][ly - 1]);
 		cc++;
 
 		//Dividing in 1000s so remember are in thoudands
 		costpopl[cc] = "Adult TB DALYs";
-		costpop[cc][ly] = round(AdultTBDALYs.out[CurrSim - 1][ly]);// / 1000;
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(AdultTBDALYs.out[CurrSim - 1][ly-1]);// / 1000;
 		cc++;
 
 		// total incidence and mortality 
 		costpopl[cc] = "Adult TB incidence per 100 000";
-		costpop[cc][ly] = NewTBrateAdult.out[CurrSim - 1][ly] * 100000.0;
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = NewTBrateAdult.out[CurrSim - 1][ly-1] * 100000.0;
 		cc++;
 		
 		costpopl[cc] = "Adult TB mortality rate per 100 000";
-		costpop[cc][ly] = TotTBmortRate.out[CurrSim - 1][ly] * 100000.0;
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = TotTBmortRate.out[CurrSim - 1][ly-1] * 100000.0;
 		cc++;
 
 		costpopl[cc] = "Total Adult TB Pop with prevalent TB";
-		costpop[cc][ly] = TotTBadult.out[CurrSim - 1][ly];
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = TotTBadult.out[CurrSim - 1][ly-1];
 		cc++;
 
 		costpopl[cc] = "Total Adult Lab diagnoses";
-		costpop[cc][ly] = round(TotLabDiagAllTBscreening.out[CurrSim - 1][ly]);
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotLabDiagAllTBscreening.out[CurrSim - 1][ly-1]);
 		cc++;
 
 		costpopl[cc] = "Testing yield";
-		costpop[cc][ly] = TBtestingYield.out[CurrSim - 1][ly]*100;
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = TBtestingYield.out[CurrSim - 1][ly-1]*100;
 		cc++;
 
 		//-----------------------------------------------------------------------------------------------------------------------------
@@ -28216,11 +28243,13 @@ void CalcCostModel()
 		*/
 
 		costpopl[cc] = "% of symptomatic TB patients tested microbiologically";
-		costpop[cc][ly] = PropnScreened.out[CurrSim - 1][ly] * 100.0;
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = PropnScreened.out[CurrSim - 1][ly-1] * 100.0;
 		cc++;
 
 		costpopl[cc] = "% of patients with TB-like symptoms tested micro-biologically";
-		costpop[cc][ly] = PropnScreened2.out[CurrSim - 1][ly] * 100.0;
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = PropnScreened2.out[CurrSim - 1][ly-1] * 100.0;
 		cc++;
 
 		costpopl[cc] = "Number of TB contacts";
@@ -28228,68 +28257,88 @@ void CalcCostModel()
 		cc++;
 
 		costpopl[cc] = "TPT coverage";
-		costpop[cc][ly] = IPTcoverage.out[CurrSim - 1][ly] * 100.0;
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = IPTcoverage.out[CurrSim - 1][ly-1] * 100.0;
 		cc++;
 
 		//-------------- TB Costing populations used for costing, these labels need to match up exactly to the labels in "Import_costs.csv"
 		costpopl[cc] = "IPT for PLHIV";
-		costpop[cc][ly] = IPTforPLHIV.out[CurrSim - 1][ly];
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = IPTforPLHIV.out[CurrSim - 1][ly-1];
 		cc++;
+
 		costpopl[cc] = "3HP for PLHIV";
-		costpop[cc][ly] = TPT3HPforPLHIV.out[CurrSim - 1][ly];
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = TPT3HPforPLHIV.out[CurrSim - 1][ly-1];
 		cc++;
 
 		//TPT for contacts
 		costpopl[cc] = "IPT for household contacts";
-		costpop[cc][ly] = IPTforHH.out[CurrSim - 1][ly];
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = IPTforHH.out[CurrSim - 1][ly-1];
 		cc++;
+
 		costpopl[cc] = "3HP for household contacts";
-		costpop[cc][ly] = TPT3HPforHH.out[CurrSim - 1][ly];
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = TPT3HPforHH.out[CurrSim - 1][ly-1];
 		cc++;
 
 		costpopl[cc] = "TB Screening General PHC";
-		costpop[cc][ly] = round(TotTBsymptomChecks.out[CurrSim - 1][ly]);
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotTBsymptomChecks.out[CurrSim - 1][ly-1]);
 		cc++;
+
 		costpopl[cc] = "TB Screening PLHIV on ART";
-		costpop[cc][ly] = round(TotTBsymptomChecksART.out[CurrSim - 1][ly]);
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotTBsymptomChecksART.out[CurrSim - 1][ly-1]);
 		cc++;
+
 		costpopl[cc] = "TB Screening (Household contacts and other close contacts)";
-		costpop[cc][ly] = round(TotalScreensACF.out[CurrSim - 1][ly]);
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalScreensACF.out[CurrSim - 1][ly-1]);
 		cc++;
 
 		costpopl[cc] = "TB Screening (Door-to-door)";
-		costpop[cc][ly] = round(TotalScreensD2D.out[CurrSim - 1][ly]);
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalScreensD2D.out[CurrSim - 1][ly-1]);
 		cc++;
 
 		//Targetted, halve cost of screening
 		costpopl[cc] = "TB Screening (Door-to-door targetted)";
+		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(TotalScreensTargettedD2D.out[CurrSim - 1][ly-1]); 
 		cc++;
 
 		costpopl[cc] = "TB Screening (Digital Chest X-ray)";
+		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(Total_dCXRscreensD2D.out[CurrSim - 1][ly-1]);
 		cc++;
 
 		//Digital Chest X-ray, portabled, halve cost of dCXR
 		costpopl[cc] = "TB Screening (Digital Chest X-ray portable)";
+		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(Total_dCXRscreensD2DPort.out[CurrSim - 1][ly-1]);
 		cc++;
 
 		// D2D TSwabPlusLife, targeted (20 mil)
 		//halved door to door screening and pluslife (83.76/2)+(30.91/2)
 		costpopl[cc] = "Testing (TSwabPlusLife D2D targeted)"; 
+		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(TotTongueSwabsD2D.out[CurrSim - 1][ly-1]);
 		cc++;
 
 		costpopl[cc] = "Testing (Follow-up Xpert DST)"; 
+		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(DiagnosedDrugSuscTest.out[CurrSim - 1][ly-1]);
 		cc++;
 		
 		costpopl[cc] = "Testing (TSwabPlusLife PHC)"; 
+		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(TotTSwabScreensPHC.out[CurrSim - 1][ly-1]);
 		cc++;
 
-		costpopl[cc] = "Testing (TSwabPlusLife immediate treat)";  //CurrSim == 9
+		costpopl[cc] = "Testing (TSwabPlusLife immediate treat)"; 
+		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(FollowupTreat.out[CurrSim - 1][ly-1]);
 		cc++;
 
@@ -28304,8 +28353,9 @@ void CalcCostModel()
 		//costpop[cc][ly] = ((TotTSwabScreensPHC.out[CurrSim - 1][ly] * (1.0 - MicroscopyPropn[ly]))); /// 1000000
 		//cc++;
 		
-		costpopl[cc] = "Testing (Xpert Ultra)"; //Testing: Xpert MTB/RIF Ultra // Testing: SputumXpert
-		costpop[cc][ly] = round((TotalScreens.out[CurrSim - 1][ly] * (1.0 - MicroscopyPropn[ly])));
+		costpopl[cc] = "Testing (Xpert Ultra)"; 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((TotalScreens.out[CurrSim - 1][ly]-1 * (1.0 - MicroscopyPropn[ly-1])));
 		cc++;
 
 		
@@ -28315,16 +28365,19 @@ void CalcCostModel()
 	//	cc++;
 
 		costpopl[cc] = "Testing: Culture in liquid medium (Xpert neg)";
-		costpop[cc][ly] = round(CultureConfirmTests.out[CurrSim - 1][ly]);
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(CultureConfirmTests.out[CurrSim - 1][ly-1]);
 		cc++;
 
 		costpopl[cc] = "Testing: TUTT for PLHIV (screening)";
-		costpop[cc][ly] = round(TotalXpertScreensART_ICF.out[CurrSim - 1][ly]);
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalXpertScreensART_ICF.out[CurrSim - 1][ly-1]);
 		cc++;
 
 		//testing positive and followed up
 		costpopl[cc] = "Testing: TUTT for PLHIV (follow-up)";
-		costpop[cc][ly] = round(NewRxAdultTB_ART_ICF.out[CurrSim - 1][ly] / (1.0 - CurrInitLTFU));
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewRxAdultTB_ART_ICF.out[CurrSim - 1][ly-1] / (1.0 - CurrInitLTFU));
 		cc++;
 
 		//cost of testing and follow-up, effect of testing 
@@ -28333,11 +28386,13 @@ void CalcCostModel()
 		cc++;*/
 
 		costpopl[cc] = "Testing: TUTT for previous TB (screening)";
-		costpop[cc][ly] = round(TotalXpertScreensPrevTB.out[CurrSim - 1][ly]);
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalXpertScreensPrevTB.out[CurrSim - 1][ly-1]);
 		cc++;
 
 		costpopl[cc] = "Testing: TUTT for previous TB (follow-up)";
-		costpop[cc][ly] = round(NewRxAdultTBscreenPrev.out[CurrSim - 1][ly] / ((1.0 - CurrInitLTFU) * HHcontactRxUptake));
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewRxAdultTBscreenPrev.out[CurrSim - 1][ly-1] / ((1.0 - CurrInitLTFU) * HHcontactRxUptake));
 		cc++;
 
 		//cost of testing and follow-up, effect of testing 
@@ -28347,21 +28402,24 @@ void CalcCostModel()
 
 		//TUTT for household contacts
 		costpopl[cc] = "Testing: TUTT for HH (screening)";
-		costpop[cc][ly] = round(TotalXpertScreensACF.out[CurrSim - 1][ly]);
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalXpertScreensACF.out[CurrSim - 1][ly-1]);
 		cc++;
 
 		//testing positive and followed up
 		costpopl[cc] = "Testing: TUTT for HH (follow-up)";
-		costpop[cc][ly] = round((NewRxAdultTB_ACF.out[CurrSim - 1][ly] / ((1.0 - CurrInitLTFU) * HHcontactRxUptake)));
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((NewRxAdultTB_ACF.out[CurrSim - 1][ly-1] / ((1.0 - CurrInitLTFU) * HHcontactRxUptake)));
 		cc++;
 
 		//Total Xpert Screens
 		costpopl[cc] = "Total Xpert MTB/RIF Ultra";
-		costpop[cc][ly] = round(((TotalScreens.out[CurrSim - 1][ly] * (1 - MicroscopyPropn[ly]))
-			+ TotalXpertScreensACF.out[CurrSim - 1][ly]
-			+ TotalXpertScreensART_ICF.out[CurrSim - 1][ly]
-			+ TotalXpertScreensPrevTB.out[CurrSim - 1][ly]
-			+ TotalXpertScreensD2D.out[CurrSim - 1][ly]));
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(((TotalScreens.out[CurrSim - 1][ly-1] * (1 - MicroscopyPropn[ly-1]))
+			+ TotalXpertScreensACF.out[CurrSim - 1][ly-1]
+			+ TotalXpertScreensART_ICF.out[CurrSim - 1][ly-1]
+			+ TotalXpertScreensPrevTB.out[CurrSim - 1][ly-1]
+			+ TotalXpertScreensD2D.out[CurrSim - 1][ly-1]));
 		cc++;
 
 
@@ -28377,6 +28435,7 @@ void CalcCostModel()
 		//Xperts test following screening interventions 
 		//not sure about the cost, should include linkage
 		costpopl[cc] = "Testing: Xpert D2D";
+		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(TotalXpertScreensD2D.out[CurrSim - 1][ly-1]);// / 1000000;
 		cc++;
 
@@ -28402,14 +28461,17 @@ void CalcCostModel()
 		cc++;*/
 
 		costpopl[cc] = "Treatment DS-TB (Outpatient)";
+		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(TotRxInitAllTBscreening.out[CurrSim - 1][ly-1] - New2ndRxAdultTB.out[CurrSim - 1][ly-1]);
 		cc++;
 
 		costpopl[cc] = "Treatment: DS-TB (Inpatient)";
+		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round((TotRxInitAllTBscreening.out[CurrSim - 1][ly-1] - New2ndRxAdultTB.out[CurrSim - 1][ly-1]) * 0.18);
 		cc++;
 
 		costpopl[cc] = "False Positives on Treatment";
+		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round((TotRxInitAllTBscreening.out[CurrSim - 1][ly-1]) * (1.0 - CurrSpTB));
 		cc++;
 
@@ -28420,6 +28482,7 @@ void CalcCostModel()
 		//reduce ITLFU to 14 % .
 		//NewDiangnoses * 14 % * 25% 
 		costpopl[cc] = "Treatment: Linkage to treatment";
+		costpop[cc][ly] = 0;
 		costpop[cc][ly] = LinkedToTreatment.out[CurrSim - 1][ly-1];
 		cc++;
 
@@ -28439,7 +28502,8 @@ void CalcCostModel()
 		//cc++;
 
 		costpopl[cc] = "Treatment: DR-TB (In- and Outpatient)";
-		costpop[cc][ly] = round(New2ndRxAdultTB.out[CurrSim - 1][ly]);
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(New2ndRxAdultTB.out[CurrSim - 1][ly-1]);
 		cc++;
 
 		//For now, the cost of DR TB is estiamted crudely 
@@ -28450,21 +28514,23 @@ void CalcCostModel()
 
 		//Childhood TB treatment
 		costpopl[cc] = "Treatment: Childhood";
+		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(RxChildTB);
 		cc++;
 
 		costpopl[cc] = "Treatment monitoring: Smear microscopy";
-		costpop[cc][ly] = round(NewRxAdultTB.out[CurrSim - 1][ly] * RxMonitorSmearTest2);
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewRxAdultTB.out[CurrSim - 1][ly-1] * RxMonitorSmearTest2);
 		cc++;
 
 		costpopl[cc] = "Treatment success (%): DS-TB";
-		costpop[cc][ly] = TBRxCompletion.out[CurrSim - 1][ly] * 100;
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = TBRxCompletion.out[CurrSim - 1][ly-1] * 100;
 		cc++;
 
 		costpopl[cc] = "Treatment success (%): DR-TB";
-		costpop[cc][ly] = TBRx2Completion.out[CurrSim - 1][ly] * 100;
+		costpop[cc][ly] = TBRx2Completion.out[CurrSim - 1][ly-1] * 100;
 		cc++;
-
 
 
 		//Calculate total cost = costing population x unit cost, informed by intervention included (based on cost pop label)

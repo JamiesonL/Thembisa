@@ -2961,13 +2961,10 @@ PostOutputArray AdultLYlostPostTB(56);
 PostOutputArray AdultPostTBDALYs(56);
 PostOutputArray AdultEpisodePostTBDALYS(56);
 
-//******************************************************************************************************************************************************
-//************************************************************** TB-IC COST-MODEL **********************************************************************
-//******************************************************************************************************************************************************
+PostOutputArray LYlostAIDSTB(65); //LJam
 
+// ****** TB-IC COST-MODEL *******
 //NB: Nov 2024. In void RunSample() ensure that for running the for TB-IC, ReadAllFiles() is called at each re-sample.
-
-
 //Weights for TB DALYS and post-TB DALYS added July 2026
 double DWHIVpos = 0.408; // source: GBD
 double DWHIVneg = 0.33; // source: GBD
@@ -2986,10 +2983,10 @@ double AvgAIDSmortHIVpos[2] = { 0.0240, 0.0184 };  // male, female
 // version once ART-duration/CD4 population shares are available.
 
 // Functions
-void SetupCosts();
-void SimInvestmentCase();
-void CalcCostModel();
-void ImportTBParms();
+//void SetupCosts();
+//void SimInvestmentCase();
+//void CalcCostModel();
+//void ImportTBParms();
 
 //Additional screeing 
 double p = 0.01;  // Example prevalence of TB in high-prevalence communities (1%)
@@ -3037,10 +3034,6 @@ long long TotalCost[ResampleSize]; //Totalcost over 20 years
 
 int ILTFU_indi; //indicator to activate intervention to reduce ILTFU
 //double Diagnosed_LinkedIN[100][86];
-
-
-
-
 
 
 //***************************************************************************Added by Lise for HIV IC
@@ -3142,8 +3135,8 @@ long long ICERNW[ResampleSize][maxinter][4]; //used to store NW ICERs, 0=ICER; 1
 string inter[100][5];
 //string costlitl[150]; //labels for literature costs
 //double costlit[150];  //values for literature costs
-string costingl[150]; //labels for ingredient costs
-double costing[150];  //values for ingredient costs
+string costingl[250]; //labels for ingredient costs
+double costing[250];  //values for ingredient costs
 //string NACMl[47][2];
 //double NACM[47][7];
 
@@ -3152,13 +3145,13 @@ double costing[150];  //values for ingredient costs
 //double rocCFLF[6], rocCSL[6]; //used to calculate rate of change from 2016 - 2021
 
 int costpopsize;
-string costpopl[150]; //labels for cost population
-long long costpop[150][93]; //values for cost population, array denote types and year, 55+1 to adjust for flow variables
-string unitcostl[150][5]; //labels for unit cost - (0) Intervention (1) Ingredient / Literature (2) IN/OUT (3) TE/INT (4) programme area
-double unitcost[150];
-string totalcostl[150];//labels for total cost
-double unitcost2[150]; //used in output of total costs
-long long totalcost[150][54]; //values for total cost, array denote types and year
+string costpopl[250]; //labels for cost population
+long long costpop[250][93]; //values for cost population, array denote types and year, 55+1 to adjust for flow variables
+string unitcostl[250][5]; //labels for unit cost - (0) Intervention (1) Ingredient / Literature (2) IN/OUT (3) TE/INT (4) programme area
+double unitcost[250];
+string totalcostl[250];//labels for total cost
+double unitcost2[250]; //used in output of total costs
+long long totalcost[250][54]; //values for total cost, array denote types and year
 long long CostforICER[ResampleSize][maxinter + 1];
 long long TotalCost[ResampleSize]; //Totalcost
 
