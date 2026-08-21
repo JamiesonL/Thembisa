@@ -1,0 +1,6 @@
+TBprevSurvey
+0.01236
+TBprevSurveySE
+0.001482143
+PropnETB
+0.10	0.22

@@ -2,9 +2,21 @@
 
 This repository contains code and supporting files for the Thembisa HIV/TB model, developed by Prof Leigh Johnson, Prof Rob Dorrington, and Dr Mmamapudi Kubjane. Thembisa is a mathematical model of the South African HIV epidemic, designed to answer policy questions relating to HIV prevention and treatment. Thembisa is also a demographic projection model and a source of demographic statistics. Recently the model has also been extended to include tuberculosis.
 
-This project uses HIV version 4.8 and TB version 2.1 and will be updated as code becomes available from the developers. More details can be found at the official [Thembisa website](https://www.thembisa.org/)
+This project uses HIV version 4.8 and TB version 2.1 and will be updated as code becomes available from the developers. More details can be found at the official [Thembisa website](https://www.thembisa.org/).
 
 **Note**: If you are a direct collaborator on the project, please follow the instructions set out in the "Collaborators" section below.
+
+## Note to collaborators & users: 
+There are two active branches for this repository based on the model you're using:
+- **main** contains the code for Thembisa HIV version 5.0
+- **Thembisa-TB2.1** contains the code for Thembisa TB version 2.1
+
+If you are working with the HIV model, continue using **main**, if you are using the TB model switch to the TB branch **Thembisa-TB2.1** using:
+```{bash, eval=FALSE}
+git checkout Thembisa-TB2.1
+```
+
+The HIV and TB branches will be merged after the next calibration of the TB model. Collaborators will be updated accordingly.
 
 # Software Requirements
 
@@ -89,11 +101,11 @@ If you are not using Windows in Visual Studio, please ensure you follow the modi
 - **Linux/MacOS**: Visual Studio Code
     - Make the compatibility changes in the table above
     - Compile using g++:
-        ```{bash, eval=FALSE}
+        ```cpp
         g++ -std=c++14 THEMBISA.cpp StatFunctions.cpp mersenne.cpp -I. -o THEMBISA
         ```
     - Run THEMBISA.exe:
-      ```{bash, eval=FALSE}
+      ```cpp
         ./THEMBISA
         ```
 
@@ -103,14 +115,14 @@ If you are not using Windows in Visual Studio, please ensure you follow the modi
 
 For the national HIV simulation of the model, ensure that in **`THEMBISA.cpp`** , the following lines are commented and uncommented respectively: 
 
-```{bash, eval=FALSE}
+```cpp
 RunSample();	
 //runIMIS(0.0);
 ```
 
 In the header file, **`THEMBISA.h`**, ensure
 
-```{bash, eval=FALSE}
+```cpp
 int FixedUncertainty = 1;
 const int VaryFutureInterventions = 0; 
 const int VaryFutureInterventionsTB = 0; 
@@ -120,7 +132,7 @@ const int InputARTinitiationRates = 0;
 
 and: 
 
-```{bash, eval=FALSE}
+```cpp
 const int ProvModel = 0; 
 string ProvID = "KZ"; // variable selection ignored if ProvModel=0
 const int UseBrassLogit = 0;
@@ -128,11 +140,25 @@ const int IncludeTB = 0;
 const int IncludeDR_TB = 0; 
 ```
 
-Please also ensure: 
+Ensure that the following calibration settings are enabled (`= 1`):
 
-```{bash, eval=FALSE}
-const int MCMCdim = 49; ///< Number of parameters in uncertainty analysis
-const int MaxPriors = 145; ///< Number of input rows in Priors file (145 for HIV, 63 for TB)
+- `CalibAdultPrev`
+- `CalibANCprev`
+- `CalibFSWprev`
+- `CalibMSMprev`
+- `CalibHCT_HH`
+- `CalibHCTprev`
+- `CalibHCTprevP`
+- `CalibDeathsA`
+- `CalibDeathsP`
+- `CalibARTbyAge`
+- `CalibARTcoverage`
+
+All remaining calibration settings should be disabled (`= 0`). Lastly, ensure that the following values are set in `THEMBISA.h`:
+
+```cpp
+const int MCMCdim = 51;   ///< Number of parameters in uncertainty analysis
+const int MaxPriors = 149; ///< Number of input rows in Priors file (149 for HIV, 63 for TB)
 ```
 
 # Provincial HIV Model
@@ -141,20 +167,22 @@ const int MaxPriors = 145; ///< Number of input rows in Priors file (145 for HIV
 
 For the provincial-level HIV simulation, ensure that in the C++ program, **`THEMBISA.cpp`** , the following lines are uncommented and commented respectively: 
 
-```{bash, eval=FALSE}
+```cpp
 RunSample();	
 //runIMIS(0.0);
 ```
 
 In the header file, **`THEMBISA.h`**, ensure
 
-```{bash, eval=FALSE}
+```cpp
 int FixedUncertainty = 1;
+...
+const int InputARTinitiationRates = 1; 
 ```
 
 and: 
 
-```{bash, eval=FALSE}
+```cpp
 const int ProvModel = 1; 
 string ProvID = "KZ"; // Choose from EC, FS, GT, KZ, LM, MP, NC, NW, WC
 const int UseBrassLogit = 0;
@@ -162,11 +190,22 @@ const int IncludeTB = 0;
 const int IncludeDR_TB = 0; 
 ```
 
-Please also ensure: 
+Ensure that the following calibration settings are enabled (`= 1`):
 
-```{bash, eval=FALSE}
-const int MCMCdim = 40; ///< Number of parameters in uncertainty analysis
-const int MaxPriors = 145; ///< Number of input rows in Priors file (145 for HIV, 63 for TB)
+- `CalibPaedPrev`
+- `CalibAdultPrev`
+- `CalibANCprev` (and also `InclANCpre1997` and `InclAS_ANCprov`)
+- `CalibDeathsA`
+- `CalibARTtotals`
+- `CalibARTbyAge`
+- `CalibARTbyAgeP2`
+- `CalibARTcoverage`
+
+All remaining calibration settings should be disabled (`= 0`). Lastly, ensure that the following values are set in `THEMBISA.h`:
+
+```cpp
+const int MCMCdim = 44; ///< Number of parameters in uncertainty analysis
+const int MaxPriors = 149; ///< Number of input rows in Priors file (145 for HIV, 63 for TB)
 ```
 
 # National TB Model
@@ -175,14 +214,14 @@ const int MaxPriors = 145; ///< Number of input rows in Priors file (145 for HIV
 
 For the simulation of the national-level TB model, ensure that in the C++ program, **`THEMBISA.cpp`** , the following lines are commented and uncommented respectively: 
 
-```{bash, eval=FALSE}
+```cpp
 RunSample();	
 //runIMIS(0.0);
 ```
 
 In the header file, **`THEMBISA.h`**, ensure
 
-```{bash, eval=FALSE}
+```cpp
 
 int FixedUncertainty = 1;
 const int VaryFutureInterventions = 0; 
@@ -206,7 +245,7 @@ double RRtestingDiagnosed = 1.0;
 ```
 Please also ensure: 
 
-```{bash, eval=FALSE}
+```cpp
 const int MCMCdim = 21; ///< Number of parameters in uncertainty analysis
 const int MaxPriors = 65; ///< Number of input rows in Priors file (145 for HIV, 63 for TB)
 ```

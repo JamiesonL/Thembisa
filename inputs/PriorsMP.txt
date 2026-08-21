@@ -72,7 +72,7 @@
 36. Increase in HIV mortality per 10-year increase in age
 0	1	9.00000	50.0000
 37. Trend in alpha for Brass relational logit model
-0	2	0.015	0.005
+0	2	0.000	0.020
 38. RR of fertility in HIV-pos undiagnosed before immune decline (cf HIV-neg) (previously 42.25 and 32.5, i.e. mean 1.3, SD 0.2)
 1	1	100.0	76.92
 39. RR of fertility in HIV-diagnosed untreated (cf undiagnosed)
@@ -220,7 +220,7 @@
 110. Relative susceptibility of FSWs at start of epidemic compared to 1995
 0	1	6.2500	1.2500
 111. Ratio of odds of viral suppression, to that in IeDEA-SA cohorts
-1	1	247.23	317.86
+1	1	236.28	346.62
 112. Relative rate of ART interruption in males
 0	1	144.0	120.0
 113. Relative rate of ART initiation per 100 cell increase in CD4 count
@@ -228,7 +228,7 @@
 114. Relative rate of testing in virgins in province (relative to national)
 0	1	25.0	25.0
 115. Increase in BF duration in province (relative to national)
-1	1	100.0	98.04
+1	1	100.0	94.34
 116. Specificity of ELISA in ANC surveys
 0	0	47.04	0.96
 117. Log-logistic marriage rate function in males: constant parameter
@@ -270,7 +270,7 @@
 135. Adjustment to ART effect on fertility, comparing 2020 to 2010, - 1
 0	1	4.00	4.00
 136. Annual rate of ART interruption in young children on ART
-1	1	8.163	40.82
+1	1	8.163	81.63
 137. Oral PrEP duration in women
 1	1	13.06	10.69
 138. RR of VMMC (relative to reported DHIS data)
@@ -278,7 +278,7 @@
 139. RR of ART interruption in future (relative to historic levels)
 1	1	4.00	4.00
 140. Condom risk compensation
-1	2	0.00	0.10
+1	2	-0.09	0.10
 141. Average duration of ART received from outside of SA among recent immigrants (2022+)
 0	1	6.25	0.25
 142. Relative duration of ART received from outside of SA among recent immigrants (2017 vs 2022)
@@ -287,3 +287,13 @@
 0	0	1.00	1.00
 144. Increase in mean age of sexual activity in women (2016 relative to 1998)
 0	1	100.0	100.0
+145. Fraction of women untested at first ANC who receive testing before delivery
+0	0	1.00	1.00
+146. RR of starting injecting drug use in high-risk women
+1	0	3.00	2.00
+147. Transmission probability per act of needle sharing
+1	0	2.46	387.8
+148. Monthly number of drug injections per PWID
+1	1	4.84	0.044
+149. OR for needle sharing per year, 2004-2024
+1	1	1714.6	1533.5

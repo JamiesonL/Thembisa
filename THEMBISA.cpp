@@ -1,14 +1,11 @@
 // This is the main project file for VC++ application project 
 // generated using an Application Wizard.
 
-//#include "stdafx.h" // commented out to work in VS code
-//#using <mscorlib.dll> // commented out to work in VS code
-//using namespace System; // commented out to work in VS code
-using namespace std; // added to work in VS code
-#include <iostream> // added to work in VS code
-#include <cstring> // added to work in VS code
-#include <sstream> // added to work in VS code
-#include <string> // added to work in VS code
+//#include "stdafx.h"
+//#using <mscorlib.dll>
+//using namespace System;
+
+using namespace std;
 
 #include "THEMBISA.h"
 #include "StatFunctions.h"
@@ -21,6 +18,7 @@ using namespace std; // added to work in VS code
 #include <cstring>
 #include <sstream>
 #include <string>
+#include <iostream>
 
 #ifdef _WIN32
   #include <direct.h>             // _mkdir on Windows
@@ -30,16 +28,185 @@ using namespace std; // added to work in VS code
   #define MKDIR(path) mkdir((path).c_str(), 0755)
 #endif
 
-//int _tmain() // commented out to work in VS code
+//int main() // commented out to work in VS code
 int main()
 {
-	int iy; 
+	
 	clock_t start, finish;
 	double elapsed_time;
 
 	start = clock();
 	//GenerateSample(); // Not yet updated in THEMBISA
-	RunSample();	// Remember to set FixedUncertainty = 1 before running this function
+	
+	if (Optimise == 0) {
+		SetupCosts();
+
+		time_t t = time(0);   // get time now
+		struct tm * now = localtime(&t);
+		stringstream h, m;
+		if (now->tm_hour < 10) { h << "0" << now->tm_hour; }
+		else { h << now->tm_hour; }
+		if (now->tm_min < 10) { m << "0" << now->tm_min; }
+		else { m << now->tm_min; }
+
+		cout << "Time start: " << (now->tm_year + 1900) << '-'
+			<< (now->tm_mon + 1) << '-'
+			<< now->tm_mday << "; Time " << h.str() << ":" << m.str() << endl;
+
+		RunSample();
+		CalcEffect();
+
+		h.str(std::string());
+		m.str(std::string());
+
+		t = time(0);   // get time now
+		now = localtime(&t);
+		if (now->tm_hour < 10) { h << "0" << now->tm_hour; }
+		else { h << now->tm_hour; }
+		if (now->tm_min < 10) { m << "0" << now->tm_min; }
+		else { m << now->tm_min; }
+		cout << "Time stop: " << (now->tm_year + 1900) << '-'
+			<< (now->tm_mon + 1) << '-'
+			<< now->tm_mday << "; Time " << h.str() << ":" << m.str() << endl;
+
+		for (int i = 0; i < ResampleSize; i++) {
+			if (effectmeasure == "LYL") {
+				cout << "Scenario; TotalCost; LYL: " << i + 1 << "; " << TotalCost[i] << "; " << fixed << LYLforICER[i] << endl;
+			}
+			if (effectmeasure == "HIV") {
+				cout << "Scenario; TotalCost; HIV: " << i + 1 << "; " << TotalCost[i] << "; " << fixed << HIVforICER[i] << endl;
+			}
+			if (effectmeasure == "DALY") {
+				cout << "Scenario; TotalCost; DALY: " << i + 1 << "; " << TotalCost[i] << "; " << fixed << DALYforICER[i] << endl;
+			}
+		}
+
+	}
+
+	
+	if (Optimise == 2) { //Paramater value calibration for HIV IC (more automated)
+		ofstream filesim;
+
+		filesim.open("ParamLog.txt");		
+		filesim << "FSWtarget	Poptarget	year	ptest	LENinit" << endl; //column names
+	
+		int stop = 0;
+
+		//check inc/dec values periodically: can be inefficient if the dec/inc is too big, then it can pass by this and go into an infinite loop			
+		double inc = 0.001;  //HCT: 0.00001, 0.001 AGYW
+		double dec = 0.005; //used 0.002 for FSW, 0.0002 for AGYW
+		int direction; //-1 decrease, +1 increase, we change this if we are way off.
+		int abssens = 1000; //how close to get?
+		int iter; //count the number of iterations
+	
+		//double targets[8] = {4500,	9000,	13500,	18000,	22500,	27000,	36000,	45000}; //FSW
+		double fswtargets[9] = {0, 4500,	9000,	13500,	18000,	22500,	27000,	36000,	45000}; //FSW
+		//double targets[10] = {9360,18720,28080,37440,46800,56160,65520,74880,84240,93600}; //MSM
+		//double targets[10] = {41500,83000,124500,166000,207500,249000,290500,332000,373500,415000}; //AGYW
+
+		double targets[8] = {3000, 6000, 9000, 12000, 15000, 18000, 21000, 24000}; //PWID
+
+
+		double pbase = 0.5 - inc;
+		double newpbase;			
+			
+
+		//chosen parameters for other subpopulations
+		/*
+		double temp[fswnum][yr] = {
+				{0.101307,0.0718701,0.0477424,0.0362486,0.0352486,0.0352486,0.0352486,0.0352486,0.0352486,0.0342486,0.0342486,0.0342486,0.0342486,0.0342486,0.0332486,0.0322486,0.0322486,0.0312486,0.0312486,0.0302486},//optimal
+				{0.101307,0.0718701,0.0477424,0.0362486,0.0352486,0.0352486,0.0352486,0.0352486,0.0352486,0.0342486,0.0342486,0.0342486,0.0342486,0.0342486,0.0332486,0.0322486,0.0322486,0.0312486,0.0312486,0.0302486}//optimal
+		};*/
+
+		/*
+		double temp[2][fswnum] = {
+			{0.0025,	0.0431473800749345,	0.0895919212834805,	0.140045545316004,	0.195105221326365,	0.255670910516435,	0.323272275274926,	0.488311855298692,	0.713204473774093},
+			{0.0025,	0.0202515694775601,	0.0435175425457182,	0.0707156795306143,	0.103020026907676,	0.142201038130744,	0.191209730437152,	0.339619070800907,	0.637055317300535}
+		};
+		
+		for (int i = 0; i < fswnum; i++) {
+			for (int j = 0; j < yr; j++) {
+				parmSETFSWyear[j][i] = temp[j][i];
+			}
+		}*/
+		
+
+	for (int fi = 1; fi < fswnum; fi++){ //<fswnum
+		fsw_curr = fi; //current FSW target
+
+		for (int ti = 0; ti < tnum; ti++) {
+			target_curr = ti;
+
+			//initialize for each new target
+			for (int i = 0; i < yr; i++) {
+				for (int j = 0; j < tnum; j++) {
+					parmyear[j][i] = 0;
+				}
+			}
+			
+			for (int yi = 0; yi < yr; yi++) {
+				yrtest = styr + yi;
+				//ptest = pbase[ti];
+				direction = 1; //reset direction
+				//ti = yi; //each year has a different value target value
+
+				if (yi == 0) { ptest = pbase; } //starting from pbase again
+				if (yi > 0) { ptest = newpbase - inc; } //for each new year, start where you left off.
+				stop = 0;
+				iter = 0;
+				while (stop == 0) {
+					//ptest += inc;
+					if (direction == -1) { ptest -= dec; } 
+					if (direction == 1) { ptest += inc; }
+
+					//cout << "target: " << targets[ti] << "| year: " << yrtest << " | parm: " << ptest;
+					cout << "FSW target: " << fswtargets[fsw_curr] << " | Pop. target: " << targets[ti] << " | year: " << yrtest << " | parm: " << ptest;
+					RunSample();
+
+					//double LENinit = NewCABLAinNonFSW.out[CurrSim - 1][(yrtest-1985)]; //NewCABLAinNonFSW; NewCABLAinFSW; NewCABLAinNonMSM; NewCABLAinMSM	
+					//double LENinit = NewCABLAinMSM.out[CurrSim - 1][(yrtest - 1985)]; //NewCABLAinNonFSW; NewCABLAinFSW; NewCABLAinNonMSM; NewCABLAinMSM	
+					double LENinit = NewCABLAinPWID.out[CurrSim - 1][(yrtest - 1985)]; //NewCABLAinNonFSW; NewCABLAinFSW; NewCABLAinNonMSM; NewCABLAinMSM	
+
+					cout << " | LENinit: " << LENinit << endl;
+
+					if (LENinit < (targets[ti] - 1000) && direction == -1) { //way off, parameter too low to start, change direction to increase -  targets[ti]
+						direction = 1;
+					}
+										
+					if (LENinit > (targets[ti] + 1000) && direction == 1) { //way off, parameter too high to start, change direction to increase -  targets[ti]
+						direction = -1;
+					}
+					
+					//reverse direction if its bound to go in the wrong direction from the start
+					if (iter == 0) {
+						if (LENinit > targets[ti] && direction == 1) { direction = -1; }
+						if (LENinit < targets[ti] && direction == -1) { direction = 1; }
+					}
+					iter += 1;
+					
+					if (abs(LENinit - targets[ti]) <= abssens) {  // targets[ti]
+					//if (LENinit <= targets[ti] || (0 < (LENinit - targets[ti]) && (LENinit - targets[ti]) < 1000)) {
+						filesim << fswtargets[fsw_curr] <<"	" << targets[ti] << "	" << yrtest << "	 " << ptest << "	" << LENinit << endl;
+						
+						
+						parmyear[ti][yrtest - styr] = ptest;
+						newpbase = ptest;
+						stop = 1;
+					}
+					//if init is more than 20% off, adjust ptest proportionally
+					if (stop == 0 && (abs(LENinit - targets[ti]) / targets[ti]) > 0.02){ 
+						//ptest = ptest * (targets[ti] / LENinit); 
+						if (direction == -1) { ptest = ptest * (targets[ti] / LENinit) + dec; }
+						if (direction == 1) { ptest = ptest * (targets[ti] / LENinit) - inc; }
+					}
+				}
+			}
+		}
+	}
+	filesim.close();
+}
+	
+	
 	//runIMIS(0.0);
 	//MaximizeLikelihood(0.0000001, "InitialSimplex.txt", "FinalSimplex.txt");
 	/*ReadAllFiles();
@@ -57,6 +224,7 @@ int main()
 	SetProgression(0);
 	UpdateARTmort();
 	CurrYear = 1984;
+	int iy; 
 	for(iy=0; iy<ProjectionTerm; iy++){
 		OneYear();
 	}
@@ -838,7 +1006,7 @@ void Child::UpdateMigP()
 	}
 }
 
-Adult::Adult(int Gender, int iRisk, int Married, int Virgin, int SRisk, int FSW, int Circ, int MSM)
+Adult::Adult(int Gender, int iRisk, int Married, int Virgin, int SRisk, int FSW, int Circ, int MSM, int PWID)
 {
 	Sex = Gender;
 	Risk = iRisk;
@@ -848,13 +1016,14 @@ Adult::Adult(int Gender, int iRisk, int Married, int Virgin, int SRisk, int FSW,
 	FSWind = FSW;
 	CircInd = Circ;
 	MSMind = MSM;
+	PWIDind = PWID;
 }
 
 void Adult::GetStartYrProfile()
 {
 	int ia, ic;
 	int BehavGroup;
-	double PartnerRiskPropn, Base, MSMadj;
+	double PartnerRiskPropn, Base, MSMadj, IDpropn, Temp;
 
 	BehavGroup = 0;
 	if(Risk==2){
@@ -870,6 +1039,10 @@ void Adult::GetStartYrProfile()
 	}
 	if (MSMind == 1){ MSMadj = InitMSMprevRatio; }
 	else{ MSMadj = 1.0; }
+	if (Sex == 0) { Temp = InitPWIDpropnM; }
+	else { Temp = InitPWIDpropnM * RR_IDfem[Risk-1]; }
+	if (PWIDind == 1) { IDpropn = Temp; }
+	else { IDpropn = 1.0 - Temp; }
 
 	for(ia=0; ia<81; ia++){
 		// Set all arrays after the first to zero
@@ -903,7 +1076,7 @@ void Adult::GetStartYrProfile()
 		}
 		// Set values for the first array + initial infections
 		Base = InitBehavDbn[ia][BehavGroup][Sex];
-		if(MarriedInd==1){
+		if(MarriedInd==1 && MSMind==0){
 			Base *= PartnerRiskPropn;}
 		if(Sex==0){
 			if(CircInd==1){
@@ -913,6 +1086,10 @@ void Adult::GetStartYrProfile()
 			if (BehavGroup == 1 || BehavGroup == 4){
 				if (MSMind == 1){ Base *= MSMpropn; }
 				else{ Base *= (1.0 - MSMpropn); }
+			}
+			if ((BehavGroup == 2 || BehavGroup == 5) && Base > 0.0) {
+				if (MSMind == 1) { Base *= InitMarriedMSM[ia][Risk-1] / InitBehavDbn[ia][Risk * 3 - 1][0]; }
+				else { Base *= (1.0 - InitMarriedMSM[ia][Risk - 1] / InitBehavDbn[ia][Risk * 3 - 1][0]); }
 			}
 		}
 		if(FSWind==1){
@@ -924,6 +1101,10 @@ void Adult::GetStartYrProfile()
 			Base = Base - TotalFSW * FSWageDbn[ia];
 			if(Base<0.0){Base = 0.0;}
 		}
+		if (ia >= 5 && ia < 40 && VirginInd == 0 && MarriedInd == 0 && MSMind==0 && FSWind==0) {
+			Base *= IDpropn;
+		}
+		else if (PWIDind == 1) { Base = 0.0; }
 		Total[ia] = Base;
 		if(Risk==2 || ia<5 || ia>39 || VirginInd==1){
 			NegNoHCT[ia] = Base;}
@@ -939,7 +1120,7 @@ void Adult::GetStartYrProfile()
 void Adult::UpdateProbTransmM()
 {
 	int ia, ib, is, iy;
-	double BaseProb[16], BaseProbMSM[6], Temp1, Temp2;
+	double BaseProb[16], BaseProbMSM[9], Temp1, Temp2;
 
 	iy = CurrYear - 1999;
 	if (iy > 11){ iy = 11; }
@@ -947,7 +1128,7 @@ void Adult::UpdateProbTransmM()
 	// Initialize BaseProb
 	for(ib=0; ib<16; ib++){
 		BaseProb[ib] = 0.0;}
-	for (ib = 0; ib<6; ib++){
+	for (ib = 0; ib<9; ib++){
 		BaseProbMSM[ib] = 0.0;}
 
 	BaseProb[0] = TransmST[1] * RelInfecRiskST[Risk-1][0][1];
@@ -962,7 +1143,7 @@ void Adult::UpdateProbTransmM()
 		BaseProb[8] = TransmFSW[1] * RelInfecRiskST[0][0][1] * (1.0 + (RRclientToFSW1985 - 1.0) *
 			pow(0.75, CurrYear - 1985));
 	}
-	if(MarriedInd==1){
+	if(MarriedInd==1 && MSMind==0){
 		BaseProb[12] = TransmLT[1] * RelInfecRiskLT[Risk-1][SpouseRisk-1][1];}
 	if(PrEPorVM==1){
 		for(ib=0; ib<4; ib++){
@@ -974,12 +1155,16 @@ void Adult::UpdateProbTransmM()
 	if (MSMind == 1){
 		BaseProbMSM[0] = MtoM_ST * RelInfecRiskST[Risk - 1][0][0];
 		BaseProbMSM[3] = MtoM_ST * RelInfecRiskST[Risk - 1][1][0];
+		BaseProbMSM[6] = MtoM_ST * (TransmLT[0] / TransmST[0]);
 		if (PrEPorVM == 1){
-			for (ib = 0; ib < 2; ib++){
+			for (ib = 0; ib < 3; ib++){
 				BaseProbMSM[ib*3+1] = BaseProbMSM[ib*3] * (1.0 - CABLAefficacyMSM);
 				BaseProbMSM[ib*3+2] = BaseProbMSM[ib*3] * (1.0 - PrEPefficacyMSM);
 			}
 		}
+	}
+	if (CircInd == 1) {
+		for (ib = 0; ib < 16; ib++) { BaseProb[ib] *= (1.0 - MCefficacyF); }
 	}
 
 	// Adjust BaseProb if virulence is changing
@@ -988,7 +1173,7 @@ void Adult::UpdateProbTransmM()
 			BaseProb[ib] *= pow(RRperCalYr, 2.5 * InfToVirulenceRatio * iy); 
 			if (BaseProb[ib]>1.0){ BaseProb[ib] = 1.0; }
 		}
-		for (ib = 0; ib < 6; ib++){
+		for (ib = 0; ib < 9; ib++){
 			BaseProbMSM[ib] *= pow(RRperCalYr, 2.5 * InfToVirulenceRatio * iy);
 			if (BaseProbMSM[ib]>1.0){ BaseProbMSM[ib] = 1.0; }
 		}
@@ -1063,8 +1248,8 @@ void Adult::UpdateProbTransmM()
 						Temp2 + (1.0 - CondomEfficacy) * Temp1)/Total[ia]);
 				}
 			}
-			// Transm to LT partner
-			if(MarriedInd==1 && ia>=5){
+			// Transm to LT heterosexual partner
+			if(MarriedInd==1 && MSMind==0 && ia>=5){
 				ProbTransm[ia][12] = BaseProb[12] * SexFreqMarital[ia-5][0] * ((1.0 - ProbCondomLT[ia][0]) * 
 					CondomEfficacy * Temp2 + (1.0 - CondomEfficacy) * Temp1)/Total[ia];
 				if(PrEPorVM==1){
@@ -1096,7 +1281,7 @@ void Adult::UpdateProbTransmM()
 				}
 			}
 			// Transm to male ST partner (MSM)
-			if (MSMind == 1){
+			if (MSMind == 1 && (MarriedInd==0 || Risk==1)){
 				ProbTransm[ia][8] = 1.0 - exp(-BaseProbMSM[0] * SexActsST * ((1.0 -
 					ProbCondomST[ia][0]) * CondomEfficacy * Temp2 + (1.0 - CondomEfficacy) *
 					Temp1) / Total[ia]);
@@ -1114,6 +1299,20 @@ void Adult::UpdateProbTransmM()
 						ProbCondomST[ia][0] * (1.0 - CondomRednCABLA[0])) * CondomEfficacy *
 						Temp2 + (1.0 - CondomEfficacy) * Temp1) / Total[ia]);
 					ProbTransm[ia][13] = 1.0 - exp(-BaseProbMSM[5] * SexActsST * ((1.0 -
+						ProbCondomST[ia][0] * (1.0 - CondomRednPrEP[0])) * CondomEfficacy *
+						Temp2 + (1.0 - CondomEfficacy) * Temp1) / Total[ia]);
+				}
+			}
+			// Transm to male LT partner (MSM)
+			if (MSMind == 1 && MarriedInd == 1 && ia >= 5) {
+				ProbTransm[ia][14] = 1.0 - exp(-BaseProbMSM[6] * SexFreqMarital[ia - 5][0] * ((1.0 -
+					ProbCondomLT[ia][0]) * CondomEfficacy * Temp2 + (1.0 - CondomEfficacy) *
+					Temp1) / Total[ia]);
+				if (PrEPorVM == 1) {
+					ProbTransm[ia][15] = 1.0 - exp(-BaseProbMSM[7] * SexFreqMarital[ia - 5][0] * ((1.0 -
+						ProbCondomST[ia][0] * (1.0 - CondomRednCABLA[0])) * CondomEfficacy *
+						Temp2 + (1.0 - CondomEfficacy) * Temp1) / Total[ia]);
+					ProbTransm[ia][16] = 1.0 - exp(-BaseProbMSM[8] * SexFreqMarital[ia - 5][0] * ((1.0 -
 						ProbCondomST[ia][0] * (1.0 - CondomRednPrEP[0])) * CondomEfficacy *
 						Temp2 + (1.0 - CondomEfficacy) * Temp1) / Total[ia]);
 				}
@@ -1356,27 +1555,83 @@ void Adult::UpdateProbTransmSW()
 		TransmFSWtoM[ib] = Temp3[ib]/Temp1;}
 }
 
+void Adult::UpdateProbTransmNS()
+{
+	int ia, ib, is, iy, ig;
+	double BaseProb[4], Temp1, Temp2;
+
+	iy = CurrYear - 1999;
+	if (iy > 11) { iy = 11; }
+
+	BaseProb[0] = BaseTransmNS;
+
+	// Adjust BaseProb if virulence is changing
+	if (RRperCalYr != 1.0) {
+		for (ib = 0; ib < 4; ib++) {
+			BaseProb[ib] *= pow(RRperCalYr, 2.5 * InfToVirulenceRatio * iy);
+			if (BaseProb[ib] > 1.0) { BaseProb[ib] = 1.0; }
+		}
+	}
+
+	// Re-assign iy
+	iy = CurrYear - StartYear;
+
+	Temp1 = 0.0;
+	Temp2 = 0.0;
+	for (ia = 0; ia < 81; ia++) {
+		if (Total[ia] > 0.0) {
+			Temp1 += Total[ia];
+			for (is = 0; is < 5; is++) {
+				Temp2 += PosNoHCT[ia][is] * RelativeTransm[is][2][Sex][ia];}
+			for (is = 0; is < 5; is++) {
+				Temp2 += PosHCTpreHIV[ia][is] * RelativeTransm[is + 5][2][Sex][ia];}
+			for (is = 0; is < 5; is++) {
+				Temp2 += PosDiagnosedPreART[ia][is] * RelativeTransm[is + 10][2][Sex][ia];}
+			for (is = 0; is < 5; is++) {
+				Temp2 += OnARTpre500[ia][is] * RelativeTransm[is + 15][2][Sex][ia];}
+			for (is = 0; is < 5; is++) {
+				Temp2 += OnART500[ia][is] * RelativeTransm[is + 20][2][Sex][ia];}
+			for (is = 0; is < 5; is++) {
+				Temp2 += OnART350[ia][is] * RelativeTransm[is + 25][2][Sex][ia];}
+			for (is = 0; is < 5; is++) {
+				Temp2 += OnART200[ia][is] * RelativeTransm[is + 30][2][Sex][ia];}
+			for (is = 0; is < 4; is++) {
+				Temp2 += StoppedART[ia][is] * RelativeTransm[is + 35][2][Sex][ia];}
+		}
+	}
+	ProbTransmPWID[0] = BaseProb[0] * MonthlyInj * PropnNeedleSharing[iy] *
+		Temp2 / Temp1;
+	if (ProbTransmPWID[0] > 0.999) { ProbTransmPWID[0] = 0.999; }
+	if (PrEPorVM == 1) {
+		ProbTransmPWID[1] = ProbTransmPWID[0] * (1.0 - CABLAefficacy[0]);
+		ProbTransmPWID[2] = ProbTransmPWID[0] * (1.0 - PrEPefficacy[0]);
+		ProbTransmPWID[3] = ProbTransmPWID[0];
+	}
+}
+
 void Adult::UpdateProbAcqM(int group)
 {
-	int ia, ib, offset, offsetLT, offsetMSM;
-	double FromST, FromLT, FromFSW, FromMSM, Temp1, Temp2;
+	int ia, ib, offset, offset2, offsetLT, offsetMSM;
+	double FromST, FromLT, FromFSW, FromMSM, FromPWID, Temp1, Temp2;
 
 	offset = (Risk - 1) * 6 + CircInd * 3 + group;
+	offset2 = offset + 12;
 	offsetLT = 12 + CircInd * 3 + group;
 	offsetMSM = (Risk - 1) * 3 + group;
 	FromST = 0.0;
 	FromLT = 0.0;
 	FromFSW = 0.0;
 	FromMSM = 0.0;
+	FromPWID = 0.0;
 	
 	for(ia=0; ia<81; ia++){
-		// Transmission from ST partners
+		// Transmission from ST heterosexual partners
 		if(Risk==1 || MarriedInd==0){
 			Temp1 = 0.0;
 			Temp2 = 0.0;
 			for(ib=0; ib<81; ib++){
 				Temp1 += AgePrefST[ia][ib][0] * TransmFtoM_ST[ib][offset];
-				Temp2 += AgePrefST[ia][ib][0] * FL_ST.ProbTransm[ib][offset];
+				Temp2 += AgePrefST[ia][ib][0] * TransmFtoM_ST[ib][offset2];
 			}
 			if (MSMind == 0){
 				FromST = (PartnerAcqM[ia] / 12.0) * (CurrSThigh[0][Risk - 1] * Temp1 +
@@ -1391,8 +1646,8 @@ void Adult::UpdateProbAcqM(int group)
 			if(Risk==1 && MarriedInd==1){
 				FromST *= RRpartnerMarried[0];}
 		}
-		// Transmission from LT partner
-		if(MarriedInd==1){
+		// Transmission from LT heterosexual partner
+		if(MarriedInd==1 && MSMind==0){
 			FromLT = 0.0;
 			if(Risk==1 && SpouseRisk==1){
 				for(ib=0; ib<81; ib++){
@@ -1417,7 +1672,7 @@ void Adult::UpdateProbAcqM(int group)
 			if(MarriedInd==1){
 				FromFSW *= FSWcontactMarried;}
 		}
-		// Transmission from MSM
+		// Transmission from ST same-sex partners
 		if (MSMind == 1 && MarriedInd == 0){
 			Temp1 = 0.0;
 			Temp2 = 0.0;
@@ -1431,21 +1686,37 @@ void Adult::UpdateProbAcqM(int group)
 				FromMSM *= RRpartnerLow[0];
 			}
 		}
+		// Transmission from LT same-sex partners
+		if (MSMind == 1 && MarriedInd == 1) {
+			Temp1 = 0.0;
+			Temp2 = 0.0;
+			for (ib = 0; ib < 81; ib++) {
+				Temp1 += AgePrefMSM[ia][ib] * TransmMtoM_LT[ib][group];
+				Temp2 += AgePrefMSM[ia][ib] * TransmMtoM_LT[ib][group + 3];
+			}
+			FromLT = (CurrLThighMSM[Risk - 1] * Temp1 + (1.0 - CurrLThighMSM[Risk - 1]) * Temp2);
+		}
+		// Transmission from PWID
+		if (PWIDind == 1) {
+			FromPWID = TransmNS[group];
+		}
 		// Combining transmission from all sources
-		ProbHIVacq[ia][group] = 1.0 - exp(-(FromST + FromLT + FromFSW + FromMSM) * EctopyFactor[ia][0]);
+		ProbHIVacq[ia][group] = 1.0 - exp(-(FromST + FromLT + FromFSW + FromMSM) * EctopyFactor[ia][0] -
+			FromPWID);
 	}
 }
 
 void Adult::UpdateProbAcqF(int group)
 {
 	int ia, ib, offset1, offset2, offsetLT;
-	double FromST, FromLT, Temp1, Temp2;
+	double FromST, FromLT, FromPWID, Temp1, Temp2;
 
 	offset1 = (Risk - 1) * 4 + group; // High risk ST partner
 	offset2 = 8 + (Risk - 1) * 4 + group; // Low risk ST partner
 	offsetLT = (SpouseRisk - 1) * 8 + (Risk - 1) * 4 + group; // LT partner
 	FromST = 0.0;
 	FromLT = 0.0;
+	FromPWID = 0.0;
 	
 	for(ia=0; ia<81; ia++){
 		// Transmission from ST partners
@@ -1469,8 +1740,12 @@ void Adult::UpdateProbAcqF(int group)
 			for(ib=0; ib<81; ib++){
 				FromLT += AgePrefLT[ia][ib][1] * TransmMtoF_LT[ib][offsetLT];}
 		}
+		// Transmission from PWID
+		if (PWIDind == 1) {
+			FromPWID = TransmNS[group];
+		}
 		// Combining transmission from ST and LT sources
-		ProbHIVacq[ia][group] = 1.0 - exp(-(FromST + FromLT) * EctopyFactor[ia][1]);
+		ProbHIVacq[ia][group] = 1.0 - exp(-(FromST + FromLT) * EctopyFactor[ia][1] - FromPWID);
 	}
 
 	if(FSWind==1){
@@ -1495,7 +1770,13 @@ void Adult::GetEndProfile()
 		UpperAge = 20;}
 	if(PrEPorVM==1){
 		StopCABLA = 1.0 - exp(-1.0/(12.0 * CABLAdur[Sex]));
+		if (MSMind == 1) { //LJ added MSM specific duration
+			StopCABLA = 1.0 - exp(-1.0 / (12.0 * CABLAdur[2]));
+		}
 		StopPrEP = 1.0 - exp(-1.0/(12.0 * PrEPdur[Sex]));
+		if (MSMind == 1) { //LJ added MSM specific duration
+			StopPrEP = 1.0 - exp(-1.0 / (12.0 * PrEPdur[2]));
+		}
 		StopVM = 1.0 - exp(-1.0/(12.0 * VMdur));
 	}
 	else{
@@ -1571,13 +1852,15 @@ void Adult::GetEndProfile()
 			NewHIVgroup[1] = (NegPastHCT[ia] + NegNoHCT[ia] * (1.0 - exp(-
 				TotTestingRateSE[ia][0][Sex]))) * ProbAcqT;
 			NewHIV[ia] = NewHIVgroup[0] + NewHIVgroup[1];
-			if(PrEPorVM==1 && Sex==0 && MSMind==0){
+			if(PrEPorVM==1 && Sex==0 && MSMind==0 && PWIDind==0){
 				NegNoHCT_E[ia] *= (1.0 - JoinCABLA[ia][Risk + 1] - JoinPrEP[ia][Risk + 1]);
 				NegPastHCT_E[ia] *= (1.0 - JoinCABLA[ia][Risk + 1] - JoinPrEP[ia][Risk + 1]);
 				RegHCT_E[ia] = (NegNoHCT[ia] + NegPastHCT[ia]) * JoinCABLA[ia][Risk + 1] * (1.0 -
 					ProbHIVacq[ia][0]);
 				RegPrEP_E[ia] = (NegNoHCT[ia] + NegPastHCT[ia]) * JoinPrEP[ia][Risk + 1] * (1.0 -
 					ProbHIVacq[ia][0]);
+
+				if (FixedUncertainty == 1) { NewPrEP_nonMSM += RegPrEP_E[ia];  NewCABLA_nonMSM += RegHCT_E[ia]; } //LJ
 			}
 			if (PrEPorVM == 1 && MSMind == 1){
 				NegNoHCT_E[ia] *= (1.0 - JoinCABLA[ia][Risk - 1] - JoinPrEP[ia][Risk - 1]);
@@ -1591,7 +1874,20 @@ void Adult::GetEndProfile()
 					NewCABLA_MSM += RegHCT_E[ia];
 				}
 			}
-			if(PrEPorVM==1 && Sex==1 && FSWind==0){
+			if (PrEPorVM == 1 && PWIDind == 1) {
+				NegNoHCT_E[ia] *= (1.0 - JoinCABLA[ia][7] - JoinPrEP[ia][7]);
+				NegPastHCT_E[ia] *= (1.0 - JoinCABLA[ia][7] - JoinPrEP[ia][7]);
+				RegHCT_E[ia] = (NegNoHCT[ia] + NegPastHCT[ia]) * JoinCABLA[ia][7] * (1.0 -
+					ProbHIVacq[ia][0]);
+				RegPrEP_E[ia] = (NegNoHCT[ia] + NegPastHCT[ia]) * JoinPrEP[ia][7] * (1.0 -
+					ProbHIVacq[ia][0]);
+				if (Sex == 1) { RegVM_E[ia] = 0.0; }
+				if (FixedUncertainty == 1) {
+					NewPrEP_PWID += RegPrEP_E[ia];
+					NewCABLA_PWID += RegHCT_E[ia];
+				}
+			}
+			if(PrEPorVM==1 && Sex==1 && FSWind==0 && PWIDind==0){
 				NegNoHCT_E[ia] *= (1.0 - JoinCABLA[ia][Risk + 4] - JoinPrEP[ia][Risk + 4] - JoinVM[ia][Risk]);
 				NegPastHCT_E[ia] *= (1.0 - JoinCABLA[ia][Risk + 4] - JoinPrEP[ia][Risk + 4] - JoinVM[ia][Risk]);
 				RegHCT_E[ia] = (NegNoHCT[ia] + NegPastHCT[ia]) * JoinCABLA[ia][Risk + 4] * (1.0 -
@@ -1603,6 +1899,10 @@ void Adult::GetEndProfile()
 				if (FixedUncertainty == 1 && ia<15){ 
 					NewPrEP_AGYW += RegPrEP_E[ia]; 
 					NewCABLA_AGYW += RegHCT_E[ia];
+				}
+				if (FixedUncertainty == 1) {					
+					NewPrEP_nonFSW += RegPrEP_E[ia]; //LJ
+					NewCABLA_nonFSW += RegHCT_E[ia]; //LJ
 				}
 			}
 			if(PrEPorVM==1 && FSWind==1){
@@ -1959,6 +2259,12 @@ void Adult::GetEndProfile()
 			for (ia = 5; ia<40; ia++){
 				Temp1 += NewHIV[ia];}
 			HIVincMSM.out[CurrSim - 1][CurrYear - 1985] += Temp1;
+		}
+		if (PWIDind == 1) {
+			Temp1 = 0.0;
+			for (ia = 0; ia < 81; ia++) {
+				Temp1 += NewHIV[ia];}
+			NewHIVinPWID.out[CurrSim - 1][CurrYear - 1985] += Temp1;
 		}
 		Temp1 = 0.0;
 		Temp2 = 0.0;
@@ -2438,7 +2744,7 @@ void OutputArray::RecordSample(const char* filout, int n)
 	for(i=0; i<ResampleSize; i++){
 		file<<setw(6)<<right<<i<<"	"<<setw(6)<<right<<SampleID[i];
 		for(c=0; c<columns; c++){
-			file<<"	"<<setw(10)<<right<<out[i][c];}
+			file<<"	"<<setw(10)<<right <<out[i][c];}
 		file<<endl;
 	}
 	file.close();
@@ -2471,7 +2777,7 @@ void PostOutputArray::RecordSample(const char* filout)
 	for(i=0; i<ResampleSize; i++){
 		file<<setw(6)<<right<<i<<"	"<<setw(6)<<right<<SampleID[i];
 		for(c=0; c<columns; c++){
-			file << "	" << setw(10) << right << out[i][c];
+			file << "	" << setw(10) << right << fixed << out[i][c];
 		}
 		file<<endl;
 	}
@@ -2789,6 +3095,9 @@ void ReadPaedAssumps()
 	file.ignore(255,'\n');
 	file.ignore(255,'\n');
 	file>>BFbiasAdj;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RRdiagDeathsPIP[0] >> RRdiagDeathsPIP[1];
 	file.close();
 
 	InitTransmART200 = TransmART200;
@@ -3002,7 +3311,10 @@ void ReadAdultAssumps()
 		file >> ORsuppressionCD4[ic][1][1];}
 	file.ignore(255,'\n');
 	file.ignore(255,'\n');
-	file>>CondomEfficacy;
+	file>>ORsuppressionPWID;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> CondomEfficacy;
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	file >> InfToVirulenceRatio;
@@ -3080,6 +3392,9 @@ void ReadAdultAssumps()
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	file >> COVIDimpactARTstart;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> USAIDexitImpact;
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	file>>UltARTdelay[0]>>UltARTdelay[1];
@@ -3201,7 +3516,7 @@ void ReadAdultAssumps()
 	file>>ShapeCirc;
 	file.ignore(255,'\n');
 	file.ignore(255,'\n');
-	file>>MCefficacy;
+	file>>MCefficacy>>MCefficacyF;
 	file.ignore(255,'\n');
 	file.ignore(255,'\n');
 	file>>MMCdataYear;
@@ -3231,7 +3546,7 @@ void ReadAdultAssumps()
 	file>>FreqHCTinPrEP[0]>>FreqHCTinPrEP[1];
 	file.ignore(255,'\n');
 	file.ignore(255,'\n');
-	file>>PrEPdur[0]>>PrEPdur[1];
+	file>>PrEPdur[0]>>PrEPdur[1] >> PrEPdur[2]; //LJ
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	file >> PrEPdurPreg;
@@ -3258,7 +3573,7 @@ void ReadAdultAssumps()
 	file >> CondomRednCABLA[0] >> CondomRednCABLA[1];
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
-	file >> CABLAdur[0] >> CABLAdur[1];
+	file >> CABLAdur[0] >> CABLAdur[1] >> CABLAdur[2]; //LJ
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	file >> CABLAdurPreg;
@@ -3298,6 +3613,9 @@ void ReadAdultAssumps()
 	file >> RRfertART;
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
+	file >> RRfertVertHIV;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
 	file >> RR_ARTeffectAge;
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
@@ -3335,6 +3653,30 @@ void ReadAdultAssumps()
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	file >> PropnTGW;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> InitPWIDpropnM;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> StartInjDrugs;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RR_IDfem[0] >> RR_IDfem[1];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> GammaMeanInj >> GammaSDinj;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RRinjDrug2000;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> StopInjDrugs;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> BaseTransmNS;
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> MonthlyInj;
 	file.close();
 	
 	// Perform basic calculations in "Adult assumptions" sheet
@@ -3534,6 +3876,10 @@ void ReadRollout()
 	file.ignore(255, '\n');
 	for (iy = 0; iy<86; iy++){
 		file >> RR_PrEPstartMSM[iy];}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> RR_PrEPstartPWID[iy];}
 	file.ignore(255,'\n');
 	file.ignore(255,'\n');
 	for (iy = 0; iy<86; iy++){
@@ -3549,7 +3895,10 @@ void ReadRollout()
 	file.ignore(255,'\n');
 	file.ignore(255,'\n');
 	for (iy = 0; iy<86; iy++){
-		file >> PrEPeligOther[iy];}
+		file >> PrEPeligOther[iy];
+		PrEPeligOtherG[iy][0] = PrEPeligOther[iy]; 
+		PrEPeligOtherG[iy][1] = PrEPeligOther[iy]; 	
+	}
 	file.ignore(255,'\n');
 	file.ignore(255,'\n');
 	for(iy=0; iy<86; iy++){
@@ -3562,6 +3911,10 @@ void ReadRollout()
 	file.ignore(255, '\n');
 	for (iy = 0; iy<86; iy++){
 		file >> RR_CABLAstartMSM[iy];}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> RR_CABLAstartPWID[iy];}
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	for (iy = 0; iy<86; iy++){
@@ -3577,7 +3930,10 @@ void ReadRollout()
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	for (iy = 0; iy<86; iy++){
-		file >> CABLAeligOther[iy];}
+		file >> CABLAeligOther[iy];
+		CABLAeligOtherG[iy][0] = CABLAeligOther[iy]; 
+		CABLAeligOtherG[iy][1] = CABLAeligOther[iy]; 
+	}
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	for (iy = 0; iy<86; iy++){
@@ -3629,6 +3985,11 @@ void ReadRollout()
 	for (iy = 0; iy<86; iy++){ file >> DurFSW[iy]; }
 	for (iy = 0; iy<86; iy++){ file >> FSWageMean[iy]; }
 	for (iy = 0; iy<86; iy++){ file >> FSWageSD[iy]; }
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	for (iy = 0; iy < 86; iy++) {
+		file >> PropnNeedleSharing[iy];
+	}
 	file.close();
 	
 	for (iy = 0; iy < 86; iy++){
@@ -3792,16 +4153,16 @@ void ReadMarriage()
 	}
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
-	file >> MarriageConstant[0] >> MarriageConstant[1];
+	file >> MarriageConstant[0] >> MarriageConstant[1] >> MarriageConstant[2];
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
-	file >> MarriageTrend[0] >> MarriageTrend[1];
+	file >> MarriageTrend[0] >> MarriageTrend[1] >> MarriageTrend[2];
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
-	file >> MarriageShape[0] >> MarriageShape[1];
+	file >> MarriageShape[0] >> MarriageShape[1] >> MarriageShape[2];
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
-	file >> MarriageMin[0] >> MarriageMin[1];
+	file >> MarriageMin[0] >> MarriageMin[1] >> MarriageMin[2];
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	file >> DivorceAdj;
@@ -3810,8 +4171,15 @@ void ReadMarriage()
 	file >> DivorceTrend;
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
-	file >> ORremarriage[0] >> ORremarriage[1];
+	file >> ORremarriage[0] >> ORremarriage[1] >> ORremarriage[2];
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	file >> RRmarriageMSM[0] >> RRmarriageMSM[1] >> RRmarriageMSM[2];
 	file.close();
+
+	for (ia = 0; ia < 76; ia++) {
+		DivorceRate[ia][2] = DivorceRate[ia][0];
+	}
 }
 
 void ReadCD4dbn()
@@ -3918,14 +4286,16 @@ void ReadMigration()
 
 void ReadCalibData()
 {
-	if((CalibPaedPrev==1 || CalibAdultPrev==1) && ProvModel == 0){
+	if((CalibPaedPrev==1 || CalibAdultPrev==1 || CalibYouthPrev == 1) && ProvModel == 0){
 		ReadHIVprevData();}
-	if(CalibANCprev==1){
+	if(CalibANCprev==1 || CalibYouthPrev == 1){
 		ReadANCprevData();}
 	if (CalibFSWprev == 1){
 		ReadCSWprevData();}
 	if (CalibMSMprev == 1 && nMSMstudies > 0){
 		ReadMSMprevData();}
+	if (CalibPWIDprev == 1 && nPWIDstudies > 0) {
+		ReadPWIDprevData();}
 	if(CalibHCTprev==1 || CalibHCTageSex == 1){
 		ReadHCTprevData();}
 	if (CalibHCTprevP == 1 || CalibHCTtotP == 1){
@@ -3938,7 +4308,7 @@ void ReadCalibData()
 		ReadHCTdata();}
 	if(CalibAIDStrend==1 || CalibAIDSage==1){
 		ReadAIDScases();}
-	if (ProvModel == 1 && (CalibANCprev == 1 || CalibAdultPrev == 1 || CalibPaedPrev == 1)){
+	if (ProvModel == 1 && (CalibANCprev == 1 || CalibAdultPrev == 1 || CalibYouthPrev == 1 || CalibPaedPrev == 1)){
 		ReadProvHIV();}
 	if (CalibARTtotals == 1 || CalibARTtotalsP == 1 || CalibARTbyAgeP == 1 || CalibARTbyAgeP2 == 1 || 
 		CalibARTbyAge == 1 || CalibARTcoverage == 1 || CalibCD4atARTstart == 1 || CalibANC_ART == 1 ||
@@ -4027,7 +4397,7 @@ void ReadANCprevData()
       exit(1);
     }
 
-	for(iy=0; iy<28; iy++){
+	for(iy=0; iy<29; iy++){
 		for(ia=0; ia<5; ia++){
 			file>>idum>>idum>>ObservedPrevANC[ia][iy]>>SEprevANC[ia][iy];}
 	}
@@ -4099,6 +4469,38 @@ void ReadMSMprevData()
 	file.close();
 }
 
+void ReadPWIDprevData()
+{
+	int ir, ic;
+	ifstream file;
+	string InputFile = "./inputs/PWIDstudies.txt";
+
+	if (ProvModel == 1) { InputFile = "./inputs/PWIDstudies" + ProvID + ".txt"; }
+
+	file.open(InputFile);
+	if (file.fail()) {
+		cerr << "Could not open PWIDstudies.txt\n";
+		exit(1);
+	}
+
+	file.ignore(255, '\n');
+	for (ir = 0; ir < nPWIDstudies; ir++) {
+		for (ic = 0; ic < 3; ic++) {
+			file >> PWIDstudyDetails[ir][ic];
+		}
+	}
+	file.ignore(255, '\n');
+	file.ignore(255, '\n');
+	if (ProvModel == 0) {
+		for (ir = 0; ir < nPWIDstudiesFtoM; ir++) {
+			for (ic = 0; ic < 3; ic++) {
+				file >> PWID_FtoMdetails[ir][ic];
+			}
+		}
+	}
+	file.close();
+}
+
 void ReadProvHIV()
 {
 	int ia, iy, idum;
@@ -4134,7 +4536,7 @@ void ReadProvHIV()
 	}
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
-	for (iy = 3; iy < 28; iy++){ //3 corresponds to 1994, 24 to 2015, 25 to 2017, 26 to 2019
+	for (iy = 3; iy < 29; iy++){ //3 corresponds to 1994, 24 to 2015, 25 to 2017, 26 to 2019
 		for (ia = 0; ia < 5; ia++){
 			file >> idum >> idum >> ObservedPrevANC[ia][iy] >> SEprevANC[ia][iy];}
 	}
@@ -4684,6 +5086,7 @@ void ReadInitTB()
 
 	InputFile = "./inputs/TBinputs/InitTBprev.txt";
 
+	if (ProvModel == 1) { InputFile = "./inputs/TBinputs/InitTBprev" + ProvID + ".txt"; }
 	file.open(InputFile);
 	if (file.fail()) {
 		cerr << "Could not open InitTBprev.txt\n";
@@ -4721,6 +5124,7 @@ void ReadTBadultAssumps()
 	string InputFile;
 
 	InputFile = "./inputs/TBinputs/TBadultAssumps.txt";
+	if (ProvModel == 1) { InputFile = "./inputs/TBinputs/TBadultAssumps" + ProvID + ".txt"; }
 
 	file.open(InputFile);
 	if (file.fail()) {
@@ -5112,7 +5516,7 @@ void ReadTBrollout()
 	ifstream file;
 	string InputFile = "./inputs/TBinputs/TBrollout.txt";
 
-	if (ProvModel == 1) { InputFile = "TBrollout" + ProvID + ".txt"; }
+	if (ProvModel == 1) { InputFile = "./inputs/TBinputs/TBrollout" + ProvID + ".txt"; }
 	file.open(InputFile);
 	if (file.fail()) {
 		cerr << "Could not open TBrollout.txt\n";
@@ -5299,12 +5703,16 @@ void ReadTBriskFactorPrev()
 
 void ReadTBmortData()
 {
-	int ia, iy;
+	int ia, iy, YearLimit;
 	ifstream file;
 	string InputFile;
 
+	if (ProvModel == 0) { YearLimit = 23; }
+	else { YearLimit = 20; }
+
 	InputFile = "./inputs/TBinputs/TB_MortData.txt";
 
+	if (ProvModel == 1) { InputFile = "./inputs/TBinputs/TB_MortData" + ProvID + ".txt"; }
 	file.open(InputFile);
 	if (file.fail()) {
 		cerr << "Could not open TB_MortData.txt\n";
@@ -5313,14 +5721,14 @@ void ReadTBmortData()
 
 	file.ignore(255, '\n');
 	for (ia = 0; ia < 16; ia++) {
-		for (iy = 0; iy < 23; iy++) {
+		for (iy = 0; iy < YearLimit; iy++) {
 			file >> RecordedTBdeathsA[ia][iy][0];
 		}
 	}
 	file.ignore(255, '\n');
 	file.ignore(255, '\n');
 	for (ia = 0; ia < 16; ia++) {
-		for (iy = 0; iy < 23; iy++) {
+		for (iy = 0; iy < YearLimit; iy++) {
 			file >> RecordedTBdeathsA[ia][iy][1];
 		}
 	}
@@ -5339,7 +5747,7 @@ void ReadTB_ETRdata()
 	ifstream file;
 	string InputFile = "./inputs/TBinputs/TB_ETRdata.txt";
 
-	if (ProvModel == 1) { InputFile = "TB_ETRdata" + ProvID + ".txt"; }
+	if (ProvModel == 1) { InputFile = "./inputs/TBinputs/TB_ETRdata" + ProvID + ".txt"; }
 	file.open(InputFile);
 	if (file.fail()) {
 		cerr << "Could not open TB_ETRdata.txt\n";
@@ -5410,6 +5818,7 @@ void ReadTBprevData()
 	ifstream file;
 	string InputFile = "./inputs/TBinputs/TBprevData.txt";
 
+	if (ProvModel == 1) { InputFile = "./inputs/TBinputs/TBprevData" + ProvID + ".txt"; }
 	file.open(InputFile);
 	if (file.fail()) {
 		cerr << "Could not open TBprevData.txt\n";
@@ -5417,27 +5826,38 @@ void ReadTBprevData()
 	}
 
 	file.ignore(255, '\n');
-	file >> TBprevSurvey[0] >> TBprevSurvey[1];
-	file.ignore(255, '\n');
-	file.ignore(255, '\n');
-	file >> TBprevSurveySE[0] >> TBprevSurveySE[1];
-	file.ignore(255, '\n');
-	file.ignore(255, '\n');
-	file >> PropnETB[0] >> PropnETB[1];
-	file.ignore(255, '\n');
-	file.ignore(255, '\n');
-	for (ic = 0; ic < 2; ic++) {
-		file >> DataRifResPrev[ic] >> DataRifResSE[ic];
+	if (ProvModel == 0) {
+		file >> TBprevSurvey[0] >> TBprevSurvey[1];
+		file.ignore(255, '\n');
+		file.ignore(255, '\n');
+		file >> TBprevSurveySE[0] >> TBprevSurveySE[1];
+		file.ignore(255, '\n');
+		file.ignore(255, '\n');
+		file >> PropnETB[0] >> PropnETB[1];
+		file.ignore(255, '\n');
+		file.ignore(255, '\n');
+		for (ic = 0; ic < 2; ic++) {
+			file >> DataRifResPrev[ic] >> DataRifResSE[ic];
+		}
+		file.ignore(255, '\n');
+		file.ignore(255, '\n');
+		for (ic = 0; ic < 4; ic++) {
+			file >> SmPosStudyDetails[ic][0] >> SmPosStudyDetails[ic][1] >> SmPosStudyDetails[ic][2];
+		}
+		file.ignore(255, '\n');
+		file.ignore(255, '\n');
+		for (ic = 0; ic < 4; ic++) {
+			file >> RRscreenStudyDetails[ic][0] >> RRscreenStudyDetails[ic][1] >> RRscreenStudyDetails[ic][2];
+		}
 	}
-	file.ignore(255, '\n');
-	file.ignore(255, '\n');
-	for (ic = 0; ic < 4; ic++) {
-		file >> SmPosStudyDetails[ic][0] >> SmPosStudyDetails[ic][1] >> SmPosStudyDetails[ic][2];
-	}
-	file.ignore(255, '\n');
-	file.ignore(255, '\n');
-	for (ic = 0; ic < 4; ic++) {
-		file >> RRscreenStudyDetails[ic][0] >> RRscreenStudyDetails[ic][1] >> RRscreenStudyDetails[ic][2];
+	else {
+		file >> TBprevSurvey[0];
+		file.ignore(255, '\n');
+		file.ignore(255, '\n');
+		file >> TBprevSurveySE[0];
+		file.ignore(255, '\n');
+		file.ignore(255, '\n');
+		file >> PropnETB[0] >> PropnETB[1];
 	}
 	file.close();
 }
@@ -5488,7 +5908,7 @@ void ReadTBscreening()
 void SetInitialParameters()
 {
 	int ia, im, ib;
-	double MedianAge, Temp;
+	double MedianAge, Temp, Temp2;
 
 	// Set initial proportion of married partners who are high risk (Mixing sheet)
 	InitMarriedHigh[1][0] = (1.0 - Assortativeness) + Assortativeness * HighRiskPropn[0];
@@ -5594,6 +6014,13 @@ void SetInitialParameters()
 		}
 	}
 
+	// Set relative rates of starting injecting drug use, by age
+	Temp = pow((GammaMeanInj - 10.0) / GammaSDinj, 2.0); // alpha
+	Temp2 = (GammaMeanInj - 10.0) / pow(GammaSDinj, 2.0); // lambda
+	for (ia = 0; ia < 81; ia++) {
+		RR_IDage[ia] = pow(1.0 * ia / 15.0, Temp - 1.0) * exp(-Temp2 * (ia - 15.0));
+	}
+
 	// TB parameters
 	if (IncludeTB == 1) {
 		for (ia = 0; ia < 81; ia++) {
@@ -5664,12 +6091,16 @@ void SetInitSexActivity()
 		}
 	}
 
-	// Get rates of widowhood for females
+	// Get rates of widowhood for females and MSM
 	for(ia=0; ia<76; ia++){ // 0 corresponds to age 15
 		Temp = 0.0;
+		Temp2 = 0.0;
 		for(ib=0; ib<76; ib++){
-			Temp += AgePrefLT[ia+5][ib+5][1] * CurrNonAIDSmortALB[ib+15][0];}
+			Temp += AgePrefLT[ia+5][ib+5][1] * CurrNonAIDSmortALB[ib+15][0];
+			Temp2 += AgePrefMSM[ia + 5][ib + 5] * CurrNonAIDSmortALB[ib + 15][0];
+		}
 		InitWidowhoodRate[ia][1] = Temp;
+		InitWidowhoodRate[ia][2] = Temp2;
 	}
 
 	// Get numbers of sexually experienced married and unmarried females
@@ -5710,6 +6141,18 @@ void SetInitSexActivity()
 	}
 
 	// Get numbers of sexually experienced married and unmarried males
+	for (ia = 0; ia < 81; ia++) {
+		if (ia <= 5) { 
+			InitMarriedMSM[ia][0] = 0.0; 
+			InitMarriedMSM[ia][1] = 0.0;
+		}
+		else {
+			Temp = GetMarriedPropnAtStart(2, ia + 10);
+			Temp *= StartingPop[ia + 10][0] * MSMpropn;
+			InitMarriedMSM[ia][0] = Temp * HighRiskPropn[0];
+			InitMarriedMSM[ia][1] = Temp * (1.0 - HighRiskPropn[0]);
+		}
+	}
 	for(ia=0; ia<81; ia++){
 		if(ia<=5){
 			InitBehavDbn[ia][2][0] = 0.0;
@@ -5772,20 +6215,28 @@ void SetInitSexActivity()
 	MHC_ST.GetStartYrProfile();
 	MHU_STM.GetStartYrProfile();
 	MHC_STM.GetStartYrProfile();
+	MHU_ID.GetStartYrProfile();
+	MHC_ID.GetStartYrProfile();
 	MHU_LTH.GetStartYrProfile();
 	MHC_LTH.GetStartYrProfile();
 	MHU_LTL.GetStartYrProfile();
 	MHC_LTL.GetStartYrProfile();
+	MHU_LTM.GetStartYrProfile();
+	MHC_LTM.GetStartYrProfile();
 	MLU_virgin.GetStartYrProfile();
 	MLC_virgin.GetStartYrProfile();
 	MLU_ST.GetStartYrProfile();
 	MLC_ST.GetStartYrProfile();
 	MLU_STM.GetStartYrProfile();
 	MLC_STM.GetStartYrProfile();
+	MLU_ID.GetStartYrProfile();
+	MLC_ID.GetStartYrProfile();
 	MLU_LTH.GetStartYrProfile();
 	MLC_LTH.GetStartYrProfile();
 	MLU_LTL.GetStartYrProfile();
 	MLC_LTL.GetStartYrProfile();
+	MLU_LTM.GetStartYrProfile();
+	MLC_LTM.GetStartYrProfile();
 
 	// Set male demand for sex workers and get initial number of sex workers
 	GetCurrBehavDbnM();
@@ -5795,10 +6246,12 @@ void SetInitSexActivity()
 	FH_virgin.GetStartYrProfile();
 	FH_ST.GetStartYrProfile();
 	FH_SW.GetStartYrProfile();
+	FH_ID.GetStartYrProfile();
 	FH_LTH.GetStartYrProfile();
 	FH_LTL.GetStartYrProfile();
 	FL_virgin.GetStartYrProfile();
 	FL_ST.GetStartYrProfile();
+	FL_ID.GetStartYrProfile();
 	FL_LTH.GetStartYrProfile();
 	FL_LTL.GetStartYrProfile();
 
@@ -5831,7 +6284,11 @@ void InitializeTBprofiles()
 
 	// Set InitLTBIprev
 	for (ia = 0; ia < 91; ia++) {
-		InitLTBIprev[ia] = InitLTBIscaling * InitLTBI[0] * (1.0 - exp(-InitLTBI[1] * ia));
+		InitLTBIprev[ia] = InitLTBI[0] * (1.0 - exp(-InitLTBI[1] * ia));
+		// Apply odds ratio adjustment (InitLTBIscaling)
+		if (InitLTBIprev[ia] > 0.0 && InitLTBIprev[ia] < 1.0) {
+			InitLTBIprev[ia] = 1.0 / (1.0 + (1.0 - InitLTBIprev[ia]) / (InitLTBIprev[ia] * InitLTBIscaling));
+		}
 	}
 
 	// Set InitPropnSmPos and InitPropnSmNeg (active TB)
@@ -6209,6 +6666,9 @@ double GetMarriedPropnAtStart(int Sex, int Age)
 		else{
 			PropnNeverMarried[ia] = 1.0 / (1.0 + pow((15.0 + ia - MarriageMin[Sex]) *
 				exp(-MarriageConstant[Sex] + MarriageTrend[Sex] * Age), 1.0 / MarriageShape[Sex]));
+			if (Sex == 2) {
+				PropnNeverMarried[ia] = pow(PropnNeverMarried[ia], RRmarriageMSM[0]);
+			}
 		}
 	}
 
@@ -6227,7 +6687,7 @@ double GetMarriedPropnAtStart(int Sex, int Age)
 			CurrentMarried[ia] += CurrentMarried[ia - 1] * RemainMarried;
 		}
 	}
-
+	
 	return CurrentMarried[Age - 15];
 }
 
@@ -6315,6 +6775,10 @@ void CalcInterruptions()
 	double CurrInterruption, CurrInterruptionPaed, temp, PaedRatio;
 
 	iy = CurrYear - StartYear;
+
+
+
+
 
 	// Age and sex multipliers to interruption rates
 	if (iy == 0){
@@ -6589,7 +7053,7 @@ void SetActivityByStage()
 void SetFertByStage()
 {
 	int is, id, ic, ia;
-	double RRtemp, RRfertARTbyAge, YrAdj, VirginAdj;
+	double RRtemp, RRfertARTbyAge, YrAdj, VirginAdj, Temp1;
 
 	if (CurrYear < 2010){ YrAdj = 1.0; }
 	else if (CurrYear < 2020){
@@ -6630,6 +7094,17 @@ void SetFertByStage()
 					OnARTbyIntDur[id][1][ia + 4]) * RelativeFert[is + 15][ia]) * RRfertARTbyAge;
 				RelativeFertART[(is - 1) * 5 + id][ia] = OnARTbyIntDur[id][1][ia + 4] * RRtemp * 
 					RRfertARTbyAge;
+			}
+		}
+		if (ia < 16) {
+			for (is = 5; is < 40; is++) {
+				// Get the % of HIV in sexually experienced AGYW that is vertically acquired, Temp1
+				Temp1 = (SumGroupsVF[ia + 4][is] / (TotalPop[ia + 14][1] - TotalSexuallyExp[ia + 14][1])) /
+					((SumGroupsF[ia + 4][is] - SumGroupsVF[ia + 4][is]) / TotalSexuallyExp[ia + 14][1]);
+				if (Temp1 > 0) {
+					RelativeFert[is][ia] *= (Temp1 * RRfertVertHIV + (1.0 - Temp1));
+					if (is >= 20) { RelativeFertART[is - 20][ia] *= (Temp1 * RRfertVertHIV + (1.0 - Temp1)); }
+				}
 			}
 		}
 	}
@@ -6870,15 +7345,19 @@ void GetCurrBehavDbnM()
 
 	for(ia=0; ia<81; ia++){
 		CurrBehavDbn[ia][0][0] = MHU_ST.Total[ia] + MHC_ST.Total[ia] +
+			MHU_ID.Total[ia] + MHC_ID.Total[ia] +
 			(MHU_STM.Total[ia] + MHC_STM.Total[ia]) * (1.0 - MSMpartnersM[ia]);
 		CurrBehavDbn[ia][1][0] = MHU_LTH.Total[ia] + MHC_LTH.Total[ia] +
 			MHU_LTL.Total[ia] + MHC_LTL.Total[ia];
 		CurrBehavDbn[ia][2][0] = MLU_ST.Total[ia] + MLC_ST.Total[ia] +
+			MLU_ID.Total[ia] + MLC_ID.Total[ia] +
 			(MLU_STM.Total[ia] + MLC_STM.Total[ia]) * (1.0 - MSMpartnersM[ia]);
 		CurrBehavDbn[ia][3][0] = MLU_LTH.Total[ia] + MLC_LTH.Total[ia] +
 			MLU_LTL.Total[ia] + MLC_LTL.Total[ia];
 		CurrBehavDbnMSM[ia][0] = (MHU_STM.Total[ia] + MHC_STM.Total[ia]) * MSMpartnersM[ia];
 		CurrBehavDbnMSM[ia][1] = (MLU_STM.Total[ia] + MLC_STM.Total[ia]) * MSMpartnersM[ia];
+		CurrBehavDbnMSM[ia][2] = MHU_LTM.Total[ia] + MHC_LTM.Total[ia];
+		CurrBehavDbnMSM[ia][3] = MLU_LTM.Total[ia] + MLC_LTM.Total[ia];
 	}
 }
 
@@ -6889,9 +7368,9 @@ void GetCurrBehavDbnF()
 	for(ia=0; ia<81; ia++){
 		// Note that we don't include FSW in CurrBehavDbn[ia][0][1], since
 		// FSWs aren't eligible to form ST partnerships or LT partnerships.
-		CurrBehavDbn[ia][0][1] = FH_ST.Total[ia];
+		CurrBehavDbn[ia][0][1] = FH_ST.Total[ia] + FH_ID.Total[ia];
 		CurrBehavDbn[ia][1][1] = FH_LTH.Total[ia] + FH_LTL.Total[ia];
-		CurrBehavDbn[ia][2][1] = FL_ST.Total[ia];
+		CurrBehavDbn[ia][2][1] = FL_ST.Total[ia] + FL_ID.Total[ia];
 		CurrBehavDbn[ia][3][1] = FL_LTH.Total[ia] + FL_LTL.Total[ia];
 	}
 }
@@ -6982,53 +7461,69 @@ void UpdatePop()
 			MHU_LTL.Total[ia] + MHC_LTL.Total[ia] + MLU_virgin.Total[ia] +  
 			MLC_virgin.Total[ia] + MLU_ST.Total[ia] + MLC_ST.Total[ia] + 
 			MLU_STM.Total[ia] + MLC_STM.Total[ia] + MLU_LTH.Total[ia] +
-			MLC_LTH.Total[ia] +MLU_LTL.Total[ia] + MLC_LTL.Total[ia];
+			MLC_LTH.Total[ia] + MLU_LTL.Total[ia] + MLC_LTL.Total[ia];
+		TotalPop[ia + 10][0] += MHU_ID.Total[ia] + MHC_ID.Total[ia] +
+			MHU_LTM.Total[ia] + MHC_LTM.Total[ia] + MLU_ID.Total[ia] + MLC_ID.Total[ia] + 
+			MLU_LTM.Total[ia] + MLC_LTM.Total[ia]; // New in version 5.0
 		TotalPop[ia+10][1] = FH_virgin.Total[ia] + FH_ST.Total[ia] + FH_SW.Total[ia] +
 			FH_LTH.Total[ia] + FH_LTL.Total[ia] + FL_virgin.Total[ia] + FL_ST.Total[ia] + 
-			FL_LTH.Total[ia] + FL_LTL.Total[ia];
+			FL_LTH.Total[ia] + FL_LTL.Total[ia] + FH_ID.Total[ia] + FL_ID.Total[ia] +
+			FH_ID.Total[ia] + FL_ID.Total[ia];
 		SumGroupsM[ia][0] = MHU_virgin.NegNoHCT[ia] + MHC_virgin.NegNoHCT[ia] + 
 			MHU_ST.NegNoHCT[ia] + MHC_ST.NegNoHCT[ia] + MHU_STM.NegNoHCT[ia] + 
 			MHC_STM.NegNoHCT[ia] + MHU_LTH.NegNoHCT[ia] + MHC_LTH.NegNoHCT[ia] +
 			MHU_LTL.NegNoHCT[ia] + MHC_LTL.NegNoHCT[ia] + MLU_virgin.NegNoHCT[ia] +  
 			MLC_virgin.NegNoHCT[ia] + MLU_ST.NegNoHCT[ia] + MLC_ST.NegNoHCT[ia] + 
 			MLU_STM.NegNoHCT[ia] + MLC_STM.NegNoHCT[ia] + MLU_LTH.NegNoHCT[ia] +
-			MLC_LTH.NegNoHCT[ia] +MLU_LTL.NegNoHCT[ia] + MLC_LTL.NegNoHCT[ia];
+			MLC_LTH.NegNoHCT[ia] + MLU_LTL.NegNoHCT[ia] + MLC_LTL.NegNoHCT[ia] +
+			MHU_ID.NegNoHCT[ia] + MHC_ID.NegNoHCT[ia] + MHU_LTM.NegNoHCT[ia] +
+			MHC_LTM.NegNoHCT[ia] + MLU_ID.NegNoHCT[ia] + MLC_ID.NegNoHCT[ia] +
+			MLU_LTM.NegNoHCT[ia] + MLC_LTM.NegNoHCT[ia];
 		SumGroupsF[ia][0] = FH_virgin.NegNoHCT[ia] + FH_ST.NegNoHCT[ia] + FH_SW.NegNoHCT[ia] +
 			FH_LTH.NegNoHCT[ia] + FH_LTL.NegNoHCT[ia] + FL_virgin.NegNoHCT[ia] + FL_ST.NegNoHCT[ia] + 
-			FL_LTH.NegNoHCT[ia] + FL_LTL.NegNoHCT[ia];
+			FL_LTH.NegNoHCT[ia] + FL_LTL.NegNoHCT[ia] + FH_ID.NegNoHCT[ia] + FL_ID.NegNoHCT[ia];
 		SumGroupsM[ia][1] = MHU_virgin.NegPastHCT[ia] + MHC_virgin.NegPastHCT[ia] + 
 			MHU_ST.NegPastHCT[ia] + MHC_ST.NegPastHCT[ia] + MHU_STM.NegPastHCT[ia] + 
 			MHC_STM.NegPastHCT[ia] + MHU_LTH.NegPastHCT[ia] + MHC_LTH.NegPastHCT[ia] +
 			MHU_LTL.NegPastHCT[ia] + MHC_LTL.NegPastHCT[ia] + MLU_virgin.NegPastHCT[ia] +  
 			MLC_virgin.NegPastHCT[ia] + MLU_ST.NegPastHCT[ia] + MLC_ST.NegPastHCT[ia] + 
 			MLU_STM.NegPastHCT[ia] + MLC_STM.NegPastHCT[ia] + MLU_LTH.NegPastHCT[ia] +
-			MLC_LTH.NegPastHCT[ia] +MLU_LTL.NegPastHCT[ia] + MLC_LTL.NegPastHCT[ia];
+			MLC_LTH.NegPastHCT[ia] +MLU_LTL.NegPastHCT[ia] + MLC_LTL.NegPastHCT[ia] +
+			MHU_ID.NegPastHCT[ia] + MHC_ID.NegPastHCT[ia] + MHU_LTM.NegPastHCT[ia] +
+			MHC_LTM.NegPastHCT[ia] + MLU_ID.NegPastHCT[ia] + MLC_ID.NegPastHCT[ia] +
+			MLU_LTM.NegPastHCT[ia] + MLC_LTM.NegPastHCT[ia];
 		SumGroupsF[ia][1] = FH_virgin.NegPastHCT[ia] + FH_ST.NegPastHCT[ia] + FH_SW.NegPastHCT[ia] +
 			FH_LTH.NegPastHCT[ia] + FH_LTL.NegPastHCT[ia] + FL_virgin.NegPastHCT[ia] + FL_ST.NegPastHCT[ia] + 
-			FL_LTH.NegPastHCT[ia] + FL_LTL.NegPastHCT[ia];
+			FL_LTH.NegPastHCT[ia] + FL_LTL.NegPastHCT[ia] + FH_ID.NegPastHCT[ia] + FL_ID.NegPastHCT[ia];
 		SumGroupsM[ia][2] = MHU_virgin.RegHCT[ia] + MHC_virgin.RegHCT[ia] + 
 			MHU_ST.RegHCT[ia] + MHC_ST.RegHCT[ia] + MHU_STM.RegHCT[ia] + 
 			MHC_STM.RegHCT[ia] + MHU_LTH.RegHCT[ia] + MHC_LTH.RegHCT[ia] +
 			MHU_LTL.RegHCT[ia] + MHC_LTL.RegHCT[ia] + MLU_virgin.RegHCT[ia] +  
 			MLC_virgin.RegHCT[ia] + MLU_ST.RegHCT[ia] + MLC_ST.RegHCT[ia] + 
 			MLU_STM.RegHCT[ia] + MLC_STM.RegHCT[ia] + MLU_LTH.RegHCT[ia] +
-			MLC_LTH.RegHCT[ia] +MLU_LTL.RegHCT[ia] + MLC_LTL.RegHCT[ia];
+			MLC_LTH.RegHCT[ia] +MLU_LTL.RegHCT[ia] + MLC_LTL.RegHCT[ia] +
+			MHU_ID.RegHCT[ia] + MHC_ID.RegHCT[ia] + MHU_LTM.RegHCT[ia] +
+			MHC_LTM.RegHCT[ia] + MLU_ID.RegHCT[ia] + MLC_ID.RegHCT[ia] +
+			MLU_LTM.RegHCT[ia] + MLC_LTM.RegHCT[ia];
 		SumGroupsF[ia][2] = FH_virgin.RegHCT[ia] + FH_ST.RegHCT[ia] + FH_SW.RegHCT[ia] +
 			FH_LTH.RegHCT[ia] + FH_LTL.RegHCT[ia] + FL_virgin.RegHCT[ia] + FL_ST.RegHCT[ia] + 
-			FL_LTH.RegHCT[ia] + FL_LTL.RegHCT[ia];
+			FL_LTH.RegHCT[ia] + FL_LTL.RegHCT[ia] + FH_ID.RegHCT[ia] + FL_ID.RegHCT[ia];
 		SumGroupsM[ia][3] = MHU_virgin.RegPrEP[ia] + MHC_virgin.RegPrEP[ia] + 
 			MHU_ST.RegPrEP[ia] + MHC_ST.RegPrEP[ia] + MHU_STM.RegPrEP[ia] +
 			MHC_STM.RegPrEP[ia] + MHU_LTH.RegPrEP[ia] + MHC_LTH.RegPrEP[ia] +
 			MHU_LTL.RegPrEP[ia] + MHC_LTL.RegPrEP[ia] + MLU_virgin.RegPrEP[ia] +  
 			MLC_virgin.RegPrEP[ia] + MLU_ST.RegPrEP[ia] + MLC_ST.RegPrEP[ia] + 
 			MLU_STM.RegPrEP[ia] + MLC_STM.RegPrEP[ia] + MLU_LTH.RegPrEP[ia] +
-			MLC_LTH.RegPrEP[ia] +MLU_LTL.RegPrEP[ia] + MLC_LTL.RegPrEP[ia];
+			MLC_LTH.RegPrEP[ia] +MLU_LTL.RegPrEP[ia] + MLC_LTL.RegPrEP[ia] +
+			MHU_ID.RegPrEP[ia] + MHC_ID.RegPrEP[ia] + MHU_LTM.RegPrEP[ia] +
+			MHC_LTM.RegPrEP[ia] + MLU_ID.RegPrEP[ia] + MLC_ID.RegPrEP[ia] +
+			MLU_LTM.RegPrEP[ia] + MLC_LTM.RegPrEP[ia];
 		SumGroupsF[ia][3] = FH_virgin.RegPrEP[ia] + FH_ST.RegPrEP[ia] + FH_SW.RegPrEP[ia] +
 			FH_LTH.RegPrEP[ia] + FH_LTL.RegPrEP[ia] + FL_virgin.RegPrEP[ia] + FL_ST.RegPrEP[ia] + 
-			FL_LTH.RegPrEP[ia] + FL_LTL.RegPrEP[ia];
+			FL_LTH.RegPrEP[ia] + FL_LTL.RegPrEP[ia] + FH_ID.RegPrEP[ia] + FL_ID.RegPrEP[ia];
 		SumGroupsF[ia][4] = FH_virgin.RegVM[ia] + FH_ST.RegVM[ia] + FH_SW.RegVM[ia] +
 			FH_LTH.RegVM[ia] + FH_LTL.RegVM[ia] + FL_virgin.RegVM[ia] + FL_ST.RegVM[ia] + 
-			FL_LTH.RegVM[ia] + FL_LTL.RegVM[ia];
+			FL_LTH.RegVM[ia] + FL_LTL.RegVM[ia] + FH_ID.RegVM[ia] + FL_ID.RegVM[ia];
 		for(is=0; is<5; is++){
 			SumGroupsM[ia][5+is] = MHU_virgin.PosNoHCT[ia][is] + MHC_virgin.PosNoHCT[ia][is] + 
 				MHU_ST.PosNoHCT[ia][is] + MHC_ST.PosNoHCT[ia][is] + MHU_STM.PosNoHCT[ia][is] + 
@@ -7036,70 +7531,91 @@ void UpdatePop()
 				MHU_LTL.PosNoHCT[ia][is] + MHC_LTL.PosNoHCT[ia][is] + MLU_virgin.PosNoHCT[ia][is] +  
 				MLC_virgin.PosNoHCT[ia][is] + MLU_ST.PosNoHCT[ia][is] + MLC_ST.PosNoHCT[ia][is] + 
 				MLU_STM.PosNoHCT[ia][is] + MLC_STM.PosNoHCT[ia][is] + MLU_LTH.PosNoHCT[ia][is] +
-				MLC_LTH.PosNoHCT[ia][is] +MLU_LTL.PosNoHCT[ia][is] + MLC_LTL.PosNoHCT[ia][is];
+				MLC_LTH.PosNoHCT[ia][is] +MLU_LTL.PosNoHCT[ia][is] + MLC_LTL.PosNoHCT[ia][is] +
+				MHU_ID.PosNoHCT[ia][is] + MHC_ID.PosNoHCT[ia][is] + MLU_ID.PosNoHCT[ia][is] + 
+				MLC_ID.PosNoHCT[ia][is] + MHU_LTM.PosNoHCT[ia][is] + MHC_LTM.PosNoHCT[ia][is] +
+				MLU_LTM.PosNoHCT[ia][is] + MLC_LTM.PosNoHCT[ia][is];
 			SumGroupsF[ia][5+is] = FH_virgin.PosNoHCT[ia][is] + FH_ST.PosNoHCT[ia][is] + FH_SW.PosNoHCT[ia][is] +
 				FH_LTH.PosNoHCT[ia][is] + FH_LTL.PosNoHCT[ia][is] + FL_virgin.PosNoHCT[ia][is] + FL_ST.PosNoHCT[ia][is] + 
-				FL_LTH.PosNoHCT[ia][is] + FL_LTL.PosNoHCT[ia][is];
+				FL_LTH.PosNoHCT[ia][is] + FL_LTL.PosNoHCT[ia][is] + FH_ID.PosNoHCT[ia][is] + FL_ID.PosNoHCT[ia][is];
 			SumGroupsM[ia][10+is] = MHU_virgin.PosHCTpreHIV[ia][is] + MHC_virgin.PosHCTpreHIV[ia][is] + 
 				MHU_ST.PosHCTpreHIV[ia][is] + MHC_ST.PosHCTpreHIV[ia][is] + MHU_STM.PosHCTpreHIV[ia][is] + 
 				MHC_STM.PosHCTpreHIV[ia][is] + MHU_LTH.PosHCTpreHIV[ia][is] + MHC_LTH.PosHCTpreHIV[ia][is] +
 				MHU_LTL.PosHCTpreHIV[ia][is] + MHC_LTL.PosHCTpreHIV[ia][is] + MLU_virgin.PosHCTpreHIV[ia][is] +  
 				MLC_virgin.PosHCTpreHIV[ia][is] + MLU_ST.PosHCTpreHIV[ia][is] + MLC_ST.PosHCTpreHIV[ia][is] + 
 				MLU_STM.PosHCTpreHIV[ia][is] + MLC_STM.PosHCTpreHIV[ia][is] + MLU_LTH.PosHCTpreHIV[ia][is] +
-				MLC_LTH.PosHCTpreHIV[ia][is] +MLU_LTL.PosHCTpreHIV[ia][is] + MLC_LTL.PosHCTpreHIV[ia][is];
+				MLC_LTH.PosHCTpreHIV[ia][is] +MLU_LTL.PosHCTpreHIV[ia][is] + MLC_LTL.PosHCTpreHIV[ia][is] +
+				MHU_ID.PosHCTpreHIV[ia][is] + MHC_ID.PosHCTpreHIV[ia][is] + MLU_ID.PosHCTpreHIV[ia][is] +
+				MLC_ID.PosHCTpreHIV[ia][is] + MHU_LTM.PosHCTpreHIV[ia][is] + MHC_LTM.PosHCTpreHIV[ia][is] +
+				MLU_LTM.PosHCTpreHIV[ia][is] + MLC_LTM.PosHCTpreHIV[ia][is];
 			SumGroupsF[ia][10+is] = FH_virgin.PosHCTpreHIV[ia][is] + FH_ST.PosHCTpreHIV[ia][is] + FH_SW.PosHCTpreHIV[ia][is] +
 				FH_LTH.PosHCTpreHIV[ia][is] + FH_LTL.PosHCTpreHIV[ia][is] + FL_virgin.PosHCTpreHIV[ia][is] + FL_ST.PosHCTpreHIV[ia][is] + 
-				FL_LTH.PosHCTpreHIV[ia][is] + FL_LTL.PosHCTpreHIV[ia][is];
+				FL_LTH.PosHCTpreHIV[ia][is] + FL_LTL.PosHCTpreHIV[ia][is] + FH_ID.PosHCTpreHIV[ia][is] + FL_ID.PosHCTpreHIV[ia][is];
 			SumGroupsM[ia][15+is] = MHU_virgin.PosDiagnosedPreART[ia][is] + MHC_virgin.PosDiagnosedPreART[ia][is] + 
 				MHU_ST.PosDiagnosedPreART[ia][is] + MHC_ST.PosDiagnosedPreART[ia][is] + MHU_STM.PosDiagnosedPreART[ia][is] + 
 				MHC_STM.PosDiagnosedPreART[ia][is] + MHU_LTH.PosDiagnosedPreART[ia][is] + MHC_LTH.PosDiagnosedPreART[ia][is] +
 				MHU_LTL.PosDiagnosedPreART[ia][is] + MHC_LTL.PosDiagnosedPreART[ia][is] + MLU_virgin.PosDiagnosedPreART[ia][is] +  
 				MLC_virgin.PosDiagnosedPreART[ia][is] + MLU_ST.PosDiagnosedPreART[ia][is] + MLC_ST.PosDiagnosedPreART[ia][is] + 
 				MLU_STM.PosDiagnosedPreART[ia][is] + MLC_STM.PosDiagnosedPreART[ia][is] + MLU_LTH.PosDiagnosedPreART[ia][is] +
-				MLC_LTH.PosDiagnosedPreART[ia][is] +MLU_LTL.PosDiagnosedPreART[ia][is] + MLC_LTL.PosDiagnosedPreART[ia][is];
+				MLC_LTH.PosDiagnosedPreART[ia][is] +MLU_LTL.PosDiagnosedPreART[ia][is] + MLC_LTL.PosDiagnosedPreART[ia][is] +
+				MHU_ID.PosDiagnosedPreART[ia][is] + MHC_ID.PosDiagnosedPreART[ia][is] + MLU_ID.PosDiagnosedPreART[ia][is] +
+				MLC_ID.PosDiagnosedPreART[ia][is] + MHU_LTM.PosDiagnosedPreART[ia][is] + MHC_LTM.PosDiagnosedPreART[ia][is] +
+				MLU_LTM.PosDiagnosedPreART[ia][is] + MLC_LTM.PosDiagnosedPreART[ia][is];
 			SumGroupsF[ia][15+is] = FH_virgin.PosDiagnosedPreART[ia][is] + FH_ST.PosDiagnosedPreART[ia][is] + FH_SW.PosDiagnosedPreART[ia][is] +
 				FH_LTH.PosDiagnosedPreART[ia][is] + FH_LTL.PosDiagnosedPreART[ia][is] + FL_virgin.PosDiagnosedPreART[ia][is] + FL_ST.PosDiagnosedPreART[ia][is] + 
-				FL_LTH.PosDiagnosedPreART[ia][is] + FL_LTL.PosDiagnosedPreART[ia][is];
+				FL_LTH.PosDiagnosedPreART[ia][is] + FL_LTL.PosDiagnosedPreART[ia][is] + FH_ID.PosDiagnosedPreART[ia][is] + FL_ID.PosDiagnosedPreART[ia][is];
 			SumGroupsM[ia][20+is] = MHU_virgin.OnARTpre500[ia][is] + MHC_virgin.OnARTpre500[ia][is] + 
 				MHU_ST.OnARTpre500[ia][is] + MHC_ST.OnARTpre500[ia][is] + MHU_STM.OnARTpre500[ia][is] + 
 				MHC_STM.OnARTpre500[ia][is] + MHU_LTH.OnARTpre500[ia][is] + MHC_LTH.OnARTpre500[ia][is] +
 				MHU_LTL.OnARTpre500[ia][is] + MHC_LTL.OnARTpre500[ia][is] + MLU_virgin.OnARTpre500[ia][is] +  
 				MLC_virgin.OnARTpre500[ia][is] + MLU_ST.OnARTpre500[ia][is] + MLC_ST.OnARTpre500[ia][is] + 
 				MLU_STM.OnARTpre500[ia][is] + MLC_STM.OnARTpre500[ia][is] + MLU_LTH.OnARTpre500[ia][is] +
-				MLC_LTH.OnARTpre500[ia][is] +MLU_LTL.OnARTpre500[ia][is] + MLC_LTL.OnARTpre500[ia][is];
+				MLC_LTH.OnARTpre500[ia][is] +MLU_LTL.OnARTpre500[ia][is] + MLC_LTL.OnARTpre500[ia][is] +
+				MHU_ID.OnARTpre500[ia][is] + MHC_ID.OnARTpre500[ia][is] + MLU_ID.OnARTpre500[ia][is] +
+				MLC_ID.OnARTpre500[ia][is] + MHU_LTM.OnARTpre500[ia][is] + MHC_LTM.OnARTpre500[ia][is] +
+				MLU_LTM.OnARTpre500[ia][is] + MLC_LTM.OnARTpre500[ia][is];
 			SumGroupsF[ia][20+is] = FH_virgin.OnARTpre500[ia][is] + FH_ST.OnARTpre500[ia][is] + FH_SW.OnARTpre500[ia][is] +
 				FH_LTH.OnARTpre500[ia][is] + FH_LTL.OnARTpre500[ia][is] + FL_virgin.OnARTpre500[ia][is] + FL_ST.OnARTpre500[ia][is] + 
-				FL_LTH.OnARTpre500[ia][is] + FL_LTL.OnARTpre500[ia][is];
+				FL_LTH.OnARTpre500[ia][is] + FL_LTL.OnARTpre500[ia][is] + FH_ID.OnARTpre500[ia][is] + FL_ID.OnARTpre500[ia][is];
 			SumGroupsM[ia][25+is] = MHU_virgin.OnART500[ia][is] + MHC_virgin.OnART500[ia][is] + 
 				MHU_ST.OnART500[ia][is] + MHC_ST.OnART500[ia][is] + MHU_STM.OnART500[ia][is] + 
 				MHC_STM.OnART500[ia][is] + MHU_LTH.OnART500[ia][is] + MHC_LTH.OnART500[ia][is] +
 				MHU_LTL.OnART500[ia][is] + MHC_LTL.OnART500[ia][is] + MLU_virgin.OnART500[ia][is] +  
 				MLC_virgin.OnART500[ia][is] + MLU_ST.OnART500[ia][is] + MLC_ST.OnART500[ia][is] + 
 				MLU_STM.OnART500[ia][is] + MLC_STM.OnART500[ia][is] + MLU_LTH.OnART500[ia][is] +
-				MLC_LTH.OnART500[ia][is] +MLU_LTL.OnART500[ia][is] + MLC_LTL.OnART500[ia][is];
+				MLC_LTH.OnART500[ia][is] +MLU_LTL.OnART500[ia][is] + MLC_LTL.OnART500[ia][is] +
+				MHU_ID.OnART500[ia][is] + MHC_ID.OnART500[ia][is] + MLU_ID.OnART500[ia][is] +
+				MLC_ID.OnART500[ia][is] + MHU_LTM.OnART500[ia][is] + MHC_LTM.OnART500[ia][is] +
+				MLU_LTM.OnART500[ia][is] + MLC_LTM.OnART500[ia][is];
 			SumGroupsF[ia][25+is] = FH_virgin.OnART500[ia][is] + FH_ST.OnART500[ia][is] + FH_SW.OnART500[ia][is] +
 				FH_LTH.OnART500[ia][is] + FH_LTL.OnART500[ia][is] + FL_virgin.OnART500[ia][is] + FL_ST.OnART500[ia][is] + 
-				FL_LTH.OnART500[ia][is] + FL_LTL.OnART500[ia][is];
+				FL_LTH.OnART500[ia][is] + FL_LTL.OnART500[ia][is] + FH_ID.OnART500[ia][is] + FL_ID.OnART500[ia][is];
 			SumGroupsM[ia][30+is] = MHU_virgin.OnART350[ia][is] + MHC_virgin.OnART350[ia][is] + 
 				MHU_ST.OnART350[ia][is] + MHC_ST.OnART350[ia][is] + MHU_STM.OnART350[ia][is] + 
 				MHC_STM.OnART350[ia][is] + MHU_LTH.OnART350[ia][is] + MHC_LTH.OnART350[ia][is] +
 				MHU_LTL.OnART350[ia][is] + MHC_LTL.OnART350[ia][is] + MLU_virgin.OnART350[ia][is] +  
 				MLC_virgin.OnART350[ia][is] + MLU_ST.OnART350[ia][is] + MLC_ST.OnART350[ia][is] + 
 				MLU_STM.OnART350[ia][is] + MLC_STM.OnART350[ia][is] + MLU_LTH.OnART350[ia][is] +
-				MLC_LTH.OnART350[ia][is] +MLU_LTL.OnART350[ia][is] + MLC_LTL.OnART350[ia][is];
+				MLC_LTH.OnART350[ia][is] +MLU_LTL.OnART350[ia][is] + MLC_LTL.OnART350[ia][is] +
+				MHU_ID.OnART350[ia][is] + MHC_ID.OnART350[ia][is] + MLU_ID.OnART350[ia][is] +
+				MLC_ID.OnART350[ia][is] + MHU_LTM.OnART350[ia][is] + MHC_LTM.OnART350[ia][is] +
+				MLU_LTM.OnART350[ia][is] + MLC_LTM.OnART350[ia][is];
 			SumGroupsF[ia][30+is] = FH_virgin.OnART350[ia][is] + FH_ST.OnART350[ia][is] + FH_SW.OnART350[ia][is] +
 				FH_LTH.OnART350[ia][is] + FH_LTL.OnART350[ia][is] + FL_virgin.OnART350[ia][is] + FL_ST.OnART350[ia][is] + 
-				FL_LTH.OnART350[ia][is] + FL_LTL.OnART350[ia][is];
+				FL_LTH.OnART350[ia][is] + FL_LTL.OnART350[ia][is] + FH_ID.OnART350[ia][is] + FL_ID.OnART350[ia][is];
 			SumGroupsM[ia][35+is] = MHU_virgin.OnART200[ia][is] + MHC_virgin.OnART200[ia][is] + 
 				MHU_ST.OnART200[ia][is] + MHC_ST.OnART200[ia][is] + MHU_STM.OnART200[ia][is] + 
 				MHC_STM.OnART200[ia][is] + MHU_LTH.OnART200[ia][is] + MHC_LTH.OnART200[ia][is] +
 				MHU_LTL.OnART200[ia][is] + MHC_LTL.OnART200[ia][is] + MLU_virgin.OnART200[ia][is] +  
 				MLC_virgin.OnART200[ia][is] + MLU_ST.OnART200[ia][is] + MLC_ST.OnART200[ia][is] + 
 				MLU_STM.OnART200[ia][is] + MLC_STM.OnART200[ia][is] + MLU_LTH.OnART200[ia][is] +
-				MLC_LTH.OnART200[ia][is] + MLU_LTL.OnART200[ia][is] + MLC_LTL.OnART200[ia][is];
+				MLC_LTH.OnART200[ia][is] + MLU_LTL.OnART200[ia][is] + MLC_LTL.OnART200[ia][is] +
+				MHU_ID.OnART200[ia][is] + MHC_ID.OnART200[ia][is] + MLU_ID.OnART200[ia][is] +
+				MLC_ID.OnART200[ia][is] + MHU_LTM.OnART200[ia][is] + MHC_LTM.OnART200[ia][is] +
+				MLU_LTM.OnART200[ia][is] + MLC_LTM.OnART200[ia][is];
 			SumGroupsF[ia][35+is] = FH_virgin.OnART200[ia][is] + FH_ST.OnART200[ia][is] + FH_SW.OnART200[ia][is] +
 				FH_LTH.OnART200[ia][is] + FH_LTL.OnART200[ia][is] + FL_virgin.OnART200[ia][is] + FL_ST.OnART200[ia][is] + 
-				FL_LTH.OnART200[ia][is] + FL_LTL.OnART200[ia][is];
+				FL_LTH.OnART200[ia][is] + FL_LTL.OnART200[ia][is] + FH_ID.OnART200[ia][is] + FL_ID.OnART200[ia][is];
 		}
 		for(is=0; is<4; is++){
 			SumGroupsM[ia][40+is] = MHU_virgin.StoppedART[ia][is] + MHC_virgin.StoppedART[ia][is] + 
@@ -7108,10 +7624,13 @@ void UpdatePop()
 				MHU_LTL.StoppedART[ia][is] + MHC_LTL.StoppedART[ia][is] + MLU_virgin.StoppedART[ia][is] +  
 				MLC_virgin.StoppedART[ia][is] + MLU_ST.StoppedART[ia][is] + MLC_ST.StoppedART[ia][is] + 
 				MLU_STM.StoppedART[ia][is] + MLC_STM.StoppedART[ia][is] + MLU_LTH.StoppedART[ia][is] +
-				MLC_LTH.StoppedART[ia][is] + MLU_LTL.StoppedART[ia][is] + MLC_LTL.StoppedART[ia][is];
+				MLC_LTH.StoppedART[ia][is] + MLU_LTL.StoppedART[ia][is] + MLC_LTL.StoppedART[ia][is] +
+				MHU_ID.StoppedART[ia][is] + MHC_ID.StoppedART[ia][is] + MLU_ID.StoppedART[ia][is] +
+				MLC_ID.StoppedART[ia][is] + MHU_LTM.StoppedART[ia][is] + MHC_LTM.StoppedART[ia][is] +
+				MLU_LTM.StoppedART[ia][is] + MLC_LTM.StoppedART[ia][is];
 			SumGroupsF[ia][40+is] = FH_virgin.StoppedART[ia][is] + FH_ST.StoppedART[ia][is] + FH_SW.StoppedART[ia][is] +
 				FH_LTH.StoppedART[ia][is] + FH_LTL.StoppedART[ia][is] + FL_virgin.StoppedART[ia][is] + FL_ST.StoppedART[ia][is] + 
-				FL_LTH.StoppedART[ia][is] + FL_LTL.StoppedART[ia][is];
+				FL_LTH.StoppedART[ia][is] + FL_LTL.StoppedART[ia][is] + FH_ID.StoppedART[ia][is] + FL_ID.StoppedART[ia][is];
 		}
 		TotalPositive[ia+10][0] = TotalPop[ia+10][0] - SumGroupsM[ia][0] - SumGroupsM[ia][1] -
 			SumGroupsM[ia][2] - SumGroupsM[ia][3];
@@ -7159,8 +7678,9 @@ void UpdatePop()
 		//	MHC_ST.Total[ia] - MHU_STM.Total[ia] - MHC_STM.Total[ia] -
 		//	MLU_ST.Total[ia] - MLC_ST.Total[ia] - MLU_STM.Total[ia] - MLC_STM.Total[ia];
 		TotalMarried[ia + 10][0] = MHU_LTH.Total[ia] + MHC_LTH.Total[ia] + MHU_LTL.Total[ia] +
-			MHC_LTL.Total[ia] + MLU_LTH.Total[ia] + MLC_LTH.Total[ia] + MLU_LTL.Total[ia] +
-			MLC_LTL.Total[ia];
+			MHC_LTL.Total[ia] + MHU_LTM.Total[ia] + MHC_LTM.Total[ia] + MLU_LTH.Total[ia] + 
+			MLC_LTH.Total[ia] + MLU_LTL.Total[ia] + MLC_LTL.Total[ia] + MLU_LTM.Total[ia] + 
+			MLC_LTM.Total[ia];
 		//TotalMarried[ia+10][1] = TotalSexuallyExp[ia+10][1] - FH_ST.Total[ia] - 
 		//	FH_SW.Total[ia] - FL_ST.Total[ia];
 		TotalMarried[ia + 10][1] = FH_LTH.Total[ia] + FH_LTL.Total[ia] +
@@ -7238,6 +7758,8 @@ void UpdateFSWdemand()
 
 	MHU_ST.GetFSWcontacts();
 	MHC_ST.GetFSWcontacts();
+	MHU_ID.GetFSWcontacts();
+	MHC_ID.GetFSWcontacts();
 	MHU_LTH.GetFSWcontacts();
 	MHC_LTH.GetFSWcontacts();
 	MHU_LTL.GetFSWcontacts();
@@ -7246,6 +7768,7 @@ void UpdateFSWdemand()
 	TotalFSW = 0.0;
 	for(ia=0; ia<81; ia++){
 		TotalFSW += MHU_ST.FSWcontactsByAge[ia] + MHC_ST.FSWcontactsByAge[ia] +
+			MHU_ID.FSWcontactsByAge[ia] + MHC_ID.FSWcontactsByAge[ia] +
 			MHU_LTH.FSWcontactsByAge[ia] + MHC_LTH.FSWcontactsByAge[ia] +
 			MHU_LTL.FSWcontactsByAge[ia] + MHC_LTL.FSWcontactsByAge[ia];
 		//TotalFSW += (CurrBehavDbn[ia][0][0] + CurrBehavDbn[ia][1][0] * 
@@ -7257,15 +7780,17 @@ void UpdateFSWdemand()
 	if(CurrMonth==0){
 		SumClients = 0.0;
 		for(ia=0; ia<81; ia++){
-			SumClients += (MHU_ST.Total[ia] + MHC_ST.Total[ia])  * (1.0 - exp(-FSWcontactRate[ia])) +
-				(MHU_LTH.Total[ia] + MHC_LTH.Total[ia] + MHU_LTL.Total[ia] + MHC_LTL.Total[ia]) * 
-				(1.0 - exp(-FSWcontactMarried * FSWcontactRate[ia]));
+			SumClients += (MHU_ST.Total[ia] + MHC_ST.Total[ia] + MHU_ID.Total[ia] + MHC_ID.Total[ia])  * 
+				(1.0 - exp(-FSWcontactRate[ia])) + (MHU_LTH.Total[ia] + MHC_LTH.Total[ia] + MHU_LTL.Total[ia] + 
+				MHC_LTL.Total[ia]) * (1.0 - exp(-FSWcontactMarried * FSWcontactRate[ia]));
 		}
 		NegClients = 0.0;
 		for(ia=0; ia<81; ia++){
 			NegClients += (MHU_ST.NegNoHCT[ia] + MHU_ST.NegPastHCT[ia] + MHU_ST.RegPrEP[ia] + 
 				MHU_ST.RegHCT[ia] + MHC_ST.NegNoHCT[ia] + MHC_ST.NegPastHCT[ia] + MHC_ST.RegPrEP[ia] +
-				MHC_ST.RegHCT[ia]) * (1.0 - exp(-FSWcontactRate[ia])) +
+				MHC_ST.RegHCT[ia] + MHU_ID.NegNoHCT[ia] + MHU_ID.NegPastHCT[ia] + MHU_ID.RegPrEP[ia] +
+				MHU_ID.RegHCT[ia] + MHC_ID.NegNoHCT[ia] + MHC_ID.NegPastHCT[ia] + MHC_ID.RegPrEP[ia] +
+				MHC_ID.RegHCT[ia]) * (1.0 - exp(-FSWcontactRate[ia])) +
 				(MHU_LTH.NegNoHCT[ia] + MHU_LTH.NegPastHCT[ia] + MHU_LTH.RegPrEP[ia] + MHU_LTH.RegHCT[ia] +
 				MHC_LTH.NegNoHCT[ia] + MHC_LTH.NegPastHCT[ia] + MHC_LTH.RegPrEP[ia] + MHC_LTH.RegHCT[ia] +
 				MHU_LTL.NegNoHCT[ia] + MHU_LTL.NegPastHCT[ia] + MHU_LTL.RegPrEP[ia] + MHU_LTL.RegHCT[ia] +
@@ -7277,7 +7802,9 @@ void UpdateFSWdemand()
 			for (id = 0; id < 5; id++){
 				ARTclients += ((MHU_ST.OnARTpre500[ia][id] + MHU_ST.OnART500[ia][id] + MHU_ST.OnART350[ia][id] +
 					MHU_ST.OnART200[ia][id] + MHC_ST.OnARTpre500[ia][id] + MHC_ST.OnART500[ia][id] + MHC_ST.OnART350[ia][id] +
-					MHC_ST.OnART200[ia][id]) * (1.0 - exp(-FSWcontactRate[ia])) +
+					MHC_ST.OnART200[ia][id] + MHU_ID.OnARTpre500[ia][id] + MHU_ID.OnART500[ia][id] + MHU_ID.OnART350[ia][id] +
+					MHU_ID.OnART200[ia][id] + MHC_ID.OnARTpre500[ia][id] + MHC_ID.OnART500[ia][id] + MHC_ID.OnART350[ia][id] +
+					MHC_ID.OnART200[ia][id]) * (1.0 - exp(-FSWcontactRate[ia])) +
 					(MHU_LTH.OnARTpre500[ia][id] + MHU_LTH.OnART500[ia][id] + MHU_LTH.OnART350[ia][id] + MHU_LTH.OnART200[ia][id] +
 					MHC_LTH.OnARTpre500[ia][id] + MHC_LTH.OnART500[ia][id] + MHC_LTH.OnART350[ia][id] + MHC_LTH.OnART200[ia][id] +
 					MHU_LTL.OnARTpre500[ia][id] + MHU_LTL.OnART500[ia][id] + MHU_LTL.OnART350[ia][id] + MHU_LTL.OnART200[ia][id] +
@@ -7480,11 +8007,11 @@ void UpdateMixingST()
 	CurrSThigh[0][1] = NewSTpartners[0][1] * (1.0 - CurrSThigh[1][0])/(NewSTpartners[0][1] *
 		(1.0 - CurrSThigh[1][0]) + NewSTpartners[1][1] * (1.0 - CurrSThigh[1][1]));
 
-	// New MSM partnerships
+	// New MSM partnerships (ST)
 
 	Temp = 0.0;
 	for (ia = 0; ia<81; ia++){
-		Temp += PartnerAcqM[ia] * CurrBehavDbnMSM[ia][0]; }
+		Temp += PartnerAcqM[ia] * (CurrBehavDbnMSM[ia][0] + CurrBehavDbnMSM[ia][2] * RRpartnerMarried[0]); }
 	NewMSMpartners[0] = Temp;
 
 	Temp = 0.0;
@@ -7495,6 +8022,19 @@ void UpdateMixingST()
 	CurrSThighMSM[0] = (1.0 - Assortativeness) + Assortativeness * NewMSMpartners[0] /
 		(NewMSMpartners[0] + NewMSMpartners[1]);
 	CurrSThighMSM[1] = Assortativeness * NewMSMpartners[0] /
+		(NewMSMpartners[0] + NewMSMpartners[1]);
+
+	// MSM LT partnerships
+
+	NewMSMpartners[0] = 0.0;
+	NewMSMpartners[1] = 0.0;
+	for (ia = 5; ia < 81; ia++) {
+		NewMSMpartners[0] += CurrBehavDbnMSM[ia][2];
+		NewMSMpartners[1] += CurrBehavDbnMSM[ia][3];
+	}
+	CurrLThighMSM[0] = (1.0 - Assortativeness) + Assortativeness * NewMSMpartners[0] /
+		(NewMSMpartners[0] + NewMSMpartners[1]);
+	CurrLThighMSM[1] = Assortativeness * NewMSMpartners[0] /
 		(NewMSMpartners[0] + NewMSMpartners[1]);
 }
 
@@ -7519,12 +8059,21 @@ void UpdateCondomUse()
 	for(ia=0; ia<81; ia++){
 		ProbCondomST[ia][1] = CondomUse20 * pow(AgeEffectCondom, ia - 10.0);
 		if (ProbCondomST[ia][1] > 0.9999){ ProbCondomST[ia][1] = 0.9999; }
+		if (CurrYear >= ICstart + 1985 - 1) {
+			ProbCondomST[ia][1] = 1.0 / (1.0 + (1.0 - ProbCondomST[ia][1]) / (ProbCondomST[ia][1] * LastCondomMultiplier)); //LJ
+		}
 		if(ia>=5){
 			ProbCondomLT[ia][1] = ProbCondomST[ia][1] * RRcondomMarital;
 			if (ProbCondomLT[ia][1] > 0.9999){ ProbCondomLT[ia][1] = 0.9999; }
+			if (CurrYear >= ICstart + 1985 - 1) {
+				ProbCondomLT[ia][1] = 1.0 / (1.0 + (1.0 - ProbCondomLT[ia][1]) / (ProbCondomLT[ia][1] * LastCondomMultiplier)); //LJ
+			}
 		}
 	}
 	ProbCondomFSW = 1.0 / (1.0 + (1.0 - CondomUse20) / (CondomUse20 * ORcondomFSW));
+	if (CurrYear >= ICstart + 1985 - 1) {
+		ProbCondomFSW = 1.0 / (1.0 + (1.0 - ProbCondomFSW) / (ProbCondomFSW * LastCondomMultiplier)); //LJ
+	}
 
 	// Calculate male rates of condom use
 	for(ia=0; ia<81; ia++){
@@ -7831,23 +8380,25 @@ void UpdateBirths()
 	}
 
 	// Age-specific prior ART exposure
-	if (CurrMonth == 0 && CalibANC_ART == 1){
+	if (CurrMonth == 0 && (CalibANC_ART == 1 || FixedUncertainty == 1)){
 		iy = CurrYear - StartYear;
 		for (ia = 0; ia < 5; ia++){
 			Temp2[0] = 0.0;
 			Temp2[1] = 0.0;
 			for (ic = 0; ic < 5; ic++){
+				// Original code - to get age-specific numbers EVER on ART at conception
+				//Temp2[0] += BirthsByHIVstage[1 + 5 * ia + ic][0] - BirthsByHIVstage[1 + 5 * ia + ic][1];
+				//Temp2[1] += BirthsByHIVstage[1 + 5 * ia + ic][6];
+				// Modified code - to get age-specific numbers CURRENTLY on ART at conception
 				Temp2[0] += BirthsByHIVstage[1 + 5 * ia + ic][0] - BirthsByHIVstage[1 + 5 * ia + ic][1];
-				Temp2[1] += BirthsByHIVstage[1 + 5 * ia + ic][6];
+				Temp2[1] += BirthsByHIVstageAdj[1 + 5 * ia + ic][4];
 			}
 			AnyARTpreConcep[iy][ia] = Temp2[1] / Temp2[0];
 		}
 	}
 	if (FixedUncertainty == 1){
 		if (CurrMonth == 0){ AnyARTpreConcep[iy][5] = 0.0; }
-		for (ia = 0; ia < 36; ia++){
-			AnyARTpreConcep[iy][5] += BirthsByHIVstage[ia][6] / 12.0;
-		}
+		for (ia = 0; ia < 36; ia++){ AnyARTpreConcep[iy][5] += BirthsByHIVstage[ia][6] / 12.0; }
 	}
 }
 
@@ -8111,7 +8662,7 @@ void SetMnthlyPaedParameters()
 void UpdatePrEPandVM()
 {
 	int ia, ig, ii, iy;
-	double PrEPrates[81][7], VMrates[81][3], CABLArates[81][7];
+	double PrEPrates[81][8], VMrates[81][3], CABLArates[81][8];
 	double Temp, Temp2, married, MarriedAdj, PartnerHIV;
 
 	// Calculate RR of oral PrEP initiation, required for estimating PrEP initiation rates
@@ -8123,12 +8674,20 @@ void UpdatePrEPandVM()
 				RR_PrEP_MSM[ia][ii] = PartnerAcqM[ia];
 				if (ii == 1){ RR_PrEP_MSM[ia][ii] *= RRpartnerLow[0]; }
 				RR_CABLA_MSM[ia][ii] = RR_PrEP_MSM[ia][ii];
+				married = CurrBehavDbnMSM[ia][2 + ii] / (CurrBehavDbnMSM[ia][ii] + CurrBehavDbnMSM[ia][2 + ii]);
+				if (ii == 0) { MarriedAdj = RRpartnerMarried[0]; }
+				else { MarriedAdj = 0.0; }
 				PartnerHIV = 1.0 - (MHU_STM.NegNoHCT[ia] + MHU_STM.NegPastHCT[ia] + MHU_STM.RegHCT[ia] +
 					MHU_STM.RegPrEP[ia] + MHC_STM.NegNoHCT[ia] + MHC_STM.NegPastHCT[ia] + MHC_STM.RegHCT[ia] +
 					MHC_STM.RegPrEP[ia] + MLU_STM.NegNoHCT[ia] + MLU_STM.NegPastHCT[ia] + MLU_STM.RegHCT[ia] +
 					MLU_STM.RegPrEP[ia] + MLC_STM.NegNoHCT[ia] + MLC_STM.NegPastHCT[ia] + MLC_STM.RegHCT[ia] +
-					MLC_STM.RegPrEP[ia]) / (MHU_STM.Total[ia] + MHC_STM.Total[ia] + MLU_STM.Total[ia] +
-					MLC_STM.Total[ia]);
+					MLC_STM.RegPrEP[ia] + MHU_LTM.NegNoHCT[ia] + MHU_LTM.NegPastHCT[ia] + MHU_LTM.RegHCT[ia] +
+					MHU_LTM.RegPrEP[ia] + MHC_LTM.NegNoHCT[ia] + MHC_LTM.NegPastHCT[ia] + MHC_LTM.RegHCT[ia] +
+					MHC_LTM.RegPrEP[ia] + MLU_LTM.NegNoHCT[ia] + MLU_LTM.NegPastHCT[ia] + MLU_LTM.RegHCT[ia] +
+					MLU_LTM.RegPrEP[ia] + MLC_LTM.NegNoHCT[ia] + MLC_LTM.NegPastHCT[ia] + MLC_LTM.RegHCT[ia] +
+					MLC_LTM.RegPrEP[ia]) / (MHU_STM.Total[ia] + MHC_STM.Total[ia] + MLU_STM.Total[ia] +
+					MLC_STM.Total[ia] + MHU_LTM.Total[ia] + MHC_LTM.Total[ia] + MLU_LTM.Total[ia] +
+					MLC_LTM.Total[ia]);
 				RR_PrEP_MSM[ia][ii] *= PartnerHIV * PrEPeligMSM[iy];
 				RR_CABLA_MSM[ia][ii] *= PartnerHIV * CABLAeligMSM[iy];
 				// Heterosexual calculations
@@ -8152,8 +8711,8 @@ void UpdatePrEPandVM()
 						RR_PrEP_Het[ia][ii][ig] *= PrEPeligAGYW[iy];
 					}
 					else{ 
-						RR_CABLA_Het[ia][ii][ig] = RR_PrEP_Het[ia][ii][ig] * CABLAeligOther[iy];
-						RR_PrEP_Het[ia][ii][ig] *= PrEPeligOther[iy];
+						RR_CABLA_Het[ia][ii][ig] = RR_PrEP_Het[ia][ii][ig] * CABLAeligOtherG[iy][ig];
+						RR_PrEP_Het[ia][ii][ig] *= PrEPeligOtherG[iy][ig];
 					}
 				}
 			}
@@ -8208,9 +8767,10 @@ void UpdatePrEPandVM()
 		for (ii = 0; ii < 2; ii++){
 			PrEPrates[ia][ii] = CurrPrEPrateFSW * RR_PrEPstartMSM[iy] * RR_PrEP_MSM[ia][ii];
 			PrEPrates[ia][ii + 2] = CurrPrEPrateFSW * RR_PrEPstartF20[iy] * RR_PrEP_Het[ia][ii][0];
-			PrEPrates[ia][4] = CurrPrEPrateFSW;
 			PrEPrates[ia][ii + 5] = CurrPrEPrateFSW * RR_PrEPstartF20[iy] * RR_PrEP_Het[ia][ii][1];
 		}
+		PrEPrates[ia][4] = CurrPrEPrateFSW;
+		PrEPrates[ia][7] = CurrPrEPrateFSW * RR_PrEPstartPWID[iy];
 	}
 	// Pregnancy adjustment in women
 	// Note that we divide by 12 for the purpose of converting the annual fertility rate to a monthly rate,
@@ -8240,9 +8800,10 @@ void UpdatePrEPandVM()
 		for (ii = 0; ii < 2; ii++){
 			CABLArates[ia][ii] = CurrCABLArateFSW * RR_CABLAstartMSM[iy] * RR_CABLA_MSM[ia][ii];
 			CABLArates[ia][ii + 2] = CurrCABLArateFSW * RR_CABLAstartF20[iy] * RR_CABLA_Het[ia][ii][0];
-			CABLArates[ia][4] = CurrCABLArateFSW;
 			CABLArates[ia][ii + 5] = CurrCABLArateFSW * RR_CABLAstartF20[iy] * RR_CABLA_Het[ia][ii][1];
 		}
+		CABLArates[ia][4] = CurrCABLArateFSW;
+		CABLArates[ia][7] = CurrCABLArateFSW * RR_CABLAstartPWID[iy];
 	}
 	// Pregnancy adjustment in women
 	Temp = CABLApregnantHigh / 12.0;
@@ -8311,6 +8872,16 @@ void UpdatePrEPandVM()
 				JoinCABLA[ia][4 + ii] = (1.0 - exp(-Temp)) * CABLArates[ia][4 + ii] / Temp;
 			}
 		}
+		// PWID probabilities
+		Temp = CABLArates[ia][7];
+		if (Temp == 0.0) {
+			JoinPrEP[ia][7] = 1.0 - exp(-PrEPrates[ia][7]);
+			JoinCABLA[ia][7] = 0.0;
+		}
+		else {
+			JoinPrEP[ia][7] = (1.0 - exp(-PrEPrates[ia][7])) * exp(-Temp);
+			JoinCABLA[ia][7] = (1.0 - exp(-Temp));
+		}
 	}
 }
 
@@ -8374,6 +8945,14 @@ void UpdateTestingRates()
 	for(ia=0; ia<81; ia++){
 		Temp = BaseHCT * pow((ia + 10.0)/25.0, aParamM - 1.0) * exp((15.0 - ia)/bParamM) / 12.0;
 		TempF = BaseHCT * pow((ia + 10.0) / 25.0, aParamF - 1.0) * exp((15.0 - ia) / bParamF) / 12.0;
+
+		//LJ
+		if (CurrYear >= (ICstart+1985) && ia >= 5 && ia < 10) {  
+			Temp *= AdolHCTMultiplier;
+			TempF *= AdolHCTMultiplier;
+		}
+
+
 		TestingRateM[ia] = Temp * VCTmale;
 		TestingRateNPF[ia] = TempF;
 		if(ia>=5 && ia<40){
@@ -8640,38 +9219,58 @@ void UpdateTransmProbs()
 	MHC_ST.UpdateProbTransmM();
 	MHU_STM.UpdateProbTransmM();
 	MHC_STM.UpdateProbTransmM();
+	MHU_ID.UpdateProbTransmM();
+	MHC_ID.UpdateProbTransmM();
 	MHU_LTH.UpdateProbTransmM();
 	MHC_LTH.UpdateProbTransmM();
 	MHU_LTL.UpdateProbTransmM();
 	MHC_LTL.UpdateProbTransmM();
+	MHU_LTM.UpdateProbTransmM();
+	MHC_LTM.UpdateProbTransmM();
 	MLU_ST.UpdateProbTransmM();
 	MLC_ST.UpdateProbTransmM();
 	MLU_STM.UpdateProbTransmM();
 	MLC_STM.UpdateProbTransmM();
+	MLU_ID.UpdateProbTransmM();
+	MLC_ID.UpdateProbTransmM();
 	MLU_LTH.UpdateProbTransmM();
 	MLC_LTH.UpdateProbTransmM();
 	MLU_LTL.UpdateProbTransmM();
 	MLC_LTL.UpdateProbTransmM();
+	MLU_LTM.UpdateProbTransmM();
+	MLC_LTM.UpdateProbTransmM();
 
 	// Update female transmission probs
 	FH_ST.UpdateProbTransmF();
+	FH_ID.UpdateProbTransmF();
 	FH_LTH.UpdateProbTransmF();
 	FH_LTL.UpdateProbTransmF();
 	FL_ST.UpdateProbTransmF();
+	FL_ID.UpdateProbTransmF();
 	FL_LTH.UpdateProbTransmF();
 	FL_LTL.UpdateProbTransmF();
 	FH_SW.UpdateProbTransmSW();
 
+	// Update PWID transmission probs
+	MHU_ID.UpdateProbTransmNS();
+	MHC_ID.UpdateProbTransmNS();
+	MLU_ID.UpdateProbTransmNS();
+	MLC_ID.UpdateProbTransmNS();
+	FH_ID.UpdateProbTransmNS();
+	FL_ID.UpdateProbTransmNS();
+
 	//Calculate TransmMtoF_ST
 	for(ia=0; ia<81; ia++){
 		Temp1 = MHU_ST.Total[ia] + MHC_ST.Total[ia] + (MHU_STM.Total[ia] + MHC_STM.Total[ia]) *
-			(1.0 - MSMpartnersM[ia]) + (MHU_LTH.Total[ia] + MHC_LTH.Total[ia] +
-			MHU_LTL.Total[ia] + MHC_LTL.Total[ia]) * RRpartnerMarried[0];
+			(1.0 - MSMpartnersM[ia]) + MHU_ID.Total[ia] + MHC_ID.Total[ia] + (MHU_LTH.Total[ia] + 
+				MHC_LTH.Total[ia] + MHU_LTL.Total[ia] + MHC_LTL.Total[ia]) * RRpartnerMarried[0];
 		for(ib=0; ib<8; ib++){
 			if(Temp1>0.0 && (PrEPorVM==1 || ib==0 || ib==4)){
 				Temp2[ib] = MHU_ST.Total[ia] * MHU_ST.ProbTransm[ia][ib] + MHC_ST.Total[ia] *
 					MHC_ST.ProbTransm[ia][ib] + (MHU_STM.Total[ia] * MHU_STM.ProbTransm[ia][ib] + 
 					MHC_STM.Total[ia] * MHC_STM.ProbTransm[ia][ib]) * (1.0 - MSMpartnersM[ia]) +
+					MHU_ID.Total[ia] * MHU_ID.ProbTransm[ia][ib] + MHC_ID.Total[ia] *
+					MHC_ID.ProbTransm[ia][ib] +
 					(MHU_LTH.Total[ia] * MHU_LTH.ProbTransm[ia][ib] + MHC_LTH.Total[ia] *
 					MHC_LTH.ProbTransm[ia][ib] + MHU_LTL.Total[ia] * MHU_LTL.ProbTransm[ia][ib] +
 					MHC_LTL.Total[ia] * MHC_LTL.ProbTransm[ia][ib]) * RRpartnerMarried[0];
@@ -8681,12 +9280,14 @@ void UpdateTransmProbs()
 				TransmMtoF_ST[ia][ib] = 0.0;}
 		}
 		Temp1 = MLU_ST.Total[ia] + MLC_ST.Total[ia] + (MLU_STM.Total[ia] + MLC_STM.Total[ia]) *
-			(1.0 - MSMpartnersM[ia]);
+			(1.0 - MSMpartnersM[ia]) + MLU_ID.Total[ia] + MLC_ID.Total[ia];
 		for(ib=0; ib<8; ib++){
 			if(Temp1>0.0 && (PrEPorVM==1 || ib==0 || ib==4)){
 				Temp2[ib] = MLU_ST.Total[ia] * MLU_ST.ProbTransm[ia][ib] + MLC_ST.Total[ia] *
 					MLC_ST.ProbTransm[ia][ib] + (MLU_STM.Total[ia] * MLU_STM.ProbTransm[ia][ib] + 
-					MLC_STM.Total[ia] * MLC_STM.ProbTransm[ia][ib]) * (1.0 - MSMpartnersM[ia]);
+					MLC_STM.Total[ia] * MLC_STM.ProbTransm[ia][ib]) * (1.0 - MSMpartnersM[ia]) +
+					MLU_ID.Total[ia] * MLU_ID.ProbTransm[ia][ib] + MLC_ID.Total[ia] *
+					MLC_ID.ProbTransm[ia][ib];
 				TransmMtoF_ST[ia][ib+8] = Temp2[ib]/Temp1;
 			}
 			else{
@@ -8696,11 +9297,12 @@ void UpdateTransmProbs()
 
 	// Calculate TransmMtoM_ST
 	for (ia = 0; ia < 81; ia++){
-		Temp1 = MHU_STM.Total[ia] + MHC_STM.Total[ia];
+		Temp1 = MHU_STM.Total[ia] + MHC_STM.Total[ia] + MHU_LTM.Total[ia] + MHC_LTM.Total[ia];
 		for (ib = 0; ib<6; ib++){
 			if (Temp1>0.0 && (PrEPorVM == 1 || ib == 0 || ib == 3)){
 				Temp2[ib] = MHU_STM.Total[ia] * MHU_STM.ProbTransm[ia][8+ib] +
-					MHC_STM.Total[ia] * MHC_STM.ProbTransm[ia][8+ib];
+					MHC_STM.Total[ia] * MHC_STM.ProbTransm[ia][8+ib] + MHU_LTM.Total[ia] * 
+					MHU_LTM.ProbTransm[ia][8 + ib] + MHC_LTM.Total[ia] * MHC_LTM.ProbTransm[ia][8 + ib];
 				TransmMtoM_ST[ia][ib] = Temp2[ib] / Temp1;
 			}
 			else{
@@ -8722,16 +9324,28 @@ void UpdateTransmProbs()
 
 	// Calculate TransmFtoM_ST
 	for(ia=0; ia<81; ia++){
-		Temp1 = FH_ST.Total[ia] + (FH_LTH.Total[ia] + FH_LTL.Total[ia]) * RRpartnerMarried[1];
+		Temp1 = FH_ST.Total[ia] + (FH_LTH.Total[ia] + FH_LTL.Total[ia]) * RRpartnerMarried[1] +
+			FH_ID.Total[ia];
 		for(ib=0; ib<12; ib++){
 			if(Temp1>0.0 && (PrEPorVM==1 || ib==0 || ib==3 || ib==6 || ib==9)){
 				Temp2[ib] = FH_ST.Total[ia] * FH_ST.ProbTransm[ia][ib] + (FH_LTH.Total[ia] *
 					FH_LTH.ProbTransm[ia][ib]+ FH_LTL.Total[ia] * FH_LTL.ProbTransm[ia][ib]) * 
-					RRpartnerMarried[1];
+					RRpartnerMarried[1] + FH_ID.Total[ia] * FH_ID.ProbTransm[ia][ib];
 				TransmFtoM_ST[ia][ib] = Temp2[ib]/Temp1;
 			}
 			else{
 				TransmFtoM_ST[ia][ib] = 0.0;}
+		}
+		Temp1 = FL_ST.Total[ia] + FL_ID.Total[ia];
+		for (ib = 0; ib < 12; ib++) {
+			if (Temp1 > 0.0 && (PrEPorVM == 1 || ib == 0 || ib == 3 || ib == 6 || ib == 9)) {
+				Temp2[ib] = FL_ST.Total[ia] * FL_ST.ProbTransm[ia][ib] + FL_ID.Total[ia] * 
+					FL_ID.ProbTransm[ia][ib];
+				TransmFtoM_ST[ia][ib+12] = Temp2[ib] / Temp1;
+			}
+			else {
+				TransmFtoM_ST[ia][ib+12] = 0.0;
+			}
 		}
 	}
 
@@ -8775,13 +9389,37 @@ void UpdateTransmProbs()
 		}
 	}
 
+	// Calculate TransmMtoM_LT
+	for (ia = 5; ia < 81; ia++) {
+		Temp1 = MHU_LTM.Total[ia] + MHC_LTM.Total[ia];
+		for (ib = 0; ib < 3; ib++) {
+			if (Temp1 > 0.0 && (PrEPorVM == 1 || ib == 0)) {
+				Temp3 = MHU_LTM.Total[ia] * MHU_LTM.ProbTransm[ia][14 + ib] + MHC_LTM.Total[ia] *
+					MHC_LTM.ProbTransm[ia][14 + ib];
+				TransmMtoM_LT[ia][ib] = Temp3 / Temp1;
+			}
+			else { TransmMtoM_LT[ia][ib] = 0.0; }
+		}
+		Temp1 = MLU_LTM.Total[ia] + MLC_LTM.Total[ia];
+		for (ib = 0; ib < 3; ib++) {
+			if (Temp1 > 0.0 && (PrEPorVM == 1 || ib == 0)) {
+				Temp3 = MLU_LTM.Total[ia] * MLU_LTM.ProbTransm[ia][14 + ib] + MLC_LTM.Total[ia] *
+					MLC_LTM.ProbTransm[ia][14 + ib];
+				TransmMtoM_LT[ia][ib + 3] = Temp3 / Temp1;
+			}
+			else { TransmMtoM_LT[ia][ib + 3] = 0.0; }
+		}
+	}
+
 	// Calculate TransmMtoFSW
 	for (ib = 0; ib < 4; ib++){
 		Temp1 = 0.0;
 		if (PrEPorVM == 1 || ib == 0){
 			for (ia = 0; ia < 81; ia++){
 				Temp1 += MHU_ST.FSWcontactsByAge[ia] * MHU_ST.ProbTransm[ia][8 + ib] +
-					MHC_ST.FSWcontactsByAge[ia] * MHC_ST.ProbTransm[ia][8 + ib] + MHU_LTH.FSWcontactsByAge[ia] *
+					MHC_ST.FSWcontactsByAge[ia] * MHC_ST.ProbTransm[ia][8 + ib] + 
+					MHU_ID.FSWcontactsByAge[ia] * MHU_ID.ProbTransm[ia][8 + ib] +
+					MHC_ID.FSWcontactsByAge[ia] * MHC_ID.ProbTransm[ia][8 + ib] + MHU_LTH.FSWcontactsByAge[ia] *
 					MHU_LTH.ProbTransm[ia][8 + ib] + MHC_LTH.FSWcontactsByAge[ia] * MHC_LTH.ProbTransm[ia][8 + ib] +
 					MHU_LTL.FSWcontactsByAge[ia] * MHU_LTL.ProbTransm[ia][8 + ib] + MHC_LTL.FSWcontactsByAge[ia] *
 					MHC_LTL.ProbTransm[ia][8 + ib];
@@ -8790,88 +9428,137 @@ void UpdateTransmProbs()
 		TransmMtoFSW[ib] = Temp1 / (TotalFSW * ClientsPA);
 	}
 
+	// Calculate TransmNS
+	for (ib = 0; ib < 6; ib++) { Temp2[ib] = 0.0; }
+	for (ia = 0; ia < 81; ia++) {
+		Temp2[0] += MHU_ID.Total[ia];
+		Temp2[1] += MHC_ID.Total[ia];
+		Temp2[2] += MLU_ID.Total[ia];
+		Temp2[3] += MLC_ID.Total[ia];
+		Temp2[4] += FH_ID.Total[ia];
+		Temp2[5] += FL_ID.Total[ia];
+	}
+	for (ib = 0; ib < 4; ib++) {
+		TransmNS[ib] = (Temp2[0] * MHU_ID.ProbTransmPWID[ib] + Temp2[1] * MHC_ID.ProbTransmPWID[ib] +
+			Temp2[2] * MLU_ID.ProbTransmPWID[ib] + Temp2[3] * MLC_ID.ProbTransmPWID[ib] +
+			Temp2[4] * FH_ID.ProbTransmPWID[ib] + Temp2[5] * FL_ID.ProbTransmPWID[ib]) / (Temp2[0] +
+				Temp2[1] + Temp2[2] + Temp2[3] + Temp2[4] + Temp2[5]);
+	}
+
 	// Calculate male probabilities of HIV acquisition
 	MHU_ST.UpdateProbAcqM(0);
 	MHC_ST.UpdateProbAcqM(0);
 	MHU_STM.UpdateProbAcqM(0);
 	MHC_STM.UpdateProbAcqM(0);
+	MHU_ID.UpdateProbAcqM(0);
+	MHC_ID.UpdateProbAcqM(0);
 	MHU_LTH.UpdateProbAcqM(0);
 	MHC_LTH.UpdateProbAcqM(0);
 	MHU_LTL.UpdateProbAcqM(0);
 	MHC_LTL.UpdateProbAcqM(0);
+	MHU_LTM.UpdateProbAcqM(0);
+	MHC_LTM.UpdateProbAcqM(0);
 	MLU_ST.UpdateProbAcqM(0);
 	MLC_ST.UpdateProbAcqM(0);
 	MLU_STM.UpdateProbAcqM(0);
 	MLC_STM.UpdateProbAcqM(0);
+	MLU_ID.UpdateProbAcqM(0);
+	MLC_ID.UpdateProbAcqM(0);
 	MLU_LTH.UpdateProbAcqM(0);
 	MLC_LTH.UpdateProbAcqM(0);
 	MLU_LTL.UpdateProbAcqM(0);
 	MLC_LTL.UpdateProbAcqM(0);
+	MLU_LTM.UpdateProbAcqM(0);
+	MLC_LTM.UpdateProbAcqM(0);
 
 	if(PrEPorVM==1){
 		MHU_ST.UpdateProbAcqM(1);
 		MHC_ST.UpdateProbAcqM(1);
 		MHU_STM.UpdateProbAcqM(1);
 		MHC_STM.UpdateProbAcqM(1);
+		MHU_ID.UpdateProbAcqM(1);
+		MHC_ID.UpdateProbAcqM(1);
 		MHU_LTH.UpdateProbAcqM(1);
 		MHC_LTH.UpdateProbAcqM(1);
 		MHU_LTL.UpdateProbAcqM(1);
 		MHC_LTL.UpdateProbAcqM(1);
+		MHU_LTM.UpdateProbAcqM(1);
+		MHC_LTM.UpdateProbAcqM(1);
 		MLU_ST.UpdateProbAcqM(1);
 		MLC_ST.UpdateProbAcqM(1);
 		MLU_STM.UpdateProbAcqM(1);
 		MLC_STM.UpdateProbAcqM(1);
+		MLU_ID.UpdateProbAcqM(1);
+		MLC_ID.UpdateProbAcqM(1);
 		MLU_LTH.UpdateProbAcqM(1);
 		MLC_LTH.UpdateProbAcqM(1);
 		MLU_LTL.UpdateProbAcqM(1);
 		MLC_LTL.UpdateProbAcqM(1);
+		MLU_LTM.UpdateProbAcqM(1);
+		MLC_LTM.UpdateProbAcqM(1);
 		MHU_ST.UpdateProbAcqM(2);
 		MHC_ST.UpdateProbAcqM(2);
 		MHU_STM.UpdateProbAcqM(2);
 		MHC_STM.UpdateProbAcqM(2);
+		MHU_ID.UpdateProbAcqM(2);
+		MHC_ID.UpdateProbAcqM(2);
 		MHU_LTH.UpdateProbAcqM(2);
 		MHC_LTH.UpdateProbAcqM(2);
 		MHU_LTL.UpdateProbAcqM(2);
 		MHC_LTL.UpdateProbAcqM(2);
+		MHU_LTM.UpdateProbAcqM(2);
+		MHC_LTM.UpdateProbAcqM(2);
 		MLU_ST.UpdateProbAcqM(2);
 		MLC_ST.UpdateProbAcqM(2);
 		MLU_STM.UpdateProbAcqM(2);
 		MLC_STM.UpdateProbAcqM(2);
+		MLU_ID.UpdateProbAcqM(2);
+		MLC_ID.UpdateProbAcqM(2);
 		MLU_LTH.UpdateProbAcqM(2);
 		MLC_LTH.UpdateProbAcqM(2);
 		MLU_LTL.UpdateProbAcqM(2);
 		MLC_LTL.UpdateProbAcqM(2);
+		MLU_LTM.UpdateProbAcqM(2);
+		MLC_LTM.UpdateProbAcqM(2);
 	}
 
 	// Calculate female probabilities of HIV acquisition
 	FH_ST.UpdateProbAcqF(0);
 	FH_SW.UpdateProbAcqF(0);
+	FH_ID.UpdateProbAcqF(0);
 	FH_LTH.UpdateProbAcqF(0);
 	FH_LTL.UpdateProbAcqF(0);
 	FL_ST.UpdateProbAcqF(0);
+	FL_ID.UpdateProbAcqF(0);
 	FL_LTH.UpdateProbAcqF(0);
 	FL_LTL.UpdateProbAcqF(0);
 
 	if(PrEPorVM==1){
 		FH_ST.UpdateProbAcqF(1);
 		FH_SW.UpdateProbAcqF(1);
+		FH_ID.UpdateProbAcqF(1);
 		FH_LTH.UpdateProbAcqF(1);
 		FH_LTL.UpdateProbAcqF(1);
 		FL_ST.UpdateProbAcqF(1);
+		FL_ID.UpdateProbAcqF(1);
 		FL_LTH.UpdateProbAcqF(1);
 		FL_LTL.UpdateProbAcqF(1);
 		FH_ST.UpdateProbAcqF(2);
 		FH_SW.UpdateProbAcqF(2);
+		FH_ID.UpdateProbAcqF(2);
 		FH_LTH.UpdateProbAcqF(2);
 		FH_LTL.UpdateProbAcqF(2);
 		FL_ST.UpdateProbAcqF(2);
+		FL_ID.UpdateProbAcqF(2);
 		FL_LTH.UpdateProbAcqF(2);
 		FL_LTL.UpdateProbAcqF(2);
 		FH_ST.UpdateProbAcqF(3);
 		FH_SW.UpdateProbAcqF(3);
+		FH_ID.UpdateProbAcqF(3);
 		FH_LTH.UpdateProbAcqF(3);
 		FH_LTL.UpdateProbAcqF(3);
 		FL_ST.UpdateProbAcqF(3);
+		FL_ID.UpdateProbAcqF(3);
 		FL_LTH.UpdateProbAcqF(3);
 		FL_LTL.UpdateProbAcqF(3);
 	}
@@ -8886,31 +9573,39 @@ void CalcHIVtransitions()
 	MHC_ST.GetEndProfile();
 	MHU_STM.GetEndProfile();
 	MHC_STM.GetEndProfile();
+	MHU_ID.GetEndProfile();
+	MHC_ID.GetEndProfile();
 	MHU_LTH.GetEndProfile();
 	MHC_LTH.GetEndProfile();
 	MHU_LTL.GetEndProfile();
 	MHC_LTL.GetEndProfile();
+	MHU_LTM.GetEndProfile();
+	MHC_LTM.GetEndProfile();
 	MLU_virgin.GetEndProfile();
 	MLC_virgin.GetEndProfile();
 	MLU_ST.GetEndProfile();
 	MLC_ST.GetEndProfile();
 	MLU_STM.GetEndProfile();
 	MLC_STM.GetEndProfile();
+	MLU_ID.GetEndProfile();
+	MLC_ID.GetEndProfile();
 	MLU_LTH.GetEndProfile();
 	MLC_LTH.GetEndProfile();
 	MLU_LTL.GetEndProfile();
 	MLC_LTL.GetEndProfile();
+	MLU_LTM.GetEndProfile();
+	MLC_LTM.GetEndProfile();
 
 	// Female transitions
 	FH_virgin.GetEndProfile();
 	FH_ST.GetEndProfile();
 	FH_SW.GetEndProfile();
-	//if(CurrYear>=2015){FH_SW.GetEndProfileFSW();}
-	//else{FH_SW.GetEndProfile();}
+	FH_ID.GetEndProfile();
 	FH_LTH.GetEndProfile();
 	FH_LTL.GetEndProfile();
 	FL_virgin.GetEndProfile();
 	FL_ST.GetEndProfile();
+	FL_ID.GetEndProfile();
 	FL_LTH.GetEndProfile();
 	FL_LTL.GetEndProfile();
 }
@@ -8924,29 +9619,39 @@ void CopyEndToStart()
 	MHC_ST.UpdateStartProfile();
 	MHU_STM.UpdateStartProfile();
 	MHC_STM.UpdateStartProfile();
+	MHU_ID.UpdateStartProfile();
+	MHC_ID.UpdateStartProfile();
 	MHU_LTH.UpdateStartProfile();
 	MHC_LTH.UpdateStartProfile();
 	MHU_LTL.UpdateStartProfile();
 	MHC_LTL.UpdateStartProfile();
+	MHU_LTM.UpdateStartProfile();
+	MHC_LTM.UpdateStartProfile();
 	MLU_virgin.UpdateStartProfile();
 	MLC_virgin.UpdateStartProfile();
 	MLU_ST.UpdateStartProfile();
 	MLC_ST.UpdateStartProfile();
 	MLU_STM.UpdateStartProfile();
 	MLC_STM.UpdateStartProfile();
+	MLU_ID.UpdateStartProfile();
+	MLC_ID.UpdateStartProfile();
 	MLU_LTH.UpdateStartProfile();
 	MLC_LTH.UpdateStartProfile();
 	MLU_LTL.UpdateStartProfile();
 	MLC_LTL.UpdateStartProfile();
+	MLU_LTM.UpdateStartProfile();
+	MLC_LTM.UpdateStartProfile();
 
 	// Female transitions
 	FH_virgin.UpdateStartProfile();
 	FH_ST.UpdateStartProfile();
 	FH_SW.UpdateStartProfile();
+	FH_ID.UpdateStartProfile();
 	FH_LTH.UpdateStartProfile();
 	FH_LTL.UpdateStartProfile();
 	FL_virgin.UpdateStartProfile();
 	FL_ST.UpdateStartProfile();
+	FL_ID.UpdateStartProfile();
 	FL_LTH.UpdateStartProfile();
 	FL_LTL.UpdateStartProfile();
 
@@ -9015,14 +9720,14 @@ void SetARTinitiation()
 	else{
 		CurrARTinitiation[0] = RateARTstartF[CurrYear - StartYear] * RR_ARTstartM;
 		CurrARTinitiation[1] = RateARTstartF[CurrYear - StartYear];
-		if (CurrYear == 2019 && CurrMonth >= 9){ // Previously this also applied in 2020-21
+		if (CurrYear == 2019 && CurrMonth >= 9){ 
 			CurrARTinitiation[0] *= (1.0 - COVIDimpactARTstart);
 			CurrARTinitiation[1] *= (1.0 - COVIDimpactARTstart);
 		}
-		/*if (CurrYear == 2021){
-			CurrARTinitiation[0] *= (1.0 - 0.5 * COVIDimpactARTstart);
-			CurrARTinitiation[1] *= (1.0 - 0.5 * COVIDimpactARTstart);
-		}*/
+		if ((CurrYear == 2024 && CurrMonth >= 6) || CurrYear > 2024) {
+			CurrARTinitiation[0] *= (1.0 - USAIDexitImpact);
+			CurrARTinitiation[1] *= (1.0 - USAIDexitImpact);
+		}
 	}
 	AsymStart[0] = CurrARTinitiation[0] * RR_ARTstart1stMo;
 	AsymStart[1] = CurrARTinitiation[1] * RR_ARTstart1stMo;
@@ -9267,6 +9972,13 @@ void SetAdultARTinitiation2()
 			else{ Cparameter[ig] *= 12.0 * (1.0 - COVIDimpactARTstart) / Temp; }
 		}
 	}
+	if (CurrYear == 2024) {
+		Temp = 6.0 + 6.0 * (1.0 - USAIDexitImpact);
+		for (ig = 0; ig < 2; ig++) {
+			if (CurrMonth < 6) { Cparameter[ig] *= 12.0 / Temp; }
+			else { Cparameter[ig] *= 12.0 * (1.0 - USAIDexitImpact) / Temp; }
+		}
+	}
 
 	// Calculate quadratic terms for rate of ART initiation in previously-diagnosed.
 	RelARTinitiation[0] = 0.0;
@@ -9416,21 +10128,26 @@ void SetAdultARTinitiation2()
 	}
 }
 
-void CalcCOVIDimpactART()
+void CalcARTdisruptionImpact(int Type)
 {
 	int ia, is, ig;
+	double Impact;
+
+	if (Type == 1) { Impact = COVIDimpactARTstart; }
+	else if (Type == 2) { Impact = USAIDexitImpact; }
+	else { Impact = 0.0; }
 
 	for (ia = 0; ia < 81; ia++){
 		for (is = 0; is < 15; is++){
 			for (ig = 0; ig < 2; ig++){
-				HCTtoART_SE[ia][is][ig] *= (1.0 - COVIDimpactARTstart);
+				HCTtoART_SE[ia][is][ig] *= (1.0 - Impact);
 			}
 		}
 	}
 	for (ia = 0; ia < 20; ia++){
 		for (is = 0; is < 5; is++){
 			for (ig = 0; ig < 2; ig++){
-				HCTtoART_V[ia][is][ig] *= (1.0 - COVIDimpactARTstart);
+				HCTtoART_V[ia][is][ig] *= (1.0 - Impact);
 			}
 		}
 	}
@@ -9781,16 +10498,18 @@ void UpdateMonthlyCum()
 		for (ia = 0; ia < 81; ia++){
 			AIDSdeathsOnART += MHU_virgin.AIDSdeathsTreated[ia] + MHC_virgin.AIDSdeathsTreated[ia] +
 				MHU_ST.AIDSdeathsTreated[ia] + MHC_ST.AIDSdeathsTreated[ia] + MHU_STM.AIDSdeathsTreated[ia] + 
-				MHC_STM.AIDSdeathsTreated[ia] + MHU_LTH.AIDSdeathsTreated[ia] +
-				MHC_LTH.AIDSdeathsTreated[ia] + MHU_LTL.AIDSdeathsTreated[ia] + MHC_LTL.AIDSdeathsTreated[ia] +
+				MHC_STM.AIDSdeathsTreated[ia] + MHU_ID.AIDSdeathsTreated[ia] + MHC_ID.AIDSdeathsTreated[ia] + 
+				MHU_LTH.AIDSdeathsTreated[ia] + MHC_LTH.AIDSdeathsTreated[ia] + MHU_LTL.AIDSdeathsTreated[ia] +
+				MHC_LTL.AIDSdeathsTreated[ia] + MHU_LTM.AIDSdeathsTreated[ia] + MHC_LTM.AIDSdeathsTreated[ia] +
 				MLU_virgin.AIDSdeathsTreated[ia] + MLC_virgin.AIDSdeathsTreated[ia] + MLU_ST.AIDSdeathsTreated[ia] +
-				MLC_ST.AIDSdeathsTreated[ia] + MLU_STM.AIDSdeathsTreated[ia] +
-				MLC_STM.AIDSdeathsTreated[ia] + MLU_LTH.AIDSdeathsTreated[ia] + MLC_LTH.AIDSdeathsTreated[ia] +
-				MLU_LTL.AIDSdeathsTreated[ia] + MLC_LTL.AIDSdeathsTreated[ia];
+				MLC_ST.AIDSdeathsTreated[ia] + MLU_STM.AIDSdeathsTreated[ia] + MLC_STM.AIDSdeathsTreated[ia] +
+				MLU_ID.AIDSdeathsTreated[ia] + MLC_ID.AIDSdeathsTreated[ia] + MLU_LTH.AIDSdeathsTreated[ia] +
+				MLC_LTH.AIDSdeathsTreated[ia] + MLU_LTL.AIDSdeathsTreated[ia] + MLC_LTL.AIDSdeathsTreated[ia] +
+				MLU_LTM.AIDSdeathsTreated[ia] + MLC_LTM.AIDSdeathsTreated[ia];
 			AIDSdeathsOnART += FH_virgin.AIDSdeathsTreated[ia] + FH_ST.AIDSdeathsTreated[ia] +
-				FH_SW.AIDSdeathsTreated[ia] + FH_LTH.AIDSdeathsTreated[ia] + FH_LTL.AIDSdeathsTreated[ia] +
-				FL_virgin.AIDSdeathsTreated[ia] + FL_ST.AIDSdeathsTreated[ia] + FL_LTH.AIDSdeathsTreated[ia] +
-				FL_LTL.AIDSdeathsTreated[ia];
+				FH_SW.AIDSdeathsTreated[ia] + FH_ID.AIDSdeathsTreated[ia] + FH_LTH.AIDSdeathsTreated[ia] + 
+				FH_LTL.AIDSdeathsTreated[ia] + FL_virgin.AIDSdeathsTreated[ia] + FL_ST.AIDSdeathsTreated[ia] +
+				FL_ID.AIDSdeathsTreated[ia] + FL_LTH.AIDSdeathsTreated[ia] + FL_LTL.AIDSdeathsTreated[ia];
 		}
 		NewPerinatal += MaleChild.PosChildAtBirthNoPMTCT_E[0] +
 			MaleChild.PosChildAtBirthPMTCT_E[0] + MaleChild.DiagChildAtBirthNoPMTCT_E[0] + 
@@ -9814,16 +10533,18 @@ void UpdateMonthlyCum()
 	for (is = 0; is < 4; is++){
 		AdultsNewARTbyCD4[is][0] += MHU_virgin.NewARTbyCD4[is] + MHC_virgin.NewARTbyCD4[is] +
 			MHU_ST.NewARTbyCD4[is] + MHC_ST.NewARTbyCD4[is] + MHU_STM.NewARTbyCD4[is] + 
-			MHC_STM.NewARTbyCD4[is] + MHU_LTH.NewARTbyCD4[is] +
-			MHC_LTH.NewARTbyCD4[is] + MHU_LTL.NewARTbyCD4[is] + MHC_LTL.NewARTbyCD4[is] +
+			MHC_STM.NewARTbyCD4[is] + MHU_ID.NewARTbyCD4[is] + MHC_ID.NewARTbyCD4[is] + 
+			MHU_LTH.NewARTbyCD4[is] + MHC_LTH.NewARTbyCD4[is] + MHU_LTL.NewARTbyCD4[is] +
+			MHC_LTL.NewARTbyCD4[is] + MHU_LTM.NewARTbyCD4[is] + MHC_LTM.NewARTbyCD4[is] +
 			MLU_virgin.NewARTbyCD4[is] + MLC_virgin.NewARTbyCD4[is] +
 			MLU_ST.NewARTbyCD4[is] + MLC_ST.NewARTbyCD4[is] + MLU_STM.NewARTbyCD4[is] + 
-			MLC_STM.NewARTbyCD4[is] + MLU_LTH.NewARTbyCD4[is] +
-			MLC_LTH.NewARTbyCD4[is] + MLU_LTL.NewARTbyCD4[is] + MLC_LTL.NewARTbyCD4[is];
+			MLC_STM.NewARTbyCD4[is] + MLU_ID.NewARTbyCD4[is] + MLC_ID.NewARTbyCD4[is] + 
+			MLU_LTH.NewARTbyCD4[is] + MLC_LTH.NewARTbyCD4[is] + MLU_LTL.NewARTbyCD4[is] +
+			MLC_LTL.NewARTbyCD4[is] + MLU_LTM.NewARTbyCD4[is] + MLC_LTM.NewARTbyCD4[is];
 		AdultsNewARTbyCD4[is][1] += FH_virgin.NewARTbyCD4[is] + FH_ST.NewARTbyCD4[is] +
-			FH_SW.NewARTbyCD4[is] + FH_LTH.NewARTbyCD4[is] + FH_LTL.NewARTbyCD4[is] +
-			FL_virgin.NewARTbyCD4[is] + FL_ST.NewARTbyCD4[is] + FL_LTH.NewARTbyCD4[is] +
-			FL_LTL.NewARTbyCD4[is];
+			FH_SW.NewARTbyCD4[is] + FH_ID.NewARTbyCD4[is] + FH_LTH.NewARTbyCD4[is] + 
+			FH_LTL.NewARTbyCD4[is] + FL_virgin.NewARTbyCD4[is] + FL_ST.NewARTbyCD4[is] +
+			FL_ID.NewARTbyCD4[is] + FL_LTH.NewARTbyCD4[is] + FL_LTL.NewARTbyCD4[is];
 	}
 	for (im = 0; im < 132; im++){
 		ChildNewARTlate += MaleChild.StartingARTlate[im] + FemChild.StartingARTlate[im];
@@ -9848,6 +10569,8 @@ void UpdateMonthlyCum()
 			}
 		}
 	}
+
+	TempNeg15_19 = 0.0; TempPos15_19 = 0.0; //LJ
 	if (FixedUncertainty == 1 || CalibHCTprev == 1 || CalibHCTprevP == 1 || CalibHCTtotP == 1 || CalibHCTageSex == 1){
 		for (ig = 0; ig < 2; ig++){
 			TempNeg[ig] = 0.0;
@@ -9915,14 +10638,32 @@ void UpdateMonthlyCum()
 				TestingRateSE[ia][1][0];
 			TempNeg[1] += SumGroupsF[ia][0] * TestingRateSE[ia][0][1] + SumGroupsF[ia][1] *
 				TestingRateSE[ia][1][1];
+
+			if (ia >= 5 && ia <= 9) {//LJ	
+				TempNeg15_19 += SumGroupsM[ia][0] * TestingRateSE[ia][0][0] + SumGroupsM[ia][1] *
+					TestingRateSE[ia][1][0] +
+					SumGroupsF[ia][0] * TestingRateSE[ia][0][1] + SumGroupsF[ia][1] *
+					TestingRateSE[ia][1][1];
+			}	
+
 			if (PrEPorVM == 1){
 				TempNeg[0] += (SumGroupsM[ia][2] + SumGroupsM[ia][3]) * FreqHCTinPrEP[0] / 12.0;
 				TempNeg[1] += (SumGroupsF[ia][2] + SumGroupsF[ia][3]) *
 					FreqHCTinPrEP[1] / 12.0 + SumGroupsF[ia][4] * FreqHCTinVM / 12.0;
+
+				if (ia >= 5 && ia <= 9) {//LJ	
+					TempNeg15_19 += (SumGroupsM[ia][2] + SumGroupsM[ia][3]) * FreqHCTinPrEP[0] / 12.0 +
+						(SumGroupsF[ia][2] + SumGroupsF[ia][3]) * FreqHCTinPrEP[1] / 12.0 + SumGroupsF[ia][4] * FreqHCTinVM / 12.0;
+				}				
+				NewlyTestedNeg_PrEP[0] += (SumGroupsM[ia][2] + SumGroupsM[ia][3]) * FreqHCTinPrEP[0] / 12.0; //LJ PrEP HCT
+				NewlyTestedNeg_PrEP[1] += (SumGroupsF[ia][2] + SumGroupsF[ia][3]) *	FreqHCTinPrEP[1] / 12.0 + SumGroupsF[ia][4] * FreqHCTinVM / 12.0; //LJ PrEP HCT
 			}
 			for (is = 2; is < 12; is++){
 				TempPos[0] += SumGroupsM[ia][is + 3] * TestingRateSE[ia][is][0];
 				TempPos[1] += SumGroupsF[ia][is + 3] * TestingRateSE[ia][is][1];
+				if (ia >= 5 && ia <= 9) {//LJ	
+					TempPos15_19 += SumGroupsM[ia][is + 3] * TestingRateSE[ia][is][0] +	SumGroupsF[ia][is + 3] * TestingRateSE[ia][is][1];					
+				}
 			}
 			for (is = 2; is < 12; is++){
 				Temp1stPos[0] += SumGroupsM[ia][is + 3] * TestingRateSE[ia][is][0];
@@ -9933,12 +10674,26 @@ void UpdateMonthlyCum()
 					SelfTestingRate[ia][is - 8][0] * RetestPosST[0] * SelfTestConfirm);
 				TempPos[1] += SumGroupsF[ia][is] * (TestingRateSE[ia][0][1] * RetestPos +
 					SelfTestingRate[ia][is - 8][1] * RetestPosST[0] * SelfTestConfirm);
+
+				if (ia >= 5 && ia <= 9) {//LJ	
+					TempPos15_19 += SumGroupsM[ia][is] * (TestingRateM[ia] * RetestPos +
+						SelfTestingRate[ia][is - 8][0] * RetestPosST[0] * SelfTestConfirm)
+						+ SumGroupsF[ia][is] * (TestingRateSE[ia][0][1] * RetestPos +
+							SelfTestingRate[ia][is - 8][1] * RetestPosST[0] * SelfTestConfirm);
+				}
 			}
 			for (is = 20; is < 44; is++){
 				TempPos[0] += SumGroupsM[ia][is] * (TestingRateM[ia] * RetestART +
 					SelfTestingRate[ia][8][0] * RetestPosST[1] * SelfTestConfirm);
 				TempPos[1] += SumGroupsF[ia][is] * (TestingRateSE[ia][0][1] * RetestART +
 					SelfTestingRate[ia][8][1] * RetestPosST[1] * SelfTestConfirm);
+
+				if (ia >= 5 && ia <= 9) {//LJ	
+					TempPos15_19 += SumGroupsM[ia][is] * (TestingRateM[ia] * RetestART +
+						SelfTestingRate[ia][8][0] * RetestPosST[1] * SelfTestConfirm)
+						+ SumGroupsF[ia][is] * (TestingRateSE[ia][0][1] * RetestART +
+							SelfTestingRate[ia][8][1] * RetestPosST[1] * SelfTestConfirm);				
+				}
 			}
 			FalseNeg[0] += SumGroupsM[ia][5] * TestingRateSE[ia][2][0] +
 				SumGroupsM[ia][10] * TestingRateSE[ia][7][0];
@@ -9950,10 +10705,23 @@ void UpdateMonthlyCum()
 					SumGroupsVM[ia][1] * (TestingRateSE[ia][1][0] - TestingRateNegV[ia][0]);
 				TempNeg[1] = TempNeg[1] - SumGroupsVF[ia][0] * (TestingRateSE[ia][0][1] - TestingRateNegV[ia][1]) -
 					SumGroupsVF[ia][1] * (TestingRateSE[ia][1][1] - TestingRateNegV[ia][1]);
+				
+				if (ia >= 5 && ia <= 9) {//LJ	
+					TempNeg15_19 = TempNeg15_19 - SumGroupsVM[ia][0] * (TestingRateSE[ia][0][0] - TestingRateNegV[ia][0]) -
+						SumGroupsVM[ia][1] * (TestingRateSE[ia][1][0] - TestingRateNegV[ia][0]);
+					TempNeg15_19 = TempNeg15_19 - SumGroupsVF[ia][0] * (TestingRateSE[ia][0][1] - TestingRateNegV[ia][1]) -
+						SumGroupsVF[ia][1] * (TestingRateSE[ia][1][1] - TestingRateNegV[ia][1]);
+				}
+
 				// Subtract tests in HIV-pos virgins
 				for (is = 2; is < 12; is++){
 					TempPos[0] = TempPos[0] - SumGroupsVM[ia][is + 3] * TestingRateSE[ia][is][0];
 					TempPos[1] = TempPos[1] - SumGroupsVF[ia][is + 3] * TestingRateSE[ia][is][1];
+					if (ia >= 5 && ia <= 9) {//LJ	
+						TempPos15_19 = TempPos15_19 - 
+							SumGroupsVM[ia][is + 3] * TestingRateSE[ia][is][0] - 
+							SumGroupsVF[ia][is + 3] * TestingRateSE[ia][is][1];					
+					}
 				}
 				for (is = 2; is < 12; is++){
 					Temp1stPos[0] = Temp1stPos[0] - SumGroupsVM[ia][is + 3] * TestingRateSE[ia][is][0];
@@ -9964,12 +10732,22 @@ void UpdateMonthlyCum()
 						SelfTestingRate[ia][is - 8][0] * RetestPosST[0] * SelfTestConfirm);
 					TempPos[1] = TempPos[1] - SumGroupsVF[ia][is] * (TestingRateSE[ia][0][1] * RetestPos +
 						SelfTestingRate[ia][is - 8][1] * RetestPosST[0] * SelfTestConfirm);
+					if (ia >= 5 && ia <= 9) {//LJ	
+						TempPos15_19 = TempPos15_19 -
+							SumGroupsVM[ia][is] * (TestingRateM[ia] * RetestPos + SelfTestingRate[ia][is - 8][0] * RetestPosST[0] * SelfTestConfirm) -
+							SumGroupsVF[ia][is] * (TestingRateSE[ia][0][1] * RetestPos + SelfTestingRate[ia][is - 8][1] * RetestPosST[0] * SelfTestConfirm);
+					}
 				}
 				for (is = 20; is < 44; is++){
 					TempPos[0] = TempPos[0] - SumGroupsVM[ia][is] * (TestingRateM[ia] * RetestART +
 						SelfTestingRate[ia][8][0] * RetestPosST[1] * SelfTestConfirm);
 					TempPos[1] = TempPos[1] - SumGroupsVF[ia][is] * (TestingRateSE[ia][0][1] * RetestART +
 						SelfTestingRate[ia][8][1] * RetestPosST[1] * SelfTestConfirm);
+					if (ia >= 5 && ia <= 9) {//LJ	
+						TempPos15_19 = TempPos15_19 -
+							SumGroupsVM[ia][is] * (TestingRateM[ia] * RetestART +	SelfTestingRate[ia][8][0] * RetestPosST[1] * SelfTestConfirm) -
+							SumGroupsVF[ia][is] * (TestingRateSE[ia][0][1] * RetestART + SelfTestingRate[ia][8][1] * RetestPosST[1] * SelfTestConfirm);
+					}
 				}
 				// Add back tests in HIV-pos virgins
 				for (is = 0; is < 5; is++){
@@ -9977,6 +10755,10 @@ void UpdateMonthlyCum()
 						TestingRateV[ia][is][0];
 					TempPos[1] += (SumGroupsVF[ia][is + 5] + SumGroupsVF[ia][is + 10]) *
 						TestingRateV[ia][is][1];
+					if (ia >= 5 && ia <= 9) {//LJ	
+						TempPos15_19 += (SumGroupsVM[ia][is + 5] + SumGroupsVM[ia][is + 10]) *	TestingRateV[ia][is][0] +
+							(SumGroupsVF[ia][is + 5] + SumGroupsVF[ia][is + 10]) *	TestingRateV[ia][is][1];
+					}
 				}
 				for (is = 0; is < 5; is++){
 					Temp1stPos[0] += (SumGroupsVM[ia][is + 5] + SumGroupsVM[ia][is + 10]) *
@@ -9992,6 +10774,9 @@ void UpdateMonthlyCum()
 					else{
 						TempPos[0] += SumGroupsVM[ia][is] * TestingRateNegV[ia][0] * RetestPos;
 						TempPos[1] += SumGroupsVF[ia][is] * TestingRateNegV[ia][1] * RetestPos;
+						if (ia >= 5 && ia <= 9) {//LJ	
+							TempPos15_19 += SumGroupsVM[ia][is] * TestingRateNegV[ia][0] * RetestPos +	SumGroupsVF[ia][is] * TestingRateNegV[ia][1] * RetestPos;
+						}
 					}
 				}
 				for (is = 20; is < 44; is++){
@@ -9999,6 +10784,11 @@ void UpdateMonthlyCum()
 						RetestART / RetestPos;
 					TempPos[1] += SumGroupsVF[ia][is] * TestingRateNegV[ia][1] * RetestPosP *
 						RetestART / RetestPos;
+					if (ia >= 5 && ia <= 9) {//LJ	
+						TempPos15_19 += SumGroupsVM[ia][is] * TestingRateNegV[ia][0] * RetestPosP *	RetestART / RetestPos +
+							SumGroupsVF[ia][is] * TestingRateNegV[ia][1] * RetestPosP *	RetestART / RetestPos;
+
+					}
 				}
 			}
 			if (ia == 4){
@@ -10035,6 +10825,9 @@ void UpdateMonthlyCum()
 				Temp4 = TempPos[1];
 			}
 			if (ia == 80){
+				NewlyTestedNeg15_19 += TempNeg15_19; //LJ
+				NewlyTestedPos15_19 += TempPos15_19; //LJ
+
 				for (ig = 0; ig < 2; ig++){
 					NewlyTestedPos[ig] += TempPos[ig] - FalseNeg[ig];
 					NewlyTestedNeg[ig] += TempNeg[ig] + FalseNeg[ig];
@@ -10085,12 +10878,15 @@ void UpdateMonthlyCum()
 	// Age-specific flows
 	for (ia = 0; ia < 81; ia++){
 		NewHIVbyAgeSex[ia][0] += MHU_ST.NewHIV[ia] + MHC_ST.NewHIV[ia] + MHU_STM.NewHIV[ia] + 
-			MHC_STM.NewHIV[ia] + MHU_LTH.NewHIV[ia] + MHC_LTH.NewHIV[ia] +
-			MHU_LTL.NewHIV[ia] + MHC_LTL.NewHIV[ia] + MLU_ST.NewHIV[ia] +
-			MLC_ST.NewHIV[ia] + MLU_STM.NewHIV[ia] + MLC_STM.NewHIV[ia] + MLU_LTH.NewHIV[ia] +
-			MLC_LTH.NewHIV[ia] + MLU_LTL.NewHIV[ia] + MLC_LTL.NewHIV[ia];
-		NewHIVbyAgeSex[ia][1] += FH_ST.NewHIV[ia] + FH_SW.NewHIV[ia] + FH_LTH.NewHIV[ia] +
-			FH_LTL.NewHIV[ia] + FL_ST.NewHIV[ia] + FL_LTH.NewHIV[ia] + FL_LTL.NewHIV[ia];
+			MHC_STM.NewHIV[ia] + MHU_ID.NewHIV[ia] + MHC_ID.NewHIV[ia] + MHU_LTH.NewHIV[ia] + 
+			MHC_LTH.NewHIV[ia] + MHU_LTL.NewHIV[ia] + MHC_LTL.NewHIV[ia] + MHU_LTM.NewHIV[ia] +
+			MHC_LTM.NewHIV[ia] + MLU_ST.NewHIV[ia] + MLC_ST.NewHIV[ia] + MLU_ID.NewHIV[ia] +	
+			MLC_ID.NewHIV[ia] + MLU_STM.NewHIV[ia] + MLC_STM.NewHIV[ia] + MLU_LTH.NewHIV[ia] +
+			MLC_LTH.NewHIV[ia] + MLU_LTL.NewHIV[ia] + MLC_LTL.NewHIV[ia] + MLU_LTM.NewHIV[ia] + 
+			MLC_LTM.NewHIV[ia];
+		NewHIVbyAgeSex[ia][1] += FH_ST.NewHIV[ia] + FH_SW.NewHIV[ia] + FH_ID.NewHIV[ia] + 
+			FH_LTH.NewHIV[ia] + FH_LTL.NewHIV[ia] + FL_ST.NewHIV[ia] + FL_ID.NewHIV[ia] +
+			FL_LTH.NewHIV[ia] + FL_LTL.NewHIV[ia];
 	}
 	Temp1 = 0.0;
 	Temp2 = 0.0;
@@ -10118,6 +10914,10 @@ void UpdateMonthlyCum()
 			MLU_LTH.AIDSdeathsUntreated[ia + 5] + MLC_LTH.AIDSdeathsUntreated[ia + 5];
 		AIDSdeathsMarriedM[ia][1][1] += MLU_LTL.AIDSdeathsTreated[ia + 5] + MLC_LTL.AIDSdeathsTreated[ia + 5] +
 			MLU_LTL.AIDSdeathsUntreated[ia + 5] + MLC_LTL.AIDSdeathsUntreated[ia + 5];
+		AIDSdeathsMarriedMSM[ia] += MHU_LTM.AIDSdeathsTreated[ia + 5] + MHC_LTM.AIDSdeathsTreated[ia + 5] +
+			MHU_LTM.AIDSdeathsUntreated[ia + 5] + MHC_LTM.AIDSdeathsUntreated[ia + 5] +
+			MLU_LTM.AIDSdeathsTreated[ia + 5] + MLC_LTM.AIDSdeathsTreated[ia + 5] +
+			MLU_LTM.AIDSdeathsUntreated[ia + 5] + MLC_LTM.AIDSdeathsUntreated[ia + 5];
 		AIDSdeathsMarriedF[ia][0][0] += FH_LTH.AIDSdeathsTreated[ia + 5] + FH_LTH.AIDSdeathsUntreated[ia + 5];
 		AIDSdeathsMarriedF[ia][0][1] += FH_LTL.AIDSdeathsTreated[ia + 5] + FH_LTL.AIDSdeathsUntreated[ia + 5];
 		AIDSdeathsMarriedF[ia][1][0] += FL_LTH.AIDSdeathsTreated[ia + 5] + FL_LTH.AIDSdeathsUntreated[ia + 5];
@@ -10130,15 +10930,19 @@ void UpdateMonthlyCum()
 			MHC_virgin.AIDSdeathsTreated[ia] + MHC_virgin.AIDSdeathsUntreated[ia] +
 			MHU_ST.AIDSdeathsTreated[ia] + MHU_ST.AIDSdeathsUntreated[ia] + MHC_ST.AIDSdeathsTreated[ia] +
 			MHC_ST.AIDSdeathsUntreated[ia] + MHU_STM.AIDSdeathsTreated[ia] + MHU_STM.AIDSdeathsUntreated[ia] + 
-			MHC_STM.AIDSdeathsTreated[ia] + MHC_STM.AIDSdeathsUntreated[ia] + MLU_virgin.AIDSdeathsTreated[ia] +
-			MLU_virgin.AIDSdeathsUntreated[ia] + MLC_virgin.AIDSdeathsTreated[ia] + MLC_virgin.AIDSdeathsUntreated[ia] +
-			MLU_ST.AIDSdeathsTreated[ia] + MLU_ST.AIDSdeathsUntreated[ia] + MLC_ST.AIDSdeathsTreated[ia] +
-			MLC_ST.AIDSdeathsUntreated[ia] + MLU_STM.AIDSdeathsTreated[ia] + MLU_STM.AIDSdeathsUntreated[ia] +
-			MLC_STM.AIDSdeathsTreated[ia] + MLC_STM.AIDSdeathsUntreated[ia];
+			MHC_STM.AIDSdeathsTreated[ia] + MHC_STM.AIDSdeathsUntreated[ia] + MHU_ID.AIDSdeathsTreated[ia] + 
+			MHU_ID.AIDSdeathsUntreated[ia] + MHC_ID.AIDSdeathsTreated[ia] + MHC_ID.AIDSdeathsUntreated[ia] +
+			MLU_virgin.AIDSdeathsTreated[ia] + MLU_virgin.AIDSdeathsUntreated[ia] + MLC_virgin.AIDSdeathsTreated[ia] +
+			MLC_virgin.AIDSdeathsUntreated[ia] + MLU_ST.AIDSdeathsTreated[ia] + MLU_ST.AIDSdeathsUntreated[ia] +
+			MLC_ST.AIDSdeathsTreated[ia] + MLC_ST.AIDSdeathsUntreated[ia] + MLU_STM.AIDSdeathsTreated[ia] +
+			MLU_STM.AIDSdeathsUntreated[ia] + MLC_STM.AIDSdeathsTreated[ia] + MLC_STM.AIDSdeathsUntreated[ia] +
+			MLU_ID.AIDSdeathsTreated[ia] + MLU_ID.AIDSdeathsUntreated[ia] + MLC_ID.AIDSdeathsTreated[ia] +
+			MLC_ID.AIDSdeathsUntreated[ia];
 		AIDSdeathsByAge[ia][1] += FH_virgin.AIDSdeathsTreated[ia] + FH_virgin.AIDSdeathsUntreated[ia] +
 			FH_ST.AIDSdeathsTreated[ia] + FH_ST.AIDSdeathsUntreated[ia] + FH_SW.AIDSdeathsTreated[ia] +
-			FH_SW.AIDSdeathsUntreated[ia] + FL_virgin.AIDSdeathsTreated[ia] + FL_virgin.AIDSdeathsUntreated[ia] +
-			FL_ST.AIDSdeathsTreated[ia] + FL_ST.AIDSdeathsUntreated[ia];
+			FH_SW.AIDSdeathsUntreated[ia] + FH_ID.AIDSdeathsTreated[ia] + FH_ID.AIDSdeathsUntreated[ia] + 
+			FL_virgin.AIDSdeathsTreated[ia] + FL_virgin.AIDSdeathsUntreated[ia] + FL_ST.AIDSdeathsTreated[ia] +
+			FL_ST.AIDSdeathsUntreated[ia] + FL_ID.AIDSdeathsTreated[ia] + FL_ID.AIDSdeathsUntreated[ia];
 	}
 	if (FixedUncertainty == 1){
 		for (ia = 0; ia < 36; ia++){
@@ -10147,7 +10951,7 @@ void UpdateMonthlyCum()
 	if (CurrMonth == 11){
 		for (ia = 0; ia < 76; ia++){
 			AIDSdeathsByAge[ia + 5][0] += AIDSdeathsMarriedM[ia][0][0] + AIDSdeathsMarriedM[ia][0][1] +
-				AIDSdeathsMarriedM[ia][1][0] + AIDSdeathsMarriedM[ia][1][1];
+				AIDSdeathsMarriedM[ia][1][0] + AIDSdeathsMarriedM[ia][1][1] + AIDSdeathsMarriedMSM[ia];
 			AIDSdeathsByAge[ia + 5][1] += AIDSdeathsMarriedF[ia][0][0] + AIDSdeathsMarriedF[ia][0][1] +
 				AIDSdeathsMarriedF[ia][1][0] + AIDSdeathsMarriedF[ia][1][1];
 		}
@@ -10192,15 +10996,19 @@ void UpdateMonthlyCum()
 		for (ia = 0; ia < 4; ia++){
 			AdultsNewARTbyAge[ia][0] += MHU_virgin.NewARTbyAge[ia] + MHC_virgin.NewARTbyAge[ia] +
 				MHU_ST.NewARTbyAge[ia] + MHC_ST.NewARTbyAge[ia] + MHU_STM.NewARTbyAge[ia] + 
-				MHC_STM.NewARTbyAge[ia] + MHU_LTH.NewARTbyAge[ia] + MHC_LTH.NewARTbyAge[ia] +
-				MHU_LTL.NewARTbyAge[ia] + MHC_LTL.NewARTbyAge[ia] + MLU_virgin.NewARTbyAge[ia] +
+				MHC_STM.NewARTbyAge[ia] + MHU_ID.NewARTbyAge[ia] + MHC_ID.NewARTbyAge[ia] + 
+				MHU_LTH.NewARTbyAge[ia] + MHC_LTH.NewARTbyAge[ia] + MHU_LTL.NewARTbyAge[ia] +
+				MHC_LTL.NewARTbyAge[ia] + MLU_virgin.NewARTbyAge[ia] + MHC_LTM.NewARTbyAge[ia] + 
+				MHU_LTM.NewARTbyAge[ia] +
 				MLC_virgin.NewARTbyAge[ia] + MLU_ST.NewARTbyAge[ia] + MLC_ST.NewARTbyAge[ia] +
-				MLU_STM.NewARTbyAge[ia] + MLC_STM.NewARTbyAge[ia] + MLU_LTH.NewARTbyAge[ia] +
-				MLC_LTH.NewARTbyAge[ia] + MLU_LTL.NewARTbyAge[ia] + MLC_LTL.NewARTbyAge[ia];
+				MLU_STM.NewARTbyAge[ia] + MLC_STM.NewARTbyAge[ia] + MLU_ID.NewARTbyAge[ia] + 
+				MLC_ID.NewARTbyAge[ia] + MLU_LTH.NewARTbyAge[ia] + MLC_LTH.NewARTbyAge[ia] +
+				MLU_LTL.NewARTbyAge[ia] + MLC_LTL.NewARTbyAge[ia] + MLU_LTM.NewARTbyAge[ia] + 
+				MLC_LTM.NewARTbyAge[ia];
 			AdultsNewARTbyAge[ia][1] += FH_virgin.NewARTbyAge[ia] + FH_ST.NewARTbyAge[ia] +
-				FH_SW.NewARTbyAge[ia] + FH_LTH.NewARTbyAge[ia] + FH_LTL.NewARTbyAge[ia] +
-				FL_virgin.NewARTbyAge[ia] + FL_ST.NewARTbyAge[ia] + FL_LTH.NewARTbyAge[ia] +
-				FL_LTL.NewARTbyAge[ia];
+				FH_SW.NewARTbyAge[ia] + FH_ID.NewARTbyAge[ia] + FH_LTH.NewARTbyAge[ia] + 
+				FH_LTL.NewARTbyAge[ia] + FL_virgin.NewARTbyAge[ia] + FL_ST.NewARTbyAge[ia] +
+				FL_ID.NewARTbyAge[ia] + FL_LTH.NewARTbyAge[ia] + FL_LTL.NewARTbyAge[ia];
 		}
 		for (ia = 0; ia < 11; ia++){
 			for (ii = 0; ii < 12; ii++){
@@ -10320,7 +11128,8 @@ void OneMonth(int im)
 	if(PrEPorVM==1){
 		UpdatePrEPandVM();}
 	//UpdateTestingRates();
-	if (CurrYear == 2019 && CurrMonth == 9 && InputARTinitiationRates == 1){ CalcCOVIDimpactART(); }
+	if (CurrYear == 2019 && CurrMonth == 9 && InputARTinitiationRates == 1){ CalcARTdisruptionImpact(1); }
+	if (CurrYear == 2024 && CurrMonth == 6 && InputARTinitiationRates == 1) { CalcARTdisruptionImpact(2); }
 	SetARTinitiation();
 	if (im==0){
 		UpdateTestingToART();
@@ -10572,6 +11381,7 @@ void UpdateTBlatent(AdultTB* Latent, AdultTB* SmPos, AdultTB* SmNeg, AdultTB* Sm
 				temp3 += Latent->HIVstage[ia][is] * HHscreeningProbNeg * PropnHHcontactTPT[iy];
 				temp3b = Latent->HIVstage[ia][is] * HHscreeningProbNeg * PropnHHcontactTPT[iy];
 			}
+			else { temp3b = 0.0; }
 			Latent->HIVstage_E[ia][is] = Latent->HIVstage_E[ia][is] - temp - temp3;
 			SmPos->HIVstage_E[ia][is] += temp * temp2 * (1.0 - PropnNewTBrifRes[iy]);
 			SmNeg->HIVstage_E[ia][is] += temp * (1.0 - temp2) * (1.0 - PropnNewTBrifRes[iy]);
@@ -10945,6 +11755,7 @@ void UpdateTBrecovST(AdultTB* PostRxST, AdultTB* PostRxLT, AdultTB* Active1, Adu
 				temp4 += PostRxST->HIVstage[ia][is] * HHscreeningProbNeg * PropnHHcontactTPT[iy];
 				temp4b = PostRxST->HIVstage[ia][is] * HHscreeningProbNeg * PropnHHcontactTPT[iy];
 			}
+			else { temp4b = 0.0; }
 			PostRxST->HIVstage_E[ia][is] = PostRxST->HIVstage_E[ia][is] - (temp1 + temp2 + temp3 + temp4);
 			PostRxLT->HIVstage_E[ia][is] += temp1;
 			Active1->HIVstage_E[ia][is] += temp2 * (1.0 - PropnNewTBrifRes[iy]);
@@ -11018,6 +11829,7 @@ void UpdateTBrecovLT(AdultTB* PostRxLT, AdultTB* Active1, AdultTB* Active2, Adul
 				temp4 += PostRxLT->HIVstage[ia][is] * HHscreeningProbNeg * PropnHHcontactTPT[iy];
 				temp4b = PostRxLT->HIVstage[ia][is] * HHscreeningProbNeg * PropnHHcontactTPT[iy];
 			}
+			else { temp4b = 0.0; }
 			PostRxLT->HIVstage_E[ia][is] = PostRxLT->HIVstage_E[ia][is] - (temp2 + temp3 + temp4);
 			Active1->HIVstage_E[ia][is] += temp2 * (1.0 - PropnNewTBrifRes[iy]);
 			Active2->HIVstage_E[ia][is] += temp3 * (1.0 - PropnNewTBrifRes[iy]);
@@ -11343,6 +12155,7 @@ void ResetMonthlyCum()
 		NewHIVinClientsNotFromSW = 0.0;
 		NewHIVinFSW.out[CurrSim-1][CurrYear-1985] = 0.0;
 		HIVincMSM.out[CurrSim - 1][CurrYear - 1985] = 0.0;
+		NewHIVinPWID.out[CurrSim - 1][CurrYear - 1985] = 0.0;
 		NewElig350[0] = 0.0;
 		NewElig350[1] = 0.0;
 		NewElig500[0] = 0.0;
@@ -11358,6 +12171,12 @@ void ResetMonthlyCum()
 		NewlyTestedFalseNeg[2] = 0.0;
 		NewlyTested1stPos[0] = 0.0;
 		NewlyTested1stPos[1] = 0.0;
+
+		NewlyTestedNeg15_19 = 0.0;//LJ
+		NewlyTestedPos15_19 = 0.0;//LJ
+		NewlyTestedNeg_PrEP[0] = 0.0;//LJ
+		NewlyTestedNeg_PrEP[1] = 0.0;//LJ
+
 		for (ia = 0; ia < 3; ia++){
 			for (ii = 0; ii < 2; ii++){ 
 				NewlyTestedPaed[ia][ii] = 0.0; 
@@ -11380,9 +12199,16 @@ void ResetMonthlyCum()
 		NewPrEP_AGYW = 0.0;
 		NewPrEP_FSW = 0.0;
 		NewPrEP_MSM = 0.0;
+		NewPrEP_PWID = 0.0;
 		NewCABLA_AGYW = 0.0;
 		NewCABLA_FSW = 0.0;
 		NewCABLA_MSM = 0.0;
+		NewCABLA_PWID = 0.0;
+
+		NewCABLA_nonMSM = 0.0; //LJ
+		NewCABLA_nonFSW = 0.0; //LJ
+		NewPrEP_nonMSM = 0.0; //LJ
+		NewPrEP_nonFSW = 0.0; //LJ
 		NewDiagnosesPregnancy.out[CurrSim - 1][CurrYear - StartYear] = 0.0; 
 	}
 
@@ -11414,6 +12240,7 @@ void ResetMonthlyCum()
 				AIDSdeathsMarriedF[ia][ii][ij] = 0.0;
 			}
 		}
+		AIDSdeathsMarriedMSM[ia] = 0.0;
 	}
 	if(CalibAIDStrend==1 || CalibAIDSage==1){
 		for(ia=0; ia<10; ia++){
@@ -11633,11 +12460,15 @@ void ResultsAtStartOfYr()
 			TotalPop_S[1][1]);
 
 		// HIV prevalence 15-24
+		Total15_19.out[CurrSim - 1][iy] = 0.0; //LJ
 		Temp1 = 0.0;
 		Temp2 = 0.0;
 		for (ia = 15; ia < 25; ia++){
 			Temp1 += TotalPop_S[ia][0] - TotalPositive_S[ia][0];
 			Temp2 += TotalPop_S[ia][1] - TotalPositive_S[ia][1];
+			if (ia < 20) {  //LJ
+				Total15_19.out[CurrSim - 1][iy] += TotalPop_S[ia][0] + TotalPop_S[ia][1]; //LJ
+			}
 		}
 		Neg15to24.out[CurrSim - 1][iy] = Temp1 + Temp2;
 		Neg15to24M.out[CurrSim - 1][iy] = Temp1;
@@ -11717,7 +12548,7 @@ void ResultsAtStartOfYr()
 	}
 
 	// Fraction of HIV-positive women infected in last year
-	if (CalibANCprev == 1){
+	if (CalibANCprev == 1 || CalibYouthPrev == 1){
 		for (ia = 0; ia < 6; ia++){
 			Temp1 = 0.0;
 			for (ii = 0; ii < 5; ii++){
@@ -11897,8 +12728,13 @@ void ResultsAtStartOfYr()
 				MHU_STM.RegPrEP[ia] + MHC_STM.NegNoHCT[ia] + MHC_STM.NegPastHCT[ia] + MHC_STM.RegHCT[ia] +
 				MHC_STM.RegPrEP[ia] + MLU_STM.NegNoHCT[ia] + MLU_STM.NegPastHCT[ia] + MLU_STM.RegHCT[ia] +
 				MLU_STM.RegPrEP[ia] + MLC_STM.NegNoHCT[ia] + MLC_STM.NegPastHCT[ia] + MLC_STM.RegHCT[ia] +
-				MLC_STM.RegPrEP[ia];
-			Temp2 += MHU_STM.Total[ia] + MHC_STM.Total[ia] + MLU_STM.Total[ia] + MLC_STM.Total[ia];
+				MLC_STM.RegPrEP[ia] + MHU_LTM.NegNoHCT[ia] + MHU_LTM.NegPastHCT[ia] + MHU_LTM.RegHCT[ia] +
+				MHU_LTM.RegPrEP[ia] + MHC_LTM.NegNoHCT[ia] + MHC_LTM.NegPastHCT[ia] + MHC_LTM.RegHCT[ia] +
+				MHC_LTM.RegPrEP[ia] + MLU_LTM.NegNoHCT[ia] + MLU_LTM.NegPastHCT[ia] + MLU_LTM.RegHCT[ia] +
+				MLU_LTM.RegPrEP[ia] + MLC_LTM.NegNoHCT[ia] + MLC_LTM.NegPastHCT[ia] + MLC_LTM.RegHCT[ia] +
+				MLC_LTM.RegPrEP[ia];
+			Temp2 += MHU_STM.Total[ia] + MHC_STM.Total[ia] + MLU_STM.Total[ia] + MLC_STM.Total[ia] +
+				MHU_LTM.Total[ia] + MHC_LTM.Total[ia] + MLU_LTM.Total[ia] + MLC_LTM.Total[ia];
 			if (ia == 14){
 				MSMprev18to24.out[CurrSim - 1][iy] = 1.0 -  Temp1 / Temp2;
 				Temp3 = Temp2;
@@ -11920,7 +12756,11 @@ void ResultsAtStartOfYr()
 				MHU_STM.RegPrEP[ia] + MHC_STM.NegNoHCT[ia] + MHC_STM.NegPastHCT[ia] + MHC_STM.RegHCT[ia] +
 				MHC_STM.RegPrEP[ia] + MLU_STM.NegNoHCT[ia] + MLU_STM.NegPastHCT[ia] + MLU_STM.RegHCT[ia] +
 				MLU_STM.RegPrEP[ia] + MLC_STM.NegNoHCT[ia] + MLC_STM.NegPastHCT[ia] + MLC_STM.RegHCT[ia] +
-				MLC_STM.RegPrEP[ia];
+				MLC_STM.RegPrEP[ia] + MHU_LTM.NegNoHCT[ia] + MHU_LTM.NegPastHCT[ia] + MHU_LTM.RegHCT[ia] +
+				MHU_LTM.RegPrEP[ia] + MHC_LTM.NegNoHCT[ia] + MHC_LTM.NegPastHCT[ia] + MHC_LTM.RegHCT[ia] +
+				MHC_LTM.RegPrEP[ia] + MLU_LTM.NegNoHCT[ia] + MLU_LTM.NegPastHCT[ia] + MLU_LTM.RegHCT[ia] +
+				MLU_LTM.RegPrEP[ia] + MLC_LTM.NegNoHCT[ia] + MLC_LTM.NegPastHCT[ia] + MLC_LTM.RegHCT[ia] +
+				MLC_LTM.RegPrEP[ia];
 		}
 		NegMSM.out[CurrSim - 1][iy] = Temp1;
 		/*Temp1 = 0.0;
@@ -11932,17 +12772,73 @@ void ResultsAtStartOfYr()
 		MalePrev18plus.out[CurrSim - 1][iy] = Temp2 / Temp1;*/
 	}
 	if (FixedUncertainty == 1){
-		Temp1 = 0.0;
+		Temp1 = NegMSM.out[CurrSim - 1][iy];
 		Temp2 = 0.0;
 		for (ia = 5; ia < 40; ia++){
-			Temp1 += MHU_STM.NegNoHCT[ia] + MHU_STM.NegPastHCT[ia] + MHU_STM.RegHCT[ia] +
-				MHU_STM.RegPrEP[ia] + MHC_STM.NegNoHCT[ia] + MHC_STM.NegPastHCT[ia] + MHC_STM.RegHCT[ia] +
-				MHC_STM.RegPrEP[ia] + MLU_STM.NegNoHCT[ia] + MLU_STM.NegPastHCT[ia] + MLU_STM.RegHCT[ia] +
-				MLU_STM.RegPrEP[ia] + MLC_STM.NegNoHCT[ia] + MLC_STM.NegPastHCT[ia] + MLC_STM.RegHCT[ia] +
-				MLC_STM.RegPrEP[ia];
-			Temp2 += MHU_STM.Total[ia] + MHC_STM.Total[ia] + MLU_STM.Total[ia] + MLC_STM.Total[ia];
+			Temp2 += MHU_STM.Total[ia] + MHC_STM.Total[ia] + MLU_STM.Total[ia] + MLC_STM.Total[ia] +
+				MHU_LTM.Total[ia] + MHC_LTM.Total[ia] + MLU_LTM.Total[ia] + MLC_LTM.Total[ia];
 		}
 		MSMprev15to49.out[CurrSim - 1][iy] = 1.0 - (Temp1 / Temp2);
+	}
+
+	// HIV prevalence in PWID
+	if (FixedUncertainty == 1 || CalibPWIDprev == 1) {
+		Temp1 = 0.0;
+		Temp2 = 0.0;
+		Temp3 = 0.0;
+		Temp4 = 0.0;
+		for (ia = 0; ia < 81; ia++) {
+			Temp1 += MHU_ID.Total[ia] + MHC_ID.Total[ia] + MLU_ID.Total[ia] + MLC_ID.Total[ia];
+			Temp2 += FH_ID.Total[ia] + FL_ID.Total[ia];
+			Temp3 += MHU_ID.NegNoHCT[ia] + MHC_ID.NegNoHCT[ia] + MLU_ID.NegNoHCT[ia] + MLC_ID.NegNoHCT[ia] +
+				MHU_ID.NegPastHCT[ia] + MHC_ID.NegPastHCT[ia] + MLU_ID.NegPastHCT[ia] + MLC_ID.NegPastHCT[ia] +
+				MHU_ID.RegHCT[ia] + MHC_ID.RegHCT[ia] + MLU_ID.RegHCT[ia] + MLC_ID.RegHCT[ia] +
+				MHU_ID.RegPrEP[ia] + MHC_ID.RegPrEP[ia] + MLU_ID.RegPrEP[ia] + MLC_ID.RegPrEP[ia];
+			Temp4 += FH_ID.NegNoHCT[ia] + FL_ID.NegNoHCT[ia] + FH_ID.NegPastHCT[ia] + FL_ID.NegPastHCT[ia] +
+				FH_ID.RegHCT[ia] + FL_ID.RegHCT[ia] + FH_ID.RegPrEP[ia] + FL_ID.RegPrEP[ia] +
+				FH_ID.RegVM[ia] + FL_ID.RegVM[ia];
+			if (CurrYear == 2015) { PWIDbyAge.out[CurrSim - 1][ia] = Temp1 + Temp2; }
+		}
+		PWIDprev[iy] = 1.0 - (Temp3 + Temp4) / (Temp1 + Temp2);
+		PWIDprevM[iy] = 1.0 - Temp3 / Temp1;
+		PWIDprevF[iy] = 1.0 - Temp4 / Temp2;
+		PrevPWID.out[CurrSim - 1][iy] = PWIDprev[iy];
+		PrevPWID_M.out[CurrSim - 1][iy] = PWIDprevM[iy];
+		PrevPWID_F.out[CurrSim - 1][iy] = PWIDprevF[iy];
+		TotalPWID.out[CurrSim - 1][iy] = Temp1 + Temp2;
+		PWIDpropnMale.out[CurrSim - 1][iy] = Temp1 / (Temp1 + Temp2);
+		NegPWID.out[CurrSim - 1][iy] = Temp3 + Temp4;
+	}
+
+	// Age distribution of MSM and men in same-sex unions
+	if (FixedUncertainty == 1 && CurrYear == 2015) {
+		Temp1 = 0.0;
+		Temp2 = 0.0;
+		Temp3 = 0.0;
+		Temp4 = 0.0;
+		for (ia = 8; ia < 81; ia++) {
+			Temp1 += TotalPop_S[ia + 10][0];
+			Temp2 += TotalMarried_S[ia + 10][0];
+			Temp3 += MHU_LTM.Total[ia] + MHC_LTM.Total[ia] + MLU_LTM.Total[ia] + MLC_LTM.Total[ia];
+			Temp4 += (MHU_STM.Total[ia] + MHC_STM.Total[ia]) * (1.0 - exp(-PartnerAcqM[ia] * MSMpartnersM20 *  
+				2.0)) + (MLU_STM.Total[ia] + MLC_STM.Total[ia]) * (1.0 - exp(-PartnerAcqM[ia] * RRpartnerLow[0] *
+				MSMpartnersM20 * 2.0));
+			if (ia == 19 || ia == 29 || ia == 39 || ia == 49 || ia == 80) {
+				if (ia == 19) { ii = 0; }
+				else if (ia == 29) { ii = 1; }
+				else if (ia == 39) { ii = 2; }
+				else if (ia == 49) { ii = 3; }
+				else { ii = 4; }
+				MSMbyAge.out[CurrSim - 1][ii] = Temp1;
+				MSMbyAge.out[CurrSim - 1][ii + 5] = Temp2;
+				MSMbyAge.out[CurrSim - 1][ii + 10] = Temp3;
+				MSMbyAge.out[CurrSim - 1][ii + 15] = Temp4;
+				Temp1 = 0.0;
+				Temp2 = 0.0;
+				Temp3 = 0.0;
+				Temp4 = 0.0;
+			}
+		}
 	}
 
 	// Proportions of adults in different CD4 stages
@@ -12007,8 +12903,30 @@ void ResultsAtStartOfYr()
 
 	// ART totals
 	Temp1 = 0.0;
+	TotalART1to2.out[CurrSim - 1][iy] = 0.0;  //LJ
+	TotalART3to5.out[CurrSim - 1][iy] = 0.0; //LJ
+	TotalART6to9.out[CurrSim - 1][iy] = 0.0; //LJ
+	TotalART10to14.out[CurrSim - 1][iy] = 0.0; //LJ
+
+
+
 	for(ia=0; ia<15; ia++){
-		Temp1 += TotalART[ia][0] + TotalART[ia][1];}
+		Temp1 += TotalART[ia][0] + TotalART[ia][1];
+		//LJ- age groups
+		if (ia >= 1 && ia <= 2) {
+			TotalART1to2.out[CurrSim - 1][iy] += TotalART[ia][0] + TotalART[ia][1];
+		}
+		if (ia >= 3 && ia <= 5) {
+			TotalART3to5.out[CurrSim - 1][iy] += TotalART[ia][0] + TotalART[ia][1];
+		}
+		if (ia >= 6 && ia <= 9) {
+			TotalART6to9.out[CurrSim - 1][iy] += TotalART[ia][0] + TotalART[ia][1];
+		}
+		if (ia >= 10 && ia <= 14) {
+			TotalART10to14.out[CurrSim - 1][iy] += TotalART[ia][0] + TotalART[ia][1];
+		}	
+	}
+
 	TotalARTunder15.out[CurrSim-1][iy] = Temp1;
 	if (FixedUncertainty == 1 || CalibARTcoverage == 1 || CalibARTtotals == 1){
 		ARTcoverageU15.out[CurrSim - 1][iy] = Temp1 / TotPaedHIV.out[CurrSim - 1][iy];
@@ -12570,29 +13488,71 @@ void ResultsAtStartOfYr()
 		Temp3 = 0.0;
 		for (ia = 0; ia < 81; ia++){
 			for (is = 0; is < 5; is++){
-				Temp1 += MHU_STM.PosNoHCT[ia][is] + MHU_STM.PosHCTpreHIV[ia][is] +
-					MHC_STM.PosNoHCT[ia][is] + MHC_STM.PosHCTpreHIV[ia][is] + 
-					MLU_STM.PosNoHCT[ia][is] + MLU_STM.PosHCTpreHIV[ia][is] + 
-					MLC_STM.PosNoHCT[ia][is] + MLC_STM.PosHCTpreHIV[ia][is];
-				Temp2 += MHU_STM.PosDiagnosedPreART[ia][is] + MHU_STM.StoppedART[ia][is] +
-					MHC_STM.PosDiagnosedPreART[ia][is] + MHC_STM.StoppedART[ia][is] +
-					MLU_STM.PosDiagnosedPreART[ia][is] + MLU_STM.StoppedART[ia][is] +
-					MLC_STM.PosDiagnosedPreART[ia][is] + MLC_STM.StoppedART[ia][is];
+				Temp1 += MHU_STM.PosNoHCT[ia][is] + MHU_STM.PosHCTpreHIV[ia][is] + MHC_STM.PosNoHCT[ia][is] + MHC_STM.PosHCTpreHIV[ia][is] + 
+					MLU_STM.PosNoHCT[ia][is] + MLU_STM.PosHCTpreHIV[ia][is] +  MLC_STM.PosNoHCT[ia][is] + MLC_STM.PosHCTpreHIV[ia][is] +
+					MHU_LTM.PosNoHCT[ia][is] + MHU_LTM.PosHCTpreHIV[ia][is] + MHC_LTM.PosNoHCT[ia][is] + MHC_LTM.PosHCTpreHIV[ia][is] +
+					MLU_LTM.PosNoHCT[ia][is] + MLU_LTM.PosHCTpreHIV[ia][is] + MLC_LTM.PosNoHCT[ia][is] + MLC_LTM.PosHCTpreHIV[ia][is];
+				Temp2 += MHU_STM.PosDiagnosedPreART[ia][is] + MHU_STM.StoppedART[ia][is] + MHC_STM.PosDiagnosedPreART[ia][is] +
+					MHC_STM.StoppedART[ia][is] + MLU_STM.PosDiagnosedPreART[ia][is] + MLU_STM.StoppedART[ia][is] +
+					MLC_STM.PosDiagnosedPreART[ia][is] + MLC_STM.StoppedART[ia][is] +
+					MHU_LTM.PosDiagnosedPreART[ia][is] + MHU_LTM.StoppedART[ia][is] + MHC_LTM.PosDiagnosedPreART[ia][is] +
+					MHC_LTM.StoppedART[ia][is] + MLU_LTM.PosDiagnosedPreART[ia][is] + MLU_LTM.StoppedART[ia][is] +
+					MLC_LTM.PosDiagnosedPreART[ia][is] + MLC_LTM.StoppedART[ia][is];
 			}
 			for (id = 1; id < 5; id++){
 				Temp2 += MHU_STM.OnARTpre500[ia][id] + MHU_STM.OnART500[ia][id] + MHU_STM.OnART350[ia][id] + MHU_STM.OnART200[ia][id] +
 					MHC_STM.OnARTpre500[ia][id] + MHC_STM.OnART500[ia][id] + MHC_STM.OnART350[ia][id] + MHC_STM.OnART200[ia][id] +
 					MLU_STM.OnARTpre500[ia][id] + MLU_STM.OnART500[ia][id] + MLU_STM.OnART350[ia][id] + MLU_STM.OnART200[ia][id] +
-					MLC_STM.OnARTpre500[ia][id] + MLC_STM.OnART500[ia][id] + MLC_STM.OnART350[ia][id] + MLC_STM.OnART200[ia][id];
+					MLC_STM.OnARTpre500[ia][id] + MLC_STM.OnART500[ia][id] + MLC_STM.OnART350[ia][id] + MLC_STM.OnART200[ia][id] +
+					MHU_LTM.OnARTpre500[ia][id] + MHU_LTM.OnART500[ia][id] + MHU_LTM.OnART350[ia][id] + MHU_LTM.OnART200[ia][id] +
+					MHC_LTM.OnARTpre500[ia][id] + MHC_LTM.OnART500[ia][id] + MHC_LTM.OnART350[ia][id] + MHC_LTM.OnART200[ia][id] +
+					MLU_LTM.OnARTpre500[ia][id] + MLU_LTM.OnART500[ia][id] + MLU_LTM.OnART350[ia][id] + MLU_LTM.OnART200[ia][id] +
+					MLC_LTM.OnARTpre500[ia][id] + MLC_LTM.OnART500[ia][id] + MLC_LTM.OnART350[ia][id] + MLC_LTM.OnART200[ia][id];
 				Temp3 += (MHU_STM.OnARTpre500[ia][id] + MHU_STM.OnART500[ia][id] + MHU_STM.OnART350[ia][id] + MHU_STM.OnART200[ia][id] +
 					MHC_STM.OnARTpre500[ia][id] + MHC_STM.OnART500[ia][id] + MHC_STM.OnART350[ia][id] + MHC_STM.OnART200[ia][id] +
 					MLU_STM.OnARTpre500[ia][id] + MLU_STM.OnART500[ia][id] + MLU_STM.OnART350[ia][id] + MLU_STM.OnART200[ia][id] +
-					MLC_STM.OnARTpre500[ia][id] + MLC_STM.OnART500[ia][id] + MLC_STM.OnART350[ia][id] + MLC_STM.OnART200[ia][id]) *
+					MLC_STM.OnARTpre500[ia][id] + MLC_STM.OnART500[ia][id] + MLC_STM.OnART350[ia][id] + MLC_STM.OnART200[ia][id] +
+					MHU_LTM.OnARTpre500[ia][id] + MHU_LTM.OnART500[ia][id] + MHU_LTM.OnART350[ia][id] + MHU_LTM.OnART200[ia][id] +
+					MHC_LTM.OnARTpre500[ia][id] + MHC_LTM.OnART500[ia][id] + MHC_LTM.OnART350[ia][id] + MHC_LTM.OnART200[ia][id] +
+					MLU_LTM.OnARTpre500[ia][id] + MLU_LTM.OnART500[ia][id] + MLU_LTM.OnART350[ia][id] + MLU_LTM.OnART200[ia][id] +
+					MLC_LTM.OnARTpre500[ia][id] + MLC_LTM.OnART500[ia][id] + MLC_LTM.OnART350[ia][id] + MLC_LTM.OnART200[ia][id]) *
 					OnARThalfIntDur[id][0][ia];
 			}
 		}
 		DiagnosedHIV_MSM.out[CurrSim - 1][iy] = Temp2 / (Temp1 + Temp2);
 		ARTcoverageMSM.out[CurrSim - 1][iy] = Temp3 / (Temp1 + Temp2);
+		// Cascade indicators for PWID (similar code structure to MSM)
+		Temp1 = 0.0;
+		Temp2 = 0.0;
+		Temp3 = 0.0;
+		for (ia = 0; ia < 81; ia++) {
+			for (is = 0; is < 5; is++) {
+				Temp1 += MHU_ID.PosNoHCT[ia][is] + MHU_ID.PosHCTpreHIV[ia][is] + MHC_ID.PosNoHCT[ia][is] + MHC_ID.PosHCTpreHIV[ia][is] +
+					MLU_ID.PosNoHCT[ia][is] + MLU_ID.PosHCTpreHIV[ia][is] + MLC_ID.PosNoHCT[ia][is] + MLC_ID.PosHCTpreHIV[ia][is] +
+					FH_ID.PosNoHCT[ia][is] + FH_ID.PosHCTpreHIV[ia][is] + FL_ID.PosNoHCT[ia][is] + FL_ID.PosHCTpreHIV[ia][is];
+				Temp2 += MHU_ID.PosDiagnosedPreART[ia][is] + MHU_ID.StoppedART[ia][is] + MHC_ID.PosDiagnosedPreART[ia][is] +
+					MHC_ID.StoppedART[ia][is] + MLU_ID.PosDiagnosedPreART[ia][is] + MLU_ID.StoppedART[ia][is] +
+					MLC_ID.PosDiagnosedPreART[ia][is] + MLC_ID.StoppedART[ia][is] + FH_ID.PosDiagnosedPreART[ia][is] + 
+					FH_ID.StoppedART[ia][is] + FL_ID.PosDiagnosedPreART[ia][is] + FL_ID.StoppedART[ia][is];
+			}
+			for (id = 1; id < 5; id++) {
+				Temp2 += MHU_ID.OnARTpre500[ia][id] + MHU_ID.OnART500[ia][id] + MHU_ID.OnART350[ia][id] + MHU_ID.OnART200[ia][id] +
+					MHC_ID.OnARTpre500[ia][id] + MHC_ID.OnART500[ia][id] + MHC_ID.OnART350[ia][id] + MHC_ID.OnART200[ia][id] +
+					MLU_ID.OnARTpre500[ia][id] + MLU_ID.OnART500[ia][id] + MLU_ID.OnART350[ia][id] + MLU_ID.OnART200[ia][id] +
+					MLC_ID.OnARTpre500[ia][id] + MLC_ID.OnART500[ia][id] + MLC_ID.OnART350[ia][id] + MLC_ID.OnART200[ia][id] +
+					FH_ID.OnARTpre500[ia][id] + FH_ID.OnART500[ia][id] + FH_ID.OnART350[ia][id] + FH_ID.OnART200[ia][id] +
+					FL_ID.OnARTpre500[ia][id] + FL_ID.OnART500[ia][id] + FL_ID.OnART350[ia][id] + FL_ID.OnART200[ia][id];
+				Temp3 += (MHU_ID.OnARTpre500[ia][id] + MHU_ID.OnART500[ia][id] + MHU_ID.OnART350[ia][id] + MHU_ID.OnART200[ia][id] +
+					MHC_ID.OnARTpre500[ia][id] + MHC_ID.OnART500[ia][id] + MHC_ID.OnART350[ia][id] + MHC_ID.OnART200[ia][id] +
+					MLU_ID.OnARTpre500[ia][id] + MLU_ID.OnART500[ia][id] + MLU_ID.OnART350[ia][id] + MLU_ID.OnART200[ia][id] +
+					MLC_ID.OnARTpre500[ia][id] + MLC_ID.OnART500[ia][id] + MLC_ID.OnART350[ia][id] + MLC_ID.OnART200[ia][id]) *
+					OnARThalfIntDur[id][0][ia] + OnARThalfIntDur[id][1][ia] *
+					(FH_ID.OnARTpre500[ia][id] + FH_ID.OnART500[ia][id] + FH_ID.OnART350[ia][id] + FH_ID.OnART200[ia][id] +
+					FL_ID.OnARTpre500[ia][id] + FL_ID.OnART500[ia][id] + FL_ID.OnART350[ia][id] + FL_ID.OnART200[ia][id]);
+			}
+		}
+		DiagnosedHIV_PWID.out[CurrSim - 1][iy] = Temp2 / (Temp1 + Temp2);
+		ARTcoveragePWID.out[CurrSim - 1][iy] = Temp3 / (Temp1 + Temp2);
 	}
 	// ART re-initiation in children
 	if (FixedUncertainty == 1){
@@ -12657,13 +13617,25 @@ void ResultsAtStartOfYr()
 		Temp1 = 0.0;
 		Temp2 = 0.0;
 		for (ia = 0; ia < 81; ia++){ 
-			Temp1 += MHU_STM.RegPrEP[ia] + MHC_STM.RegPrEP[ia] +
-				MLU_STM.RegPrEP[ia] + MLC_STM.RegPrEP[ia];
-			Temp2 += MHU_STM.RegHCT[ia] + MHC_STM.RegHCT[ia] +
-				MLU_STM.RegHCT[ia] + MLC_STM.RegHCT[ia];
+			Temp1 += MHU_STM.RegPrEP[ia] + MHC_STM.RegPrEP[ia] + MLU_STM.RegPrEP[ia] +
+				MLC_STM.RegPrEP[ia] + MHU_LTM.RegPrEP[ia] + MHC_LTM.RegPrEP[ia] +
+				MLU_LTM.RegPrEP[ia] + MLC_LTM.RegPrEP[ia];
+			Temp2 += MHU_STM.RegHCT[ia] + MHC_STM.RegHCT[ia] + MLU_STM.RegHCT[ia] +
+				MLC_STM.RegHCT[ia] + MHU_LTM.RegHCT[ia] + MHC_LTM.RegHCT[ia] +
+				MLU_LTM.RegHCT[ia] + MLC_LTM.RegHCT[ia];
 		}
 		MSMonPrEP.out[CurrSim - 1][iy] = Temp1;
 		MSMonCABLA.out[CurrSim - 1][iy] = Temp2;
+		Temp1 = 0.0;
+		Temp2 = 0.0;
+		for (ia = 0; ia < 81; ia++) {
+			Temp1 += MHU_ID.RegPrEP[ia] + MHC_ID.RegPrEP[ia] + MLU_ID.RegPrEP[ia] +
+				MLC_ID.RegPrEP[ia] + FH_ID.RegPrEP[ia] + FL_ID.RegPrEP[ia];
+			Temp2 += MHU_ID.RegHCT[ia] + MHC_ID.RegHCT[ia] + MLU_ID.RegHCT[ia] +
+				MLC_ID.RegHCT[ia] + FH_ID.RegHCT[ia] + FL_ID.RegHCT[ia];
+		}
+		PWIDonPrEP.out[CurrSim - 1][iy] = Temp1;
+		PWIDonCABLA.out[CurrSim - 1][iy] = Temp2;
 	}
 
 	// Additional outputs for Investment Case
@@ -12688,22 +13660,6 @@ void ResultsAtStartOfYr()
 		Prev15plus.out[CurrSim - 1][iy] = TotHIV15.out[CurrSim - 1][iy] / (Temp1 + Temp2);
 		Prev15plusM.out[CurrSim - 1][iy] = TotHIV15M.out[CurrSim - 1][iy] / Temp1;
 		Prev15plusF.out[CurrSim - 1][iy] = TotHIV15F.out[CurrSim - 1][iy] / Temp2;
-		Temp1 = 0.0;
-		Temp2 = 0.0;
-		for (ia = 17; ia < 50; ia++){
-			Temp1 += TotalMarried_S[ia][0];
-			Temp2 += TotalMarried_S[ia][1];
-		}
-		MarriedM17to49.out[CurrSim - 1][iy] = Temp1;
-		MarriedF17to49.out[CurrSim - 1][iy] = Temp2;
-		Temp1 = 0.0;
-		Temp2 = 0.0;
-		for (ia = 50; ia < 91; ia++){
-			Temp1 += TotalMarried_S[ia][0];
-			Temp2 += TotalMarried_S[ia][1];
-		}
-		MarriedM50.out[CurrSim - 1][iy] = Temp1;
-		MarriedF50.out[CurrSim - 1][iy] = Temp2;
 		TotInfants.out[CurrSim - 1][iy] = TotalPop_S[0][0] + TotalPop_S[0][1];
 		Children1to2.out[CurrSim - 1][iy] = TotalPop_S[1][0] + TotalPop_S[1][1] +
 			TotalPop_S[2][0] + TotalPop_S[2][1];
@@ -12849,9 +13805,10 @@ void ResultsAtStartOfYr()
 		Temp1 = 0.0;
 		Temp2 = 0.0;
 		for (ia = 5; ia < 81; ia++){
-			Temp1 += (MHC_virgin.Total[ia] + MHC_ST.Total[ia] + MHC_STM.Total[ia] +
-				MHC_LTH.Total[ia] + MHC_LTL.Total[ia] + MLC_virgin.Total[ia] + MLC_ST.Total[ia] +
-				MLC_STM.Total[ia] + MLC_LTH.Total[ia] + MLC_LTL.Total[ia]);
+			Temp1 += (MHC_virgin.Total[ia] + MHC_ST.Total[ia] + MHC_STM.Total[ia] + MHC_ID.Total[ia] +
+				MHC_LTH.Total[ia] + MHC_LTL.Total[ia] + MHC_LTM.Total[ia] + MLC_virgin.Total[ia] + 
+				MLC_ST.Total[ia] + MLC_STM.Total[ia] + MLC_ID.Total[ia] + MLC_LTH.Total[ia] +
+				MLC_LTL.Total[ia] + MLC_LTM.Total[ia]);
 			Temp2 += TotalPop_S[ia + 10][0];
 			if (ia == 14){
 				Circumcised15to24.out[CurrSim - 1][iy] = Temp1 / Temp2;
@@ -12875,24 +13832,6 @@ void ResultsAtStartOfYr()
 		Births200to349.out[CurrSim - 1][iy] = TempCD4[2];
 		BirthsUnder200.out[CurrSim - 1][iy] = TempCD4[3];
 		TotSexWorkers.out[CurrSim - 1][iy] = TotalFSW;
-		Temp1 = 0.0;
-		Temp2 = 0.0;
-		for (ia = 5; ia < 81; ia++){
-			Temp1 += MHC_LTH.PosDiagnosedPreART[ia][1] + MHU_LTH.PosDiagnosedPreART[ia][1] +
-				MHC_LTL.PosDiagnosedPreART[ia][1] + MHU_LTL.PosDiagnosedPreART[ia][1] +
-				MLC_LTH.PosDiagnosedPreART[ia][1] + MLU_LTH.PosDiagnosedPreART[ia][1] +
-				MLC_LTL.PosDiagnosedPreART[ia][1] + MLU_LTL.PosDiagnosedPreART[ia][1] +
-				FH_LTH.PosDiagnosedPreART[ia][1] + FL_LTH.PosDiagnosedPreART[ia][1] +
-				FH_LTL.PosDiagnosedPreART[ia][1] + FL_LTL.PosDiagnosedPreART[ia][1];
-			for (is = 1; is < 5; is++){
-				Temp2 += MHC_LTH.PosDiagnosedPreART[ia][is] + MHU_LTH.PosDiagnosedPreART[ia][is] +
-					MHC_LTL.PosDiagnosedPreART[ia][is] + MHU_LTL.PosDiagnosedPreART[ia][is] +
-					MLC_LTH.PosDiagnosedPreART[ia][is] + MLU_LTH.PosDiagnosedPreART[ia][is] +
-					MLC_LTL.PosDiagnosedPreART[ia][is] + MLU_LTL.PosDiagnosedPreART[ia][is] +
-					FH_LTH.PosDiagnosedPreART[ia][is] + FL_LTH.PosDiagnosedPreART[ia][is] +
-					FH_LTL.PosDiagnosedPreART[ia][is] + FL_LTL.PosDiagnosedPreART[ia][is];
-			}
-		}
 		for (is = 0; is < 4; is++){
 			TempCD4[is] = 0.0;
 		}
@@ -12934,6 +13873,50 @@ void ResultsAtStartOfYr()
 				FemChild.AwareMatEBF[ia]) * ExtNVProllout[iy];
 		}
 		ChildrenOnExtNVP.out[CurrSim - 1][iy] = Temp1;
+	}
+
+	// Marriage outputs
+	if (FixedUncertainty == 1) {
+		Temp1 = 0.0;
+		Temp2 = 0.0;
+		for (ia = 15; ia < 50; ia++) {
+			Temp1 += TotalMarried_S[ia][0];
+			Temp2 += TotalMarried_S[ia][1];
+		}
+		MarriedM15to49.out[CurrSim - 1][iy] = Temp1;
+		MarriedF15to49.out[CurrSim - 1][iy] = Temp2;
+		MarriedPropn15_49M.out[CurrSim - 1][iy] = Temp1 / Total15to49M.out[CurrSim - 1][iy];
+		MarriedPropn15_49F.out[CurrSim - 1][iy] = Temp2 / Total15to49F.out[CurrSim - 1][iy];
+		MarriedPropn15_49.out[CurrSim - 1][iy] = (Temp1 + Temp2) / (Total15to49M.out[CurrSim - 1][iy] +
+			Total15to49F.out[CurrSim - 1][iy]);
+		Temp1 = 0.0;
+		Temp2 = 0.0;
+		for (ia = 50; ia < 91; ia++) {
+			Temp1 += TotalMarried_S[ia][0];
+			Temp2 += TotalMarried_S[ia][1];
+		}
+		MarriedM50.out[CurrSim - 1][iy] = Temp1;
+		MarriedF50.out[CurrSim - 1][iy] = Temp2;
+		MarriedPropn50plusM.out[CurrSim - 1][iy] = Temp1 / Total50plusM.out[CurrSim - 1][iy];
+		MarriedPropn50plusF.out[CurrSim - 1][iy] = Temp2 / Total50plusF.out[CurrSim - 1][iy];
+		MarriedPropn50plus.out[CurrSim - 1][iy] = (Temp1 + Temp2) / (Total50plusM.out[CurrSim - 1][iy] +
+			Total50plusF.out[CurrSim - 1][iy]);
+		MarriedPropnAllM.out[CurrSim - 1][iy] = (Temp1 + MarriedM15to49.out[CurrSim - 1][iy]) / 
+			MalesOver15.out[CurrSim - 1][iy];
+		MarriedPropnAllF.out[CurrSim - 1][iy] = (Temp2 + MarriedF15to49.out[CurrSim - 1][iy]) /
+			FemalesOver15.out[CurrSim - 1][iy];
+		MarriedPropnAll.out[CurrSim - 1][iy] = (Temp1 + Temp2 + MarriedM15to49.out[CurrSim - 1][iy] +
+			MarriedF15to49.out[CurrSim - 1][iy]) / (MalesOver15.out[CurrSim - 1][iy] +
+			FemalesOver15.out[CurrSim - 1][iy]);
+		Temp1 = 0.0;
+		for (ia = 5; ia < 81; ia++) {
+			Temp1 += MHU_LTM.Total[ia] + MHC_LTM.Total[ia] + MLU_LTM.Total[ia] + MLC_LTM.Total[ia];
+		}
+		MarriedMSM.out[CurrSim - 1][iy] = Temp1;
+		MarriedPropnAllMSM.out[CurrSim - 1][iy] = Temp1 / (TotalCisMSM.out[CurrSim - 1][iy] +
+			TotalTGW.out[CurrSim - 1][iy]);
+		PropnMarriedM_MSM.out[CurrSim - 1][iy] = Temp1 / (MarriedM15to49.out[CurrSim - 1][iy] +
+			MarriedM50.out[CurrSim - 1][iy]);
 	}
 
 	if (FixedUncertainty == 1){ 
@@ -13329,6 +14312,7 @@ void CalcVLSstartYr()
 {
 	int ia, ig, is, id, iy;
 	double Temp1[2], Temp2, Temp3, Temp4[2], ORsuppress, TempART[4][2][81], TempVL[4][2][81], CumPaedART[2], PreRebound[2];
+	double TempART_ID[4][2][81], TempVL_ID[4][2][81]; // For PWID
 	double Temp3store[3][2], Temp4store[3][2]; // stored summations at age 15, 50, 90 (1st index), by sex (2nd index)
 	double LowVLstore[5][2][4]; // Denominators in LowVLuntreated, by CD4, sex and age (<15 naive, 15+ naive, <15 stopped, 15+ stopped)
 
@@ -13339,6 +14323,7 @@ void CalcVLSstartYr()
 		for (is = 0; is < 4; is++){
 			for (ia = 5; ia < 81; ia++){
 				TempART[is][ig][ia] = 0.0;
+				TempART_ID[is][ig][ia] = 0.0;
 				if (ia < 15){ ORsuppress = ORsuppressionCD4[is][ig][0]; }
 				else if (ia >= 40){ ORsuppress = ORsuppressionCD4[is][ig][1]; }
 				else{
@@ -13347,6 +14332,8 @@ void CalcVLSstartYr()
 				}
 				TempVL[is][ig][ia] = 1.0 / (1.0 + (1.0 - CurrSuppression200) / (CurrSuppression200 *
 					ORsuppress));
+				TempVL_ID[is][ig][ia] = 1.0 / (1.0 + (1.0 - CurrSuppression200) / (CurrSuppression200 *
+					ORsuppress * ORsuppressionPWID));
 			}
 		}
 		for (ia = 5; ia < 81; ia++){
@@ -13354,6 +14341,24 @@ void CalcVLSstartYr()
 				for (id = 1; id < 5; id++){
 					if (ig == 0){ TempART[is][ig][ia] += SumGroupsM[ia][20 + is * 5 + id] * OnARThalfIntDur[id][0][ia]; }
 					else{ TempART[is][ig][ia] += SumGroupsF[ia][20 + is * 5 + id] * OnARThalfIntDur[id][1][ia]; }
+				}
+			}
+			for (id = 1; id < 5; id++) {
+				if (ig == 1) {
+					TempART_ID[0][ig][ia] += (FH_ID.OnARTpre500[ia][id] + FL_ID.OnARTpre500[ia][id]) * OnARThalfIntDur[id][1][ia];
+					TempART_ID[1][ig][ia] += (FH_ID.OnART500[ia][id] + FL_ID.OnART500[ia][id]) * OnARThalfIntDur[id][1][ia];
+					TempART_ID[2][ig][ia] += (FH_ID.OnART350[ia][id] + FL_ID.OnART350[ia][id]) * OnARThalfIntDur[id][1][ia];
+					TempART_ID[3][ig][ia] += (FH_ID.OnART200[ia][id] + FL_ID.OnART200[ia][id]) * OnARThalfIntDur[id][1][ia];
+				}
+				else {
+					TempART_ID[0][ig][ia] += (MHU_ID.OnARTpre500[ia][id] + MHC_ID.OnARTpre500[ia][id] +
+						MLU_ID.OnARTpre500[ia][id] + MLC_ID.OnARTpre500[ia][id]) * OnARThalfIntDur[id][0][ia];
+					TempART_ID[1][ig][ia] += (MHU_ID.OnART500[ia][id] + MHC_ID.OnART500[ia][id] +
+						MLU_ID.OnART500[ia][id] + MLC_ID.OnART500[ia][id]) * OnARThalfIntDur[id][0][ia];
+					TempART_ID[2][ig][ia] += (MHU_ID.OnART350[ia][id] + MHC_ID.OnART350[ia][id] +
+						MLU_ID.OnART350[ia][id] + MLC_ID.OnART350[ia][id]) * OnARThalfIntDur[id][0][ia];
+					TempART_ID[3][ig][ia] += (MHU_ID.OnART200[ia][id] + MHC_ID.OnART200[ia][id] +
+						MLU_ID.OnART200[ia][id] + MLC_ID.OnART200[ia][id]) * OnARThalfIntDur[id][0][ia];
 				}
 			}
 		}
@@ -13446,13 +14451,21 @@ void CalcVLSstartYr()
 				}
 				else{
 					TempART[0][ig][ia] += (MHU_STM.OnARTpre500[ia][id] + MHC_STM.OnARTpre500[ia][id] +
-						MLU_STM.OnARTpre500[ia][id] + MLC_STM.OnARTpre500[ia][id]) * OnARThalfIntDur[id][0][ia];
+						MLU_STM.OnARTpre500[ia][id] + MLC_STM.OnARTpre500[ia][id] +
+						MHU_LTM.OnARTpre500[ia][id] + MHC_LTM.OnARTpre500[ia][id] +
+						MLU_LTM.OnARTpre500[ia][id] + MLC_LTM.OnARTpre500[ia][id]) * OnARThalfIntDur[id][0][ia];
 					TempART[1][ig][ia] += (MHU_STM.OnART500[ia][id] + MHC_STM.OnART500[ia][id] +
-						MLU_STM.OnART500[ia][id] + MLC_STM.OnART500[ia][id]) * OnARThalfIntDur[id][0][ia];
+						MLU_STM.OnART500[ia][id] + MLC_STM.OnART500[ia][id] + 
+						MHU_LTM.OnART500[ia][id] + MHC_LTM.OnART500[ia][id] +
+						MLU_LTM.OnART500[ia][id] + MLC_LTM.OnART500[ia][id]) * OnARThalfIntDur[id][0][ia];
 					TempART[2][ig][ia] += (MHU_STM.OnART350[ia][id] + MHC_STM.OnART350[ia][id] +
-						MLU_STM.OnART350[ia][id] + MLC_STM.OnART350[ia][id]) * OnARThalfIntDur[id][0][ia];
+						MLU_STM.OnART350[ia][id] + MLC_STM.OnART350[ia][id] +
+						MHU_LTM.OnART350[ia][id] + MHC_LTM.OnART350[ia][id] +
+						MLU_LTM.OnART350[ia][id] + MLC_LTM.OnART350[ia][id]) * OnARThalfIntDur[id][0][ia];
 					TempART[3][ig][ia] += (MHU_STM.OnART200[ia][id] + MHC_STM.OnART200[ia][id] +
-						MLU_STM.OnART200[ia][id] + MLC_STM.OnART200[ia][id]) * OnARThalfIntDur[id][0][ia];
+						MLU_STM.OnART200[ia][id] + MLC_STM.OnART200[ia][id] +
+						MHU_LTM.OnART200[ia][id] + MHC_LTM.OnART200[ia][id] +
+						MLU_LTM.OnART200[ia][id] + MLC_LTM.OnART200[ia][id]) * OnARThalfIntDur[id][0][ia];
 				}
 			}
 		}
@@ -13472,6 +14485,18 @@ void CalcVLSstartYr()
 			VLsuppressed1000FSW.out[CurrSim - 1][iy] = Temp4[0] / Temp3;
 		}
 	}
+	// And now for PWID - similar code
+	Temp3 = 0.0;
+	Temp4[0] = 0.0;
+	for (is = 0; is < 4; is++) {
+		for (ia = 5; ia < 81; ia++) {
+			for (ig = 0; ig < 2; ig++) {
+				Temp4[0] += TempART_ID[is][ig][ia] * pow(TempVL_ID[is][ig][ia], Temp1[0]);
+				Temp3 += TempART_ID[is][ig][ia];
+			}
+		}
+	}
+	VLsuppressed1000PWID.out[CurrSim - 1][iy] = Temp4[0] / Temp3;
 
 	// Now do calculations of low VL in untreated people
 	for (ig = 0; ig < 2; ig++){
@@ -13532,8 +14557,10 @@ void CalcVLSstartYr()
 				CumPaedART[0] += CumPaedARTearly[ia][id];
 				CumPaedART[1] += CumPaedARTlate[ia][id];
 			}
-			Temp3 += TotalInterrupt[ia][ig] * (CumPaedART[1] / (CumPaedART[0] + CumPaedART[1])) * LowVLuntreated[4][ig];
-			Temp3 += TotalInterrupt[ia][ig] * (CumPaedART[0] / (CumPaedART[0] + CumPaedART[1])) * LowVLuntreated[1][ig];
+			if (CumPaedART[0] + CumPaedART[1] > 0.0) {
+				Temp3 += TotalInterrupt[ia][ig] * (CumPaedART[1] / (CumPaedART[0] + CumPaedART[1])) * LowVLuntreated[4][ig];
+				Temp3 += TotalInterrupt[ia][ig] * (CumPaedART[0] / (CumPaedART[0] + CumPaedART[1])) * LowVLuntreated[1][ig];
+			}
 		}
 	}
 	for (is = 0; is < 5; is++){
@@ -13739,15 +14766,27 @@ void CalcMultPartners()
 void GetPrEPrateFSW()
 {
 	int ia, ig, ii, iy;
-	double PrEPeligFSW, PrEPeligMSM[81][2], PrEPeligOther[81][2][2], temp, temp2, tempMSM;
+	double PrEPeligFSW, PrEPeligMSM[81][2], PrEPeligPWID, PrEPeligOther[81][2][2];
+	double temp, temp2, tempMSM;
 
 	PrEPeligFSW = 0.0;
+	PrEPeligPWID = 0.0;
 	for (ia = 0; ia < 81; ia++){
 		PrEPeligFSW += FH_SW.NegNoHCT[ia] + FH_SW.NegPastHCT[ia];
 		PrEPeligMSM[ia][0] = MHU_STM.NegNoHCT[ia] + MHU_STM.NegPastHCT[ia] +
-			MHC_STM.NegNoHCT[ia] + MHC_STM.NegPastHCT[ia];
+			MHC_STM.NegNoHCT[ia] + MHC_STM.NegPastHCT[ia] +
+			MHU_LTM.NegNoHCT[ia] + MHU_LTM.NegPastHCT[ia] +
+			MHC_LTM.NegNoHCT[ia] + MHC_LTM.NegPastHCT[ia];
 		PrEPeligMSM[ia][1] = MLU_STM.NegNoHCT[ia] + MLU_STM.NegPastHCT[ia] +
-			MLC_STM.NegNoHCT[ia] + MLC_STM.NegPastHCT[ia];
+			MLC_STM.NegNoHCT[ia] + MLC_STM.NegPastHCT[ia] +
+			MLU_LTM.NegNoHCT[ia] + MLU_LTM.NegPastHCT[ia] +
+			MLC_LTM.NegNoHCT[ia] + MLC_LTM.NegPastHCT[ia];
+		PrEPeligPWID += MHU_ID.NegNoHCT[ia] + MHU_ID.NegPastHCT[ia] +
+			MHC_ID.NegNoHCT[ia] + MHC_ID.NegPastHCT[ia] +
+			MLU_ID.NegNoHCT[ia] + MLU_ID.NegPastHCT[ia] +
+			MLC_ID.NegNoHCT[ia] + MLC_ID.NegPastHCT[ia] +
+			FH_ID.NegNoHCT[ia] + FH_ID.NegPastHCT[ia] +
+			FL_ID.NegNoHCT[ia] + FL_ID.NegPastHCT[ia];
 		PrEPeligOther[ia][0][0] = MHU_ST.NegNoHCT[ia] + MHU_ST.NegPastHCT[ia] +
 			MHC_ST.NegNoHCT[ia] + MHC_ST.NegPastHCT[ia] + MHU_LTH.NegNoHCT[ia] + 
 			MHU_LTH.NegPastHCT[ia] + MHC_LTH.NegNoHCT[ia] + MHC_LTH.NegPastHCT[ia] +
@@ -13768,7 +14807,7 @@ void GetPrEPrateFSW()
 
 	iy = CurrYear - StartYear;
 	if (TotStartingPrEP[iy] > 0.0){
-		temp = PrEPeligFSW;
+		temp = PrEPeligFSW + PrEPeligPWID * RR_PrEPstartPWID[iy];
 		for (ia = 0; ia < 81; ia++){
 			for (ii = 0; ii < 2; ii++){
 				temp += PrEPeligMSM[ia][ii] * RR_PrEPstartMSM[iy] * RR_PrEP_MSM[ia][ii];
@@ -13806,24 +14845,29 @@ void GetPrEPrateFSW()
 		}
 		tempMSM = 0.0;
 		for (ia = 0; ia < 81; ia++){ 
-			tempMSM += PrEPeligMSM[ia][0] * exp(-PartnerAcqM[ia]) + PrEPeligMSM[ia][1] * exp(-PartnerAcqM[ia] * RRpartnerLow[0]);
+			tempMSM += PrEPeligMSM[ia][0] * (1.0 - exp(-PartnerAcqM[ia])) + PrEPeligMSM[ia][1] * 
+				(1.0 - exp(-PartnerAcqM[ia] * RRpartnerLow[0]));
 		}
 		if (tempMSM > 0.0){
 			PrEPcoverageMSM.out[CurrSim - 1][iy] = (MSMonPrEP.out[CurrSim - 1][iy] + MSMonCABLA.out[CurrSim - 1][iy]) / 
 				(tempMSM + MSMonPrEP.out[CurrSim - 1][iy] + MSMonCABLA.out[CurrSim - 1][iy]);
 		}
+		if (PrEPeligPWID > 0.0) {
+			PrEPcoveragePWID.out[CurrSim - 1][iy] = (PWIDonPrEP.out[CurrSim - 1][iy] + PWIDonCABLA.out[CurrSim - 1][iy]) /
+				(PrEPeligPWID + PWIDonPrEP.out[CurrSim - 1][iy] + PWIDonCABLA.out[CurrSim - 1][iy]);
+		}
 		temp = 0.0;
 		for (ia = 0; ia < 15; ia++){ 
-			temp += PrEPeligOther[ia][0][1] * exp(-PartnerAcqF[ia] * PartnerRate20F) + PrEPeligOther[ia][1][1] * 
-				exp(-PartnerAcqF[ia] * PartnerRate20F * RRpartnerLow[1]);
+			temp += PrEPeligOther[ia][0][1] * (1.0 - exp(-PartnerAcqF[ia] * PartnerRate20F)) + PrEPeligOther[ia][1][1] * 
+				(1.0 - exp(-PartnerAcqF[ia] * PartnerRate20F * RRpartnerLow[1]));
 		}
 		if (temp > 0.0){
 			PrEPcoverageAGYW.out[CurrSim - 1][iy] = (AGYWonPrEP.out[CurrSim - 1][iy] + AGYWonCABLA.out[CurrSim - 1][iy]) / 
 				(temp + AGYWonPrEP.out[CurrSim - 1][iy] + AGYWonCABLA.out[CurrSim - 1][iy]);
 		}
 		for (ia = 15; ia < 81; ia++){ 
-			temp += PrEPeligOther[ia][0][1] * exp(-PartnerAcqF[ia] * PartnerRate20F) + PrEPeligOther[ia][1][1] *
-				exp(-PartnerAcqF[ia] * PartnerRate20F * RRpartnerLow[1]);
+			temp += PrEPeligOther[ia][0][1] * (1.0 - exp(-PartnerAcqF[ia] * PartnerRate20F)) + PrEPeligOther[ia][1][1] *
+				(1.0 - exp(-PartnerAcqF[ia] * PartnerRate20F * RRpartnerLow[1]));
 		}
 		if (PrEPeligFSW > 0.0){
 			PrEPcoverageAllF.out[CurrSim - 1][iy] = (WomenOnPrEP.out[CurrSim - 1][iy] + WomenOnCABLA.out[CurrSim - 1][iy]) / 
@@ -13831,8 +14875,8 @@ void GetPrEPrateFSW()
 		}
 		temp2 = 0.0;
 		for (ia = 0; ia < 81; ia++){ 
-			temp2 += PrEPeligOther[ia][0][0] * exp(-PartnerAcqM[ia]) + PrEPeligOther[ia][1][0] * exp(-PartnerAcqM[ia] * 
-				RRpartnerLow[0]);
+			temp2 += PrEPeligOther[ia][0][0] * (1.0 - exp(-PartnerAcqM[ia])) + PrEPeligOther[ia][1][0] * (1.0 -  
+				exp(-PartnerAcqM[ia] * RRpartnerLow[0]));
 		}
 		if (tempMSM > 0.0){
 			PrEPcoverageAllM.out[CurrSim - 1][iy] = (MenOnPrEP.out[CurrSim - 1][iy] + MenOnCABLA.out[CurrSim - 1][iy]) / 
@@ -13840,8 +14884,8 @@ void GetPrEPrateFSW()
 		}
 		if (PrEPeligFSW > 0.0){
 			PrEPcoverageAll.out[CurrSim - 1][iy] = (WomenOnPrEP.out[CurrSim - 1][iy] + MenOnPrEP.out[CurrSim - 1][iy] +
-				WomenOnCABLA.out[CurrSim - 1][iy] + MenOnCABLA.out[CurrSim - 1][iy]) / (temp + PrEPeligFSW + temp2 +
-				tempMSM + WomenOnPrEP.out[CurrSim - 1][iy] + MenOnPrEP.out[CurrSim - 1][iy] +
+				WomenOnCABLA.out[CurrSim - 1][iy] + MenOnCABLA.out[CurrSim - 1][iy]) / (temp + PrEPeligFSW + PrEPeligPWID + 
+				temp2 + tempMSM + WomenOnPrEP.out[CurrSim - 1][iy] + MenOnPrEP.out[CurrSim - 1][iy] +
 				WomenOnCABLA.out[CurrSim - 1][iy] + MenOnCABLA.out[CurrSim - 1][iy]);
 		}
 	}
@@ -14576,11 +15620,11 @@ void CalcSelfTestingRates()
 	}
 
 	// (a) Fixed point distribution
+	bParamM = pow(QuadParam[0], 2.0) / VCTage[0];
+	bParamF = pow(QuadParam[1], 2.0) / VCTage[1];
+	aParamM = VCTage[0] / bParamM;
+	aParamF = VCTage[1] / bParamF;
 	if (SelfTestUptake[0] > 0.0){
-		bParamM = pow(QuadParam[0], 2.0) / VCTage[0];
-		bParamF = pow(QuadParam[1], 2.0) / VCTage[1];
-		aParamM = VCTage[0] / bParamM;
-		aParamF = VCTage[1] / bParamF;
 		Temp = 0.0;
 		for (ia = 0; ia < 81; ia++){
 			AgeSexAdjFixed[ia][0] = VCTmale2010 * pow((ia + 10.0) / 25.0, aParamM - 1.0) * exp((15.0 - ia) /
@@ -15897,7 +16941,7 @@ void CalcCurrMarriageRates()
 	int ia, ig, iy;
 	double PropnNeverMarried[77];
 
-	for (ig = 0; ig < 2; ig++){
+	for (ig = 0; ig < 3; ig++){
 		for (ia = 0; ia <= 75; ia++){ // 0 corresponds to age 15 last birthday
 			iy = CurrYear - (ia + 15) - StartYear; // Year of birth, in years after 1985
 			if (ia < MarriageMin[ig] - 15){ MarriageRate[ia][ig] = 0.0; }
@@ -15907,6 +16951,15 @@ void CalcCurrMarriageRates()
 				PropnNeverMarried[ia + 1] = 1.0 / (1.0 + pow((15.0 + (ia + 1.0) - MarriageMin[ig]) *
 					exp(-MarriageConstant[ig] - MarriageTrend[ig] * iy), 1.0 / MarriageShape[ig]));
 				MarriageRate[ia][ig] = 1.0 - PropnNeverMarried[ia + 1] / PropnNeverMarried[ia];
+				if (ig == 2) {
+					if (CurrYear < 2006){ MarriageRate[ia][ig] *= RRmarriageMSM[0]; }
+					else if (CurrYear == 2006) { 
+						MarriageRate[ia][ig] *= 0.5 * (RRmarriageMSM[0] + RRmarriageMSM[1]); }
+					else if (CurrYear < 2010){ MarriageRate[ia][ig] *= RRmarriageMSM[1]; }
+					else if (CurrYear == 2010) {
+						MarriageRate[ia][ig] *= 0.5 * (RRmarriageMSM[1] + RRmarriageMSM[2]); }
+					else { MarriageRate[ia][ig] *= RRmarriageMSM[2]; }
+				}
 			}
 		}
 	}
@@ -15915,7 +16968,7 @@ void CalcCurrMarriageRates()
 void GetMarriageAndDivorceRates()
 {
 	int ia, ib, ig, ii, ij;
-	double Temp1, Temp2, NewMarriages[2][2], CurrDivorceAdj;
+	double Temp1, Temp2, Temp3, NewMarriages[2][2], CurrDivorceAdj;
 
 	// Calculate AnnAIDSmort
 	for(ia=0; ia<76; ia++){
@@ -15959,6 +17012,13 @@ void GetMarriageAndDivorceRates()
 				MLU_LTL.Total_E[ia+5] + MLC_LTL.Total_E[ia+5]);}
 		else{
 			AnnAIDSmortM[ia][1][1] = 0.0;}
+		if (AIDSdeathsMarriedMSM[ia] > 0.0) {
+			AnnAIDSmortMSM[ia] = AIDSdeathsMarriedMSM[ia] / (AIDSdeathsMarriedMSM[ia] + MHU_LTM.Total_E[ia + 5] + 
+				MHC_LTM.Total_E[ia + 5] + MLU_LTM.Total_E[ia + 5] + MLC_LTM.Total_E[ia + 5]);
+		}
+		else {
+			AnnAIDSmortM[ia][1][1] = 0.0;
+		}
 	}
 
 	CalcCurrMarriageRates();
@@ -15967,30 +17027,35 @@ void GetMarriageAndDivorceRates()
 	for(ia=0; ia<76; ia++){
 		// Marriage rates
 		for(ii=0; ii<2; ii++){
-			for(ig=0; ig<2; ig++){
+			for(ig=0; ig<3; ig++){
 				ProbMarriageSE[ia][ii][ig] = MarriageRate[ia][ig];}
 		}
 		if(ia<15){
-			ProbMarriageSE[ia][0][0] *= (CurrBehavDbn[ia + 5][0][0] + CurrBehavDbnMSM[ia + 5][0] + 
-				MHU_virgin.Total[ia + 5] + MHC_virgin.Total[ia + 5]) / (CurrBehavDbn[ia + 5][0][0] + 
-				CurrBehavDbnMSM[ia + 5][0]);
-			ProbMarriageSE[ia][1][0] *= (CurrBehavDbn[ia + 5][2][0] + CurrBehavDbnMSM[ia + 5][1] + 
-				MLU_virgin.Total[ia + 5] + MLC_virgin.Total[ia + 5]) / (CurrBehavDbn[ia + 5][2][0] +
-				CurrBehavDbnMSM[ia + 5][1]);
+			ProbMarriageSE[ia][0][0] *= (CurrBehavDbn[ia + 5][0][0] + (1.0 - MSMpropn) *
+				(MHU_virgin.Total[ia + 5] + MHC_virgin.Total[ia + 5])) / CurrBehavDbn[ia + 5][0][0];
+			ProbMarriageSE[ia][1][0] *= (CurrBehavDbn[ia + 5][2][0] + (1.0 - MSMpropn) *
+				(MLU_virgin.Total[ia + 5] + MLC_virgin.Total[ia + 5])) / CurrBehavDbn[ia + 5][2][0];
 			ProbMarriageSE[ia][0][1] *= (CurrBehavDbn[ia+5][0][1] + FH_virgin.Total[ia+5])/
 				CurrBehavDbn[ia+5][0][1];
 			ProbMarriageSE[ia][1][1] *= (CurrBehavDbn[ia+5][2][1] + FL_virgin.Total[ia+5])/
 				CurrBehavDbn[ia+5][2][1];
+			ProbMarriageSE[ia][0][2] *= (CurrBehavDbnMSM[ia + 5][0] + MSMpropn *
+				(MHU_virgin.Total[ia + 5] + MHC_virgin.Total[ia + 5])) / CurrBehavDbnMSM[ia + 5][0];
+			ProbMarriageSE[ia][1][2] *= (CurrBehavDbnMSM[ia + 5][1] + MSMpropn *
+				(MLU_virgin.Total[ia + 5] + MLC_virgin.Total[ia + 5])) / CurrBehavDbnMSM[ia + 5][1];
 		}
 		// Rates of widowhood in current year
 		Temp1 = 0.0;
 		Temp2 = 0.0;
+		Temp3 = 0.0;
 		for(ib=0; ib<76; ib++){
 			Temp1 += AgePrefLT[ia+5][ib+5][0] * CurrNonAIDSmortALB[ib+15][1];
 			Temp2 += AgePrefLT[ia+5][ib+5][1] * CurrNonAIDSmortALB[ib+15][0];
+			Temp3 += AgePrefMSM[ia + 5][ib + 5] * CurrNonAIDSmortALB[ib + 15][0];
 		}
 		CurrWidowhoodRate[ia][0] = Temp2;
 		CurrWidowhoodRate[ia][1] = Temp1;
+		CurrWidowhoodRate[ia][2] = Temp3;
 		for(ii=0; ii<2; ii++){
 			for(ij=0; ij<2; ij++){
 				ProbDivorceOrWidowM[ia][ii][ij] = (1.0 - CurrWidowhoodRate[ia][1]) * 
@@ -16005,6 +17070,11 @@ void GetMarriageAndDivorceRates()
 				ProbDivorceOrWidowF[ia][ii][ij] = 1.0 - ProbDivorceOrWidowF[ia][ii][ij];
 			}
 		}
+		ProbDivorceOrWidowMSM[ia] = (1.0 - CurrWidowhoodRate[ia][2]) *
+			exp(-DivorceRate[ia][0] * CurrDivorceAdj) * (1.0 - SpouseAIDSmort(ia, 0, 0, 2));
+		ProbDivorceOrWidowMSM[ia] += (1.0 - ProbDivorceOrWidowMSM[ia]) * ORremarriage[2] *
+			MarriageRate[ia][2] / (ORremarriage[2] * MarriageRate[ia][2] + 1.0 - MarriageRate[ia][2]);
+		ProbDivorceOrWidowMSM[ia] = 1.0 - ProbDivorceOrWidowMSM[ia];
 	}
 
 	// Calculate remaining parameters in Mixing sheet (balancing factor and risk group prefs)
@@ -16040,8 +17110,10 @@ double SpouseAIDSmort(int ia, int ir1, int ir2, int ig)
 	for(ib=0; ib<76; ib++){
 		if(ig==0){
 			Temp += AgePrefLT[ia+5][ib+5][0] * AnnAIDSmortF[ib][ir2][ir1];}
-		else{
+		else if(ig==1){
 			Temp += AgePrefLT[ia+5][ib+5][1] * AnnAIDSmortM[ib][ir2][ir1];}
+		else {
+			Temp += AgePrefMSM[ia + 5][ib + 5] * AnnAIDSmortMSM[ib];}
 	}
 
 	return Temp;
@@ -16184,6 +17256,185 @@ void UpdateMarital(Adult* Single, Adult* MarriedH, Adult* MarriedL)
 	}
 }
 
+void UpdateMarriedMSM(Adult* Single, Adult* Married)
+{
+	int ia, is, ii;
+	double EnterLT1, ExitLT1;
+	double NewMarried1, NewSingle1;
+
+	ii = Single->Risk - 1;
+
+	for (ia = 5; ia < 81; ia++) {
+		EnterLT1 = ProbMarriageSE[ia - 5][ii][2];
+		ExitLT1 = ProbDivorceOrWidowMSM[ia - 5];
+		// Negative, never tested
+		NewMarried1 = Single->NegNoHCT[ia] * EnterLT1;
+		NewSingle1 = Married->NegNoHCT[ia] * ExitLT1;
+		Single->NegNoHCT[ia] += NewSingle1 - NewMarried1;
+		Married->NegNoHCT[ia] += NewMarried1 - NewSingle1;
+		// Negative, previously tested
+		NewMarried1 = Single->NegPastHCT[ia] * EnterLT1;
+		NewSingle1 = Married->NegPastHCT[ia] * ExitLT1;
+		Single->NegPastHCT[ia] += NewSingle1 - NewMarried1;
+		Married->NegPastHCT[ia] += NewMarried1 - NewSingle1;
+		if (PrEPorVM == 1) {
+			// RegHCT
+			NewMarried1 = Single->RegHCT[ia] * EnterLT1;
+			NewSingle1 = Married->RegHCT[ia] * ExitLT1;
+			Single->RegHCT[ia] += NewSingle1 - NewMarried1;
+			Married->RegHCT[ia] += NewMarried1 - NewSingle1;
+			// RegPrEP
+			NewMarried1 = Single->RegPrEP[ia] * EnterLT1;
+			NewSingle1 = Married->RegPrEP[ia] * ExitLT1;
+			Single->RegPrEP[ia] += NewSingle1 - NewMarried1;
+			Married->RegPrEP[ia] += NewMarried1 - NewSingle1;
+			// RegVM
+			NewMarried1 = Single->RegVM[ia] * EnterLT1;
+			NewSingle1 = Married->RegVM[ia] * ExitLT1;
+			Single->RegVM[ia] += NewSingle1 - NewMarried1;
+			Married->RegVM[ia] += NewMarried1 - NewSingle1;
+		}
+		for (is = 0; is < 5; is++) {
+			// Positive, never tested
+			NewMarried1 = Single->PosNoHCT[ia][is] * EnterLT1;
+			NewSingle1 = Married->PosNoHCT[ia][is] * ExitLT1;
+			Single->PosNoHCT[ia][is] += NewSingle1 - NewMarried1;
+			Married->PosNoHCT[ia][is] += NewMarried1 - NewSingle1;
+			// Positive, tested before HIV
+			NewMarried1 = Single->PosHCTpreHIV[ia][is] * EnterLT1;
+			NewSingle1 = Married->PosHCTpreHIV[ia][is] * ExitLT1;
+			Single->PosHCTpreHIV[ia][is] += NewSingle1 - NewMarried1;
+			Married->PosHCTpreHIV[ia][is] += NewMarried1 - NewSingle1;
+			// Diagnosed positive, not yet on ART
+			NewMarried1 = Single->PosDiagnosedPreART[ia][is] * EnterLT1;
+			NewSingle1 = Married->PosDiagnosedPreART[ia][is] * ExitLT1;
+			Single->PosDiagnosedPreART[ia][is] += NewSingle1 - NewMarried1;
+			Married->PosDiagnosedPreART[ia][is] += NewMarried1 - NewSingle1;
+			// On ART, baseline CD4 500+
+			NewMarried1 = Single->OnARTpre500[ia][is] * EnterLT1;
+			NewSingle1 = Married->OnARTpre500[ia][is] * ExitLT1;
+			Single->OnARTpre500[ia][is] += NewSingle1 - NewMarried1;
+			Married->OnARTpre500[ia][is] += NewMarried1 - NewSingle1;
+			// On ART, baseline CD4 350-499
+			NewMarried1 = Single->OnART500[ia][is] * EnterLT1;
+			NewSingle1 = Married->OnART500[ia][is] * ExitLT1;
+			Single->OnART500[ia][is] += NewSingle1 - NewMarried1;
+			Married->OnART500[ia][is] += NewMarried1 - NewSingle1;
+			// On ART, baseline CD4 200-349
+			NewMarried1 = Single->OnART350[ia][is] * EnterLT1;
+			NewSingle1 = Married->OnART350[ia][is] * ExitLT1;
+			Single->OnART350[ia][is] += NewSingle1 - NewMarried1;
+			Married->OnART350[ia][is] += NewMarried1 - NewSingle1;
+			// On ART, baseline CD4 <200
+			NewMarried1 = Single->OnART200[ia][is] * EnterLT1;
+			NewSingle1 = Married->OnART200[ia][is] * ExitLT1;
+			Single->OnART200[ia][is] += NewSingle1 - NewMarried1;
+			Married->OnART200[ia][is] += NewMarried1 - NewSingle1;
+		}
+		// Stopped ART
+		for (is = 0; is < 4; is++) {
+			NewMarried1 = Single->StoppedART[ia][is] * EnterLT1;
+			NewSingle1 = Married->StoppedART[ia][is] * ExitLT1;
+			Single->StoppedART[ia][is] += NewSingle1 - NewMarried1;
+			Married->StoppedART[ia][is] += NewMarried1 - NewSingle1;
+		}
+	}
+}
+
+void UpdatePWID(Adult* NonInjecting, Adult* Injecting)
+{
+	int ia, is, ii;
+	double Temp, EnterLT1, ExitLT1;
+	double NewPWID, ExPWID;
+
+	Temp = StartInjDrugs;
+	if (NonInjecting->Sex == 1) {
+		ii = NonInjecting->Risk - 1;
+		Temp *= RR_IDfem[ii];
+	}
+	if (CurrYear <= 2000) { Temp *= RRinjDrug2000; }
+	else if (CurrYear < 2015) {
+		Temp *= (RRinjDrug2000 + (1.0 - RRinjDrug2000) *
+			(CurrYear - 2000)/15.0);
+	}
+	ExitLT1 = 1.0 - exp(-StopInjDrugs);
+
+	for (ia = 5; ia < 81; ia++) {
+		EnterLT1 = 1.0 - exp(-Temp * RR_IDage[ia]);
+		// Negative, never tested
+		NewPWID = NonInjecting->NegNoHCT[ia] * EnterLT1;
+		ExPWID = Injecting->NegNoHCT[ia] * ExitLT1;
+		NonInjecting->NegNoHCT[ia] += ExPWID - NewPWID;
+		Injecting->NegNoHCT[ia] += NewPWID - ExPWID;
+		// Negative, previously tested
+		NewPWID = NonInjecting->NegPastHCT[ia] * EnterLT1;
+		ExPWID = Injecting->NegPastHCT[ia] * ExitLT1;
+		NonInjecting->NegPastHCT[ia] += ExPWID - NewPWID;
+		Injecting->NegPastHCT[ia] += NewPWID - ExPWID;
+		if (PrEPorVM == 1) {
+			// RegHCT
+			NewPWID = NonInjecting->RegHCT[ia] * EnterLT1;
+			ExPWID = Injecting->RegHCT[ia] * ExitLT1;
+			NonInjecting->RegHCT[ia] += ExPWID - NewPWID;
+			Injecting->RegHCT[ia] += NewPWID - ExPWID;
+			// RegPrEP
+			NewPWID = NonInjecting->RegPrEP[ia] * EnterLT1;
+			ExPWID = Injecting->RegPrEP[ia] * ExitLT1;
+			NonInjecting->RegPrEP[ia] += ExPWID - NewPWID;
+			Injecting->RegPrEP[ia] += NewPWID - ExPWID;
+			// RegVM
+			NewPWID = NonInjecting->RegVM[ia] * EnterLT1;
+			ExPWID = Injecting->RegVM[ia] * ExitLT1;
+			NonInjecting->RegVM[ia] += ExPWID - NewPWID;
+			Injecting->RegVM[ia] += NewPWID - ExPWID;
+		}
+		for (is = 0; is < 5; is++) {
+			// Positive, never tested
+			NewPWID = NonInjecting->PosNoHCT[ia][is] * EnterLT1;
+			ExPWID = Injecting->PosNoHCT[ia][is] * ExitLT1;
+			NonInjecting->PosNoHCT[ia][is] += ExPWID - NewPWID;
+			Injecting->PosNoHCT[ia][is] += NewPWID - ExPWID;
+			// Positive, tested before HIV
+			NewPWID = NonInjecting->PosHCTpreHIV[ia][is] * EnterLT1;
+			ExPWID = Injecting->PosHCTpreHIV[ia][is] * ExitLT1;
+			NonInjecting->PosHCTpreHIV[ia][is] += ExPWID - NewPWID;
+			Injecting->PosHCTpreHIV[ia][is] += NewPWID - ExPWID;
+			// Diagnosed positive, not yet on ART
+			NewPWID = NonInjecting->PosDiagnosedPreART[ia][is] * EnterLT1;
+			ExPWID = Injecting->PosDiagnosedPreART[ia][is] * ExitLT1;
+			NonInjecting->PosDiagnosedPreART[ia][is] += ExPWID - NewPWID;
+			Injecting->PosDiagnosedPreART[ia][is] += NewPWID - ExPWID;
+			// On ART, baseline CD4 500+
+			NewPWID = NonInjecting->OnARTpre500[ia][is] * EnterLT1;
+			ExPWID = Injecting->OnARTpre500[ia][is] * ExitLT1;
+			NonInjecting->OnARTpre500[ia][is] += ExPWID - NewPWID;
+			Injecting->OnARTpre500[ia][is] += NewPWID - ExPWID;
+			// On ART, baseline CD4 350-499
+			NewPWID = NonInjecting->OnART500[ia][is] * EnterLT1;
+			ExPWID = Injecting->OnART500[ia][is] * ExitLT1;
+			NonInjecting->OnART500[ia][is] += ExPWID - NewPWID;
+			Injecting->OnART500[ia][is] += NewPWID - ExPWID;
+			// On ART, baseline CD4 200-349
+			NewPWID = NonInjecting->OnART350[ia][is] * EnterLT1;
+			ExPWID = Injecting->OnART350[ia][is] * ExitLT1;
+			NonInjecting->OnART350[ia][is] += ExPWID - NewPWID;
+			Injecting->OnART350[ia][is] += NewPWID - ExPWID;
+			// On ART, baseline CD4 <200
+			NewPWID = NonInjecting->OnART200[ia][is] * EnterLT1;
+			ExPWID = Injecting->OnART200[ia][is] * ExitLT1;
+			NonInjecting->OnART200[ia][is] += ExPWID - NewPWID;
+			Injecting->OnART200[ia][is] += NewPWID - ExPWID;
+		}
+		// Stopped ART
+		for (is = 0; is < 4; is++) {
+			NewPWID = NonInjecting->StoppedART[ia][is] * EnterLT1;
+			ExPWID = Injecting->StoppedART[ia][is] * ExitLT1;
+			NonInjecting->StoppedART[ia][is] += ExPWID - NewPWID;
+			Injecting->StoppedART[ia][is] += NewPWID - ExPWID;
+		}
+	}
+}
+
 void UpdateAllDemog()
 {
 	// Adult males
@@ -16193,29 +17444,39 @@ void UpdateAllDemog()
 	MHC_ST.UpdateDemog();
 	MHU_STM.UpdateDemog();
 	MHC_STM.UpdateDemog();
+	MHU_ID.UpdateDemog();
+	MHC_ID.UpdateDemog();
 	MHU_LTH.UpdateDemog();
 	MHC_LTH.UpdateDemog();
 	MHU_LTL.UpdateDemog();
 	MHC_LTL.UpdateDemog();
+	MHU_LTM.UpdateDemog();
+	MHC_LTM.UpdateDemog();
 	MLU_virgin.UpdateDemog();
 	MLC_virgin.UpdateDemog();
 	MLU_ST.UpdateDemog();
 	MLC_ST.UpdateDemog();
 	MLU_STM.UpdateDemog();
 	MLC_STM.UpdateDemog();
+	MLU_ID.UpdateDemog();
+	MLC_ID.UpdateDemog();
 	MLU_LTH.UpdateDemog();
 	MLC_LTH.UpdateDemog();
 	MLU_LTL.UpdateDemog();
 	MLC_LTL.UpdateDemog();
+	MLU_LTM.UpdateDemog();
+	MLC_LTM.UpdateDemog();
 
 	// Adult females
 	FH_virgin.UpdateDemog();
 	FH_ST.UpdateDemog();
 	FH_SW.UpdateDemog();
+	FH_ID.UpdateDemog();
 	FH_LTH.UpdateDemog();
 	FH_LTL.UpdateDemog();
 	FL_virgin.UpdateDemog();
 	FL_ST.UpdateDemog();
+	FL_ID.UpdateDemog();
 	FL_LTH.UpdateDemog();
 	FL_LTL.UpdateDemog();
 
@@ -16557,29 +17818,39 @@ void UpdateStartTot()
 	MHC_ST.UpdateStartTotal();
 	MHU_STM.UpdateStartTotal();
 	MHC_STM.UpdateStartTotal();
+	MHU_ID.UpdateStartTotal();
+	MHC_ID.UpdateStartTotal();
 	MHU_LTH.UpdateStartTotal();
 	MHC_LTH.UpdateStartTotal();
 	MHU_LTL.UpdateStartTotal();
 	MHC_LTL.UpdateStartTotal();
+	MHU_LTM.UpdateStartTotal();
+	MHC_LTM.UpdateStartTotal();
 	MLU_virgin.UpdateStartTotal();
 	MLC_virgin.UpdateStartTotal();
 	MLU_ST.UpdateStartTotal();
 	MLC_ST.UpdateStartTotal();
 	MLU_STM.UpdateStartTotal();
 	MLC_STM.UpdateStartTotal();
+	MLU_ID.UpdateStartTotal();
+	MLC_ID.UpdateStartTotal();
 	MLU_LTH.UpdateStartTotal();
 	MLC_LTH.UpdateStartTotal();
 	MLU_LTL.UpdateStartTotal();
 	MLC_LTL.UpdateStartTotal();
+	MLU_LTM.UpdateStartTotal();
+	MLC_LTM.UpdateStartTotal();
 
 	// Adult females
 	FH_virgin.UpdateStartTotal();
 	FH_ST.UpdateStartTotal();
 	FH_SW.UpdateStartTotal();
+	FH_ID.UpdateStartTotal();
 	FH_LTH.UpdateStartTotal();
 	FH_LTL.UpdateStartTotal();
 	FL_virgin.UpdateStartTotal();
 	FL_ST.UpdateStartTotal();
+	FL_ID.UpdateStartTotal();
 	FL_LTH.UpdateStartTotal();
 	FL_LTL.UpdateStartTotal();
 
@@ -16732,6 +18003,14 @@ void ResultsAtEndOfYr()
 		DiagDeaths5to9.out[CurrSim - 1][iy] = AIDSdeathsDiagP[1];
 		ARTdeaths1to4.out[CurrSim - 1][iy] = AIDSdeathsART_P[0];
 		ARTdeaths5to9.out[CurrSim - 1][iy] = AIDSdeathsART_P[1];
+		Temp[0] = ChildMortBy5yr[iy][1][0] + ChildMortBy5yr[iy][1][1] - AIDSdeathsDiagP[0];
+		Temp[1] = ((AIDSdeathsDiagP[0] - AIDSdeathsART_P[0]) / RRdiagDeathsPIP[0]) +
+			AIDSdeathsART_P[0] / (RRdiagDeathsPIP[0] * RRdiagDeathsPIP[1]);
+		DeathsDiagPos1to4.out[CurrSim - 1][iy] = Temp[1] / (Temp[0] + Temp[1]);
+		Temp[0] = ChildMortBy5yr[iy][2][0] + ChildMortBy5yr[iy][2][1] - AIDSdeathsDiagP[1];
+		Temp[1] = ((AIDSdeathsDiagP[0] - AIDSdeathsART_P[0]) / RRdiagDeathsPIP[0]) +
+			AIDSdeathsART_P[1] / (RRdiagDeathsPIP[0] * RRdiagDeathsPIP[1]);
+		DeathsDiagPos5to9.out[CurrSim - 1][iy] = Temp[1] / (Temp[0] + Temp[1]);
 	}
 
 	NewART_P = 0.0;
@@ -16739,7 +18018,7 @@ void ResultsAtEndOfYr()
 	StartingART0to14.out[CurrSim - 1][iy] = NewART_P;
 
 	// Fraction of infections acquired recently
-	if (CalibANCprev == 1){
+	if (CalibANCprev == 1 || CalibYouthPrev){
 		for (ia = 0; ia < 6; ia++){
 			FractionRecentF[ia][CurrYear - StartYear + 1] = 0.0;
 			for (ii = 0; ii < 5; ii++){
@@ -17012,8 +18291,16 @@ void ResultsAtEndOfYr()
 		StartingART1to2.out[CurrSim - 1][iy] = PaedNewARTbyAge[1] + PaedNewARTbyAge[2];
 		StartingART3to5.out[CurrSim - 1][iy] = PaedNewARTbyAge[3] + PaedNewARTbyAge[4] + PaedNewARTbyAge[5];
 		StartingART6to13.out[CurrSim - 1][iy] = 0.0;
+		StartingART6to9.out[CurrSim - 1][iy] = 0.0;  //LJ
+		StartingART10to14.out[CurrSim - 1][iy] = 0.0;//LJ
 		for (ia = 6; ia < 14; ia++){
 			StartingART6to13.out[CurrSim - 1][iy] += PaedNewARTbyAge[ia];
+			if (ia >= 6 && ia <= 9) {
+				StartingART6to9.out[CurrSim - 1][iy] += PaedNewARTbyAge[ia]; //LJ
+			}
+			if (ia >= 10 && ia <= 14) {
+				StartingART10to14.out[CurrSim - 1][iy] += PaedNewARTbyAge[ia];//LJ
+			}
 		}
 		TotNewNeed500M.out[CurrSim - 1][iy] = NewElig500[0];
 		TotNewNeed500F.out[CurrSim - 1][iy] = NewElig500[1];
@@ -17023,6 +18310,16 @@ void ResultsAtEndOfYr()
 		// HIV testing outputs
 		TotalHIVtests.out[CurrSim-1][iy] = NewlyTestedNeg[0] + NewlyTestedNeg[1] +
 			NewlyTestedPos[0] + NewlyTestedPos[1];
+
+		TotalHIVtests15_19.out[CurrSim - 1][iy] = NewlyTestedNeg15_19 + NewlyTestedPos15_19; //LJ
+		TotalHIVtestsNeg15_19.out[CurrSim - 1][iy] = NewlyTestedNeg15_19;  //LJ
+		TotalHIVtestsPos15_19.out[CurrSim - 1][iy] = NewlyTestedPos15_19;  //LJ
+		TotalHIVtestsPrEP.out[CurrSim - 1][iy] = NewlyTestedNeg_PrEP[0] + NewlyTestedNeg_PrEP[1]; //LJ
+		HIVtestsPosNoPrEP.out[CurrSim - 1][iy] = (NewlyTestedPos[0] + NewlyTestedPos[1]) / //this is to separate out PrEP HCT to use in costs later (because our PrEP cost accounts for tests)
+			(TotalHIVtests.out[CurrSim - 1][iy] - TotalHIVtestsPrEP.out[CurrSim - 1][iy]); // LJ
+
+
+
 		if (CurrYear > 1990){
 			HIVtestsPos.out[CurrSim - 1][iy] = (NewlyTestedPos[0] + NewlyTestedPos[1] + (NewlyTestedNeg[0] +
 				NewlyTestedNeg[1]) * (1.0 - RapidDiagSp)) / TotalHIVtests.out[CurrSim - 1][iy];
@@ -17320,6 +18617,7 @@ void ResultsAtEndOfYr2()
 	HIVincMSM.out[CurrSim - 1][iy] = HIVincMSM.out[CurrSim - 1][iy] / NegMSM.out[CurrSim - 1][iy];
 	HIVincMSM.out[CurrSim - 1][iy] *= 1.0 / (PropnTGW * RR_HIV_TGW + 1.0 - PropnTGW);
 	HIVincTGW.out[CurrSim - 1][iy] = HIVincMSM.out[CurrSim - 1][iy] * RR_HIV_TGW;
+	HIVincPWID.out[CurrSim - 1][iy] = NewHIVinPWID.out[CurrSim - 1][iy] / NegPWID.out[CurrSim - 1][iy];
 
 	// Incidence:prevalence ratio
 	IncPrevRatio.out[CurrSim - 1][iy] = TotalNewHIV.out[CurrSim - 1][iy] / TotalHIV.out[CurrSim - 1][iy];
@@ -17392,9 +18690,16 @@ void ResultsAtEndOfYr2()
 	NewPrEPinAGYW.out[CurrSim - 1][iy] = NewPrEP_AGYW;
 	NewPrEPinFSW.out[CurrSim - 1][iy] = NewPrEP_FSW;
 	NewPrEPinMSM.out[CurrSim - 1][iy] = NewPrEP_MSM;
+	NewPrEPinNonMSM.out[CurrSim - 1][iy] = NewPrEP_nonMSM; //LJ
+	NewPrEPinNonFSW.out[CurrSim - 1][iy] = NewPrEP_nonFSW; //LJ
+	NewPrEPinPWID.out[CurrSim - 1][iy] = NewPrEP_PWID;
+
 	NewCABLAinAGYW.out[CurrSim - 1][iy] = NewCABLA_AGYW;
 	NewCABLAinFSW.out[CurrSim - 1][iy] = NewCABLA_FSW;
 	NewCABLAinMSM.out[CurrSim - 1][iy] = NewCABLA_MSM;
+	NewCABLAinNonMSM.out[CurrSim - 1][iy] = NewCABLA_nonMSM; //LJ
+	NewCABLAinNonFSW.out[CurrSim - 1][iy] = NewCABLA_nonFSW; //LJ
+	NewCABLAinPWID.out[CurrSim - 1][iy] = NewCABLA_PWID;
 }
 
 void TBresultsAtEndOfYr()
@@ -17643,7 +18948,7 @@ void TBresultsAtEndOfYr()
 		}
 		temp1 = 0.0;
 		temp2 = 0.0;
-		for (ii = 0; ii < 5; ii++) { // ii is years prior to current
+		for (ii = 0; ii < 5 && ii <= iy; ii++) { // ii is years prior to current; guard against negative index
 			temp1 += exp(-(ii + 0.5) / DurTBadult.out[CurrSim - 1][iy]) *
 				NewActiveTBadult.out[CurrSim - 1][iy - ii];
 			temp2 += exp(-(ii + 0.5) / DurTBadult.out[CurrSim - 1][iy]);
@@ -17817,25 +19122,29 @@ void OneYear()
 	UpdateMC(&MHU_virgin, &MHC_virgin);
 	UpdateMC(&MHU_ST, &MHC_ST);
 	UpdateMC(&MHU_STM, &MHC_STM);
+	UpdateMC(&MHU_ID, &MHC_ID);
 	UpdateMC(&MHU_LTH, &MHC_LTH);
 	UpdateMC(&MHU_LTL, &MHC_LTL);
+	UpdateMC(&MHU_LTM, &MHC_LTM);
 	UpdateMC(&MLU_virgin, &MLC_virgin);
 	UpdateMC(&MLU_ST, &MLC_ST);
 	UpdateMC(&MLU_STM, &MLC_STM);
+	UpdateMC(&MLU_ID, &MLC_ID);
 	UpdateMC(&MLU_LTH, &MLC_LTH);
 	UpdateMC(&MLU_LTL, &MLC_LTL);
+	UpdateMC(&MLU_LTM, &MLC_LTM);
 
 	// Update marital status
 	UpdateMarital(&MHU_ST, &MHU_LTH, &MHU_LTL);
-	UpdateMarital(&MHU_STM, &MHU_LTH, &MHU_LTL);
 	UpdateMarital(&MHC_ST, &MHC_LTH, &MHC_LTL);
-	UpdateMarital(&MHC_STM, &MHC_LTH, &MHC_LTL);
 	UpdateMarital(&MLU_ST, &MLU_LTH, &MLU_LTL);
-	UpdateMarital(&MLU_STM, &MLU_LTH, &MLU_LTL);
 	UpdateMarital(&MLC_ST, &MLC_LTH, &MLC_LTL);
-	UpdateMarital(&MLC_STM, &MLC_LTH, &MLC_LTL);
 	UpdateMarital(&FH_ST, &FH_LTH, &FH_LTL);
 	UpdateMarital(&FL_ST, &FL_LTH, &FL_LTL);
+	UpdateMarriedMSM(&MHU_STM, &MHU_LTM);
+	UpdateMarriedMSM(&MHC_STM, &MHC_LTM);
+	UpdateMarriedMSM(&MLU_STM, &MLU_LTM);
+	UpdateMarriedMSM(&MLC_STM, &MLC_LTM);
 
 	UpdateAllDemog();
 
@@ -17846,6 +19155,14 @@ void OneYear()
 	UpdateDebut(&MLC_virgin, &MLC_ST, &MLC_STM, 1);
 	UpdateDebut(&FH_virgin, &FH_ST, &FH_ST, 1);
 	UpdateDebut(&FL_virgin, &FL_ST, &FL_ST, 1);
+
+	// Update injecting drug use
+	UpdatePWID(&MHU_ST, &MHU_ID);
+	UpdatePWID(&MHC_ST, &MHC_ID);
+	UpdatePWID(&MLU_ST, &MLU_ID);
+	UpdatePWID(&MLC_ST, &MLC_ID);
+	UpdatePWID(&FH_ST, &FH_ID);
+	UpdatePWID(&FL_ST, &FL_ID);
 
 	// Update totals
 	UpdateStartTot();
@@ -17984,6 +19301,7 @@ void GetSummaryOutputs(const char* filout)
 	TotSexWorkers.GetMeans(); // New in v4.8
 	TotalCisMSM.GetMeans(); // New in v4.8
 	TotalTGW.GetMeans(); // New in v4.8
+	TotalPWID.GetMeans();
 	TotBirths.GetMeans();
 	TotFertRate.GetMeans();
 	BirthRate.GetMeans();
@@ -18015,7 +19333,8 @@ void GetSummaryOutputs(const char* filout)
 	NewHIVclients.GetMeans(); 
 	NewHIVclientsNotSW.GetMeans(); 
 	NewHIVinMSM.GetMeans();
-	NewHIVinTGW.GetMeans(); // New in v4.8
+	NewHIVinTGW.GetMeans(); 
+	NewHIVinPWID.GetMeans();
 	TotIncidence.GetMeans();
 	HIVinc15plus.GetMeans(); 
 	HIVinc15plusM.GetMeans(); 
@@ -18036,7 +19355,8 @@ void GetSummaryOutputs(const char* filout)
 	HIVincFSW.GetMeans(); 
 	HIVincClients.GetMeans(); 
 	HIVincMSM.GetMeans(); 
-	HIVincTGW.GetMeans(); // New in v4.8
+	HIVincTGW.GetMeans(); 
+	HIVincPWID.GetMeans();
 	ANCincidence.GetMeans(); 
 	IncPrevRatio.GetMeans(); 
 	IncPrevRatioFtoM.GetMeans(); 
@@ -18099,7 +19419,10 @@ void GetSummaryOutputs(const char* filout)
 	PrevPreg40to49.GetMeans();
 	PrevFSW.GetMeans();
 	MSMprev18plus.GetMeans();
-	TGWprev18plus.GetMeans(); // New in v4.8
+	TGWprev18plus.GetMeans(); 
+	PrevPWID.GetMeans();
+	PrevPWID_M.GetMeans();
+	PrevPWID_F.GetMeans();
 	PrevClients.GetMeans(); 
 
 	// ART outputs: uptake, coverage and interruption
@@ -18134,6 +19457,7 @@ void GetSummaryOutputs(const char* filout)
 	ARTcoverageFSW.GetMeans(); 
 	ARTcoverageClients.GetMeans(); 
 	ARTcoverageMSM.GetMeans(); 
+	ARTcoveragePWID.GetMeans();
 	EnrolmentRatio.GetMeans();
 	EnrolmentRatio15M.GetMeans();
 	EnrolmentRatio15F.GetMeans();
@@ -18158,6 +19482,7 @@ void GetSummaryOutputs(const char* filout)
 	VLsuppressed1000P.GetMeans();
 	VLsuppressed1000FSW.GetMeans();
 	VLsuppressed1000MSM.GetMeans();
+	VLsuppressed1000PWID.GetMeans();
 	VLsuppressed15to24.GetMeans();
 	VLsuppressed15to24M.GetMeans();
 	VLsuppressed15to24F.GetMeans();
@@ -18171,13 +19496,17 @@ void GetSummaryOutputs(const char* filout)
 	VLsuppressed50M.GetMeans();
 	VLsuppressed50F.GetMeans();
 	VLsuppressed50P.GetMeans();
+	LowVLuntreatedHIV.GetMeans();
+	LowVLuntreatedHIV_M.GetMeans();
+	LowVLuntreatedHIV_F.GetMeans();
+	LowVLuntreatedHIV_P.GetMeans();
 
 	// HIV testing and other 90-90-90 indicators 
 	SummOutRow += 3;
 	TotalHIVtests.GetMeans();
 	TotalHIVtestsU15.GetMeans();
 	HIVtestsPos.GetMeans();
-	FirstHIVtestsPos.GetMeans(); // New to v4.8
+	FirstHIVtestsPos.GetMeans(); 
 	HIVtestsPosU15.GetMeans();
 	NewDiagAtBirth.GetMeans();
 	NewDiagInfants.GetMeans();
@@ -18193,6 +19522,7 @@ void GetSummaryOutputs(const char* filout)
 	DiagnosedPropn15to24F.GetMeans();
 	DiagnosedHIV_FSW.GetMeans(); 
 	DiagnosedHIV_MSM.GetMeans(); 
+	DiagnosedHIV_PWID.GetMeans();
 	ARTcoverageDiag.GetMeans();
 	ARTcoverageDiagM.GetMeans();
 	ARTcoverageDiagF.GetMeans();
@@ -18221,24 +19551,29 @@ void GetSummaryOutputs(const char* filout)
 	WomenOnPrEP.GetMeans();
 	FSWonPrEP.GetMeans();
 	MSMonPrEP.GetMeans();
+	PWIDonPrEP.GetMeans();
 	AGYWonPrEP.GetMeans();
 	NewPrEP_M.GetMeans();
 	NewPrEP_F.GetMeans();
 	NewPrEPinFSW.GetMeans();
 	NewPrEPinMSM.GetMeans();
+	NewPrEPinPWID.GetMeans();
 	NewPrEPinAGYW.GetMeans();
 	MenOnCABLA.GetMeans();
 	WomenOnCABLA.GetMeans();
 	FSWonCABLA.GetMeans();
 	MSMonCABLA.GetMeans();
+	PWIDonCABLA.GetMeans();
 	AGYWonCABLA.GetMeans();
 	NewCABLA_M.GetMeans();
 	NewCABLA_F.GetMeans();
 	NewCABLAinFSW.GetMeans();
 	NewCABLAinMSM.GetMeans();
+	NewCABLAinPWID.GetMeans();
 	NewCABLAinAGYW.GetMeans();
 	PrEPcoverageFSW.GetMeans();
 	PrEPcoverageMSM.GetMeans();
+	PrEPcoveragePWID.GetMeans();
 	PrEPcoverageAGYW.GetMeans();
 	PrEPcoverageAllM.GetMeans();
 	PrEPcoverageAllF.GetMeans();
@@ -18369,6 +19704,12 @@ void GetAddedOutputs(const char* filout)
 	PregDiag25to49.GetMeans(); // New to 4.8
 	DiagnosedPropnAdult.GetMeans();
 	FalseNegPropn.GetMeans(); 
+	HIVtestsPos18mo.GetMeans();
+	HIVtestsPos19to59mo.GetMeans();
+	HIVtestsPos5to14.GetMeans();
+	NewDiagnosesPregnancy.GetMeans();
+	NewDiag1yrOlds.GetMeans();
+	RelativeTestingVirgins.GetMeans();
 
 	// Other ART outputs
 	SummOutRow += 3;
@@ -18376,11 +19717,11 @@ void GetAddedOutputs(const char* filout)
 	AdultRootF.GetMeans();
 	ChildRoot.GetMeans();
 	AdultARTinterrupters.GetMeans();
-	ChildARTinterrupters.GetMeans(); // New to 4.3
+	ChildARTinterrupters.GetMeans(); 
 	ARTcoverageAdult.GetMeans();
 	TotMTCTallBirths.GetMeans();
 	AdultInterruptPropn.GetMeans();
-	ChildInterruptPropn.GetMeans(); // New to 4.3
+	ChildInterruptPropn.GetMeans(); 
 	TotBirthsARTconcep.GetMeans();
 	EverARTpreConcep.GetMeans();
 	ARTpreConcep15.GetMeans();
@@ -18388,40 +19729,21 @@ void GetAddedOutputs(const char* filout)
 	ARTpreConcep25.GetMeans();
 	ARTpreConcep30.GetMeans();
 	ARTpreConcep35.GetMeans();
-	MSMprev15to49.GetMeans();
-	//MalePrev18plus.GetMeans();
-	Circumcised15to24.GetMeans();
-	Circumcised15plus.GetMeans();
-	MMCprob10to14.GetMeans();
-	HIVtestsPos18mo.GetMeans();
-	HIVtestsPos19to59mo.GetMeans();
-	HIVtestsPos5to14.GetMeans();
-	PaedARTpropn0to4.GetMeans(); 
-	PaedARTpropn5to9.GetMeans(); 
-	AdultsOver500.GetMeans(); 
-	Adults350to499.GetMeans(); 
+	PaedARTpropn0to4.GetMeans();
+	PaedARTpropn5to9.GetMeans();
+	AdultsOver500.GetMeans();
+	Adults350to499.GetMeans();
 	Adults200to349.GetMeans();
-	AdultsUnder200.GetMeans(); 
-	NewARTunder200F.GetMeans(); 
-	NewART200to349F.GetMeans(); 
-	NewART350to499F.GetMeans(); 
-	NewARTover500F.GetMeans(); 
-	HIVinc15to49adj.GetMeans();
-	ANCincidence.GetMeans();
-	ANCincidenceAdj.GetMeans();
-	MultPartners15to24M.GetMeans();
-	MultPartners15to24F.GetMeans();
-	MultPartners25to49M.GetMeans();
-	MultPartners25to49F.GetMeans();
+	AdultsUnder200.GetMeans();
+	NewARTunder200F.GetMeans();
+	NewART200to349F.GetMeans();
+	NewART350to499F.GetMeans();
+	NewARTover500F.GetMeans();
 	ARTresumptionRateM.GetMeans();
 	ARTresumptionRateF.GetMeans();
-	RelativeTestingVirgins.GetMeans();
-	NewPrEPrateFSW.GetMeans();
-	NewCABLArateFSW.GetMeans(); // New to 4.8
-	NewDiagnosesPregnancy.GetMeans();
-	NewDiag1yrOlds.GetMeans();
-	TotClients.GetMeans();
-	PosClients.GetMeans();
+
+	// Other VL outputs
+	SummOutRow += 3;
 	LowVLuntreatedHIV.GetMeans();
 	LowVLuntreatedHIV_M.GetMeans();
 	LowVLuntreatedHIV_F.GetMeans();
@@ -18430,6 +19752,38 @@ void GetAddedOutputs(const char* filout)
 	LowVLallHIV_M.GetMeans();
 	LowVLallHIV_F.GetMeans();
 	LowVLallHIV_P.GetMeans();
+
+	// Marriage and other behavioural outputs
+	SummOutRow += 3;
+	MarriedPropnAll.GetMeans();
+	MarriedPropn15_49.GetMeans();
+	MarriedPropn50plus.GetMeans();
+	MarriedPropnAllM.GetMeans();
+	MarriedPropn15_49M.GetMeans();
+	MarriedPropn50plusM.GetMeans();
+	MarriedPropnAllF.GetMeans();
+	MarriedPropn15_49F.GetMeans();
+	MarriedPropn50plusF.GetMeans();
+	MarriedPropnAllMSM.GetMeans();
+	PropnMarriedM_MSM.GetMeans();
+	MultPartners15to24M.GetMeans();
+	MultPartners15to24F.GetMeans();
+	MultPartners25to49M.GetMeans();
+	MultPartners25to49F.GetMeans();
+
+	// Other outputs
+	SummOutRow += 3;
+	MSMprev15to49.GetMeans();
+	Circumcised15to24.GetMeans();
+	Circumcised15plus.GetMeans();
+	MMCprob10to14.GetMeans();
+	HIVinc15to49adj.GetMeans();
+	ANCincidence.GetMeans();
+	ANCincidenceAdj.GetMeans();
+	NewPrEPrateFSW.GetMeans();
+	NewCABLArateFSW.GetMeans(); // New to 4.8
+	TotClients.GetMeans();
+	PosClients.GetMeans();
 	DALY_HIV.GetMeans();
 	DALY_HIVpaed.GetMeans();
 	YLD_HIV.GetMeans();
@@ -18437,6 +19791,9 @@ void GetAddedOutputs(const char* filout)
 	AHDnotOnART.GetMeans();
 	YLD_AHD.GetMeans();
 	YLD_AHDuntreated.GetMeans();
+	PWIDpropnMale.GetMeans();
+	DeathsDiagPos1to4.GetMeans();
+	DeathsDiagPos5to9.GetMeans();
 
 	for (i = 0; i <= SummOutRow; i++){
 		for (c = 0; c<86; c++){
@@ -18864,6 +20221,8 @@ void CalcLikelihood()
 		LogLikelihood += CalcCSWprevLogL();}
 	if (CalibMSMprev == 1 && nMSMstudies > 0){
 		LogLikelihood += CalcMSMprevLogL();}
+	if (CalibPWIDprev == 1 && nPWIDstudies > 0) {
+		LogLikelihood += CalcPWIDprevLogL();}
 	if (CalibTBdeathsA == 1) {
 		LogLikelihood += CalcAdultTBmortLogL();}
 	if (CalibTBdeathsPLHIV == 1) {
@@ -18876,12 +20235,14 @@ void CalcLikelihood()
 		LogLikelihood += CalcAdultTBlabDiagLogL();}
 	if (CalibHIVprevETR == 1) {
 		LogLikelihood += CalcHIVprevETRlogL();}
+	if (CalibTBprev == 1) {
+		LogLikelihood += CalcTBprevLogL();}
 	if (ProvModel == 0){
 		if (CalibPaedPrev == 1){
 			LogLikelihood += CalcPaedPrevLogL();}
-		if (CalibAdultPrev == 1){
+		if (CalibAdultPrev == 1 || CalibYouthPrev == 1){
 			LogLikelihood += CalcAdultPrevLogL();}
-		if (CalibANCprev == 1){
+		if (CalibANCprev == 1 || CalibYouthPrev == 1){
 			LogLikelihood += CalcANCprevLogL2();}
 		if (CalibDeathsA == 1){
 			LogLikelihood += CalcMortLikelihoodA();}
@@ -18897,8 +20258,6 @@ void CalcLikelihood()
 			LogLikelihood += CalcChildPIPlogL();}
 		if (CalibMarriageData == 1){
 			LogLikelihood += CalcMarriageLogL();}
-		if (CalibTBprev == 1) {
-			LogLikelihood += CalcTBprevLogL();}
 		if (CalibRifResPropn == 1) {
 			LogLikelihood += CalcRifResLogL();}
 		if (CalibSmPosHH == 1) {
@@ -18909,11 +20268,11 @@ void CalcLikelihood()
 			LogLikelihood += CalcTB_HIV_ORlogL();}
 	}
 	else{
-		if (CalibAdultPrev == 1){
+		if (CalibAdultPrev == 1 || CalibYouthPrev == 1){
 			LogLikelihood += CalcHHprovLogL();}
 		if (CalibPaedPrev == 1){
 			LogLikelihood += CalcHHprovPlogL();}
-		if (CalibANCprev == 1){
+		if (CalibANCprev == 1 || CalibYouthPrev == 1){
 			LogLikelihood += CalcANCprevLogL2();}
 		if (CalibDeathsA == 1){
 			LogLikelihood += CalcMortLikelihoodA();}
@@ -18925,7 +20284,7 @@ void CalcLikelihood()
 			LogLikelihood += CalcANC_ARTlogL();}
 		//if (ARTerrorInd == 1){ LogLikelihood = -100000.0; }
 	}
-	
+	//cout << "LogLikelihood: "<< LogLikelihood <<endl;
 	//PrevLogL.out[CurrSim-1][0] = LogLikelihood;
 }
 
@@ -18965,13 +20324,15 @@ double CalcPaedPrevLogL()
 
 double CalcAdultPrevLogL()
 {
-	int ia, ig;
+	int ia, ig, UpperLimit;
 	double SElogitPrev05, SElogitPrev08, SElogitPrev12, SElogitPrev16, SElogitPrev17, SElogitPrev22, AdultLogL;
 
 	AdultLogL = 0.0;
+	UpperLimit = 9;
+	if (CalibYouthPrev == 1 && CalibAdultPrev == 0) { UpperLimit = 2; }
 
 	// HSRC data 
-	for(ia=0; ia<9; ia++){
+	for(ia=0; ia<UpperLimit; ia++){
 		for(ig=0; ig<2; ig++){
 			if (AdultHHprev[20][ia][ig] < 0.0001){ AdultHHprev[20][ia][ig] = 0.0001; }
 			if (AdultHHprev[23][ia][ig] < 0.0001){ AdultHHprev[23][ia][ig] = 0.0001; }
@@ -19004,7 +20365,7 @@ double CalcAdultPrevLogL()
 
 	// DHS data 
 	for (ig = 0; ig < 2; ig++){
-		for (ia = 0; ia < 9; ia++){
+		for (ia = 0; ia < UpperLimit; ia++){
 			SElogitPrev16 = SEprev16[ia][ig] / (ObservedPrev16[ia][ig] * (1.0 - ObservedPrev16[ia][ig]));
 			if (AdultHHprev[31][ia][ig] < 0.0001){ AdultHHprev[31][ia][ig] = 0.0001; }
 			AdultLogL += -0.5 * (log(2.0 * 3.141592654 * pow(SElogitPrev16, 2.0)) +
@@ -19018,13 +20379,15 @@ double CalcAdultPrevLogL()
 
 double CalcHHprovLogL()
 {
-	int ia, iy;
+	int ia, iy, UpperLimit;
 	double SElogitPrev, AdultLogL;
 
 	AdultLogL = 0.0;
+	UpperLimit = 2;
+	if (CalibYouthPrev == 1 && CalibAdultPrev == 0) { UpperLimit = 1; }
 
 	// HSRC and DHS data
-	for (ia = 0; ia<2; ia++){
+	for (ia = 0; ia<UpperLimit; ia++){
 		for (iy = 0; iy<6; iy++){
 			if (ModelProvHH[iy][ia] < 0.0001){ ModelProvHH[iy][ia] = 0.0001; }
 			SElogitPrev = SEprovHH[iy][ia] / (ObservedProvHH[iy][ia] * (1.0 - ObservedProvHH[iy][ia]));
@@ -19192,20 +20555,24 @@ double CalcANCprevLogL2()
 	// This differs from the original function in the way we calculate antenatal bias.
 	// Also the variance calculation is more accurate - I've added a Newton-Raphson step.
 
-	int ia, iy, iystart, ii;
+	int ia, iy, iystart, ii, UpperLimit;
 	double TempSp, FirstDeriv, SecondDeriv;
-	double ANClogL, VarLogitPrev[5][28], SquaredDif[5][28], ModelVarEst;
-	double AdjPrevPregnant[7][28]; // PrevPregnant adjusted to reflect antenatal bias
+	double ANClogL, VarLogitPrev[5][29], SquaredDif[5][29], ModelVarEst;
+	double AdjPrevPregnant[7][29]; // PrevPregnant adjusted to reflect antenatal bias
+
+	UpperLimit = 5;
+	if (CalibYouthPrev == 1 && CalibANCprev == 0) { UpperLimit = 2; }
 
 	// Adjust for bias due to test specificity and private sector
 	for (ia = 0; ia < 7; ia++){
-		for (iy = 0; iy < 28; iy++){
+		for (iy = 0; iy < 29; iy++){
 			if (iy < 6 || iy >= 25){ TempSp = 1.0; }
 			else{ TempSp = SpecificityANC; }
 			if (iy < 25){ AdjPrevPregnant[ia][iy] = PrevPregnant[ia][iy + 6]; }
 			if (iy == 25){ AdjPrevPregnant[ia][iy] = PrevPregnant[ia][32]; }
 			if (iy == 26){ AdjPrevPregnant[ia][iy] = PrevPregnant[ia][34]; }
 			if (iy == 27){ AdjPrevPregnant[ia][iy] = PrevPregnant[ia][37]; }
+			if (iy == 28) { AdjPrevPregnant[ia][iy] = PrevPregnant[ia][40]; }
 			AdjPrevPregnant[ia][iy] = 1.0 - TempSp + TempSp * AdjPrevPregnant[ia][iy] /
 				(PropnPregPrivate[ia] * (RRprevPrivateANC - 1.0) + 1.0);
 			if (AdjPrevPregnant[ia][iy] > 1.0){ AdjPrevPregnant[ia][iy] = 0.9999; }
@@ -19218,7 +20585,7 @@ double CalcANCprevLogL2()
 	//else{ iystart = 6; }
 	iystart = 3; // Corresponds to 1994
 	for (ia = 0; ia<5; ia++){
-		for (iy = iystart; iy<28; iy++){
+		for (iy = iystart; iy<29; iy++){
 			VarLogitPrev[ia][iy] = pow(SEprevANC[ia][iy] / (ObservedPrevANC[ia][iy] *
 				(1.0 - ObservedPrevANC[ia][iy])), 2.0);
 			SquaredDif[ia][iy] = pow(log(ObservedPrevANC[ia][iy] / (1.0 - ObservedPrevANC[ia][iy])) -
@@ -19229,7 +20596,7 @@ double CalcANCprevLogL2()
 	if (ModelVarEst < 0.0){
 		ModelVarEst = 0.0;}
 	else{
-		ModelVarEst = ModelVarEst / (5.0 * (28.0 - iystart));}
+		ModelVarEst = ModelVarEst / (5.0 * (29.0 - iystart));}
 
 	// Update variance using Newton-Raphson method
 	/*for (ii = 0; ii < 3; ii++){
@@ -19251,8 +20618,8 @@ double CalcANCprevLogL2()
 
 	// Calculate likelihood
 	ANClogL = 0.0;
-	for (ia = 0; ia<5; ia++){
-		for (iy = iystart; iy<28; iy++){ 
+	for (ia = 0; ia<UpperLimit; ia++){
+		for (iy = iystart; iy<29; iy++){ 
 			ANClogL += -0.5 * (log(2.0 * 3.141592654 * (VarLogitPrev[ia][iy] + ModelVarEst)) +
 				SquaredDif[ia][iy] / (VarLogitPrev[ia][iy] + ModelVarEst));
 		}
@@ -19603,6 +20970,51 @@ double CalcMSMprevLogL()
 	}
 
 	return MSMlogL;
+}
+
+double CalcPWIDprevLogL()
+{
+	double ModelPrev[nPWIDstudies+1], RandomError[nPWIDstudies+1], VarRandEffects, PWIDlogL;
+	double ModelOR[nPWIDstudiesFtoM + 1], RandomError2[nPWIDstudiesFtoM + 1];
+	int ic, year;
+
+	// Calculate ModelPrev and RandomError
+	for (ic = 0; ic < nPWIDstudies; ic++) {
+		year = PWIDstudyDetails[ic][0];
+		ModelPrev[ic] = PWIDprev[year - StartYear];
+		RandomError[ic] = 1.0 / (PWIDstudyDetails[ic][1] * PWIDstudyDetails[ic][2] *
+			(1.0 - PWIDstudyDetails[ic][2]));
+	}
+
+	if (ProvModel == 0) { VarRandEffects = 0.87; }
+	else { VarRandEffects = 0.54; }
+	if (VarRandEffects < 0.0) { VarRandEffects = 0.0; }
+	//if (FixedUncertainty == 1) { ErrorVariance.out[CurrSim - 1][0] = VarRandEffects; }
+
+	// Calculate likelihood for aggregated HIV prevalence data
+	PWIDlogL = 0.0;
+	for (ic = 0; ic < nPWIDstudies; ic++) {
+		PWIDlogL += -0.5 * (log(2.0 * 3.141592654 * (RandomError[ic] + VarRandEffects)) +
+			pow(log(PWIDstudyDetails[ic][2] / (1.0 - PWIDstudyDetails[ic][2])) -
+				log(ModelPrev[ic] / (1.0 - ModelPrev[ic])), 2.0) /
+				(RandomError[ic] + VarRandEffects));
+	}
+
+	// Calculate likelihood for female-to-male HIV ods ratios
+	if (ProvModel == 0) {
+		VarRandEffects = 0.13;
+		for (ic = 0; ic < nPWIDstudiesFtoM; ic++) {
+			year = PWID_FtoMdetails[ic][0];
+			ModelOR[ic] = (PWIDprevF[year - StartYear] / (1.0 - PWIDprevF[year - StartYear])) /
+				(PWIDprevM[year - StartYear] / (1.0 - PWIDprevM[year - StartYear]));
+			RandomError2[ic] = pow(PWID_FtoMdetails[ic][2], 2.0);
+			PWIDlogL += -0.5 * (log(2.0 * 3.141592654 * (RandomError2[ic] + VarRandEffects)) +
+				pow(log(PWID_FtoMdetails[ic][1]) - log(ModelOR[ic]), 2.0) /
+				(RandomError2[ic] + VarRandEffects));
+		}
+	}
+	
+	return PWIDlogL;
 }
 
 double CalcMortLikelihoodA()
@@ -20324,7 +21736,8 @@ double CalcPaedAHDlogL()
 	// Calculate likelihood
 	ARTlogL = 0.0;
 	for (iy = 0; iy < 4; iy++){
-		temp = ModelAHDpaedART[iy] - ObsAHDpaedART[iy];
+		temp = log(ModelAHDpaedART[iy] / (1.0 - ModelAHDpaedART[iy])) - log(ObsAHDpaedART[iy] /
+			(1.0 - ObsAHDpaedART[iy]));
 		VarEst = pow(SE_AHDpaedART[iy], 2.0);
 		ARTlogL += -0.5 * (log(2.0 * 3.141592654 * VarEst) + pow(temp, 2.0) / VarEst);
 	}
@@ -20441,23 +21854,6 @@ double CalcChildPIPlogL()
 	double TempLogL, StdErrorDiag[13][2], StdErrorART[13][2], temp, ErrorVar;
 	double AdjDeaths[3][2]; // Deaths in HIV-neg/undiagnosed, diagnosed untreated and treated, by age
 
-	// Calculate the bias in the ART deaths
-	if (InclPriors[107][0] == 0){
-		RRdiagDeathsPIP[1] = 1.0;
-		/*for (iy = 0; iy < 13; iy++){
-			RRdiagDeathsPIP[1] *= (ARTdeaths1to4.out[CurrSim - 1][iy + 20] / (DiagDeaths1to4.out[CurrSim - 1][iy + 20] -
-				ARTdeaths1to4.out[CurrSim - 1][iy + 20])) / (ChildPIPdiag[iy][0] / (1.0 - ChildPIPdiag[iy][0]));
-			RRdiagDeathsPIP[1] *= (ARTdeaths5to9.out[CurrSim - 1][iy + 20] / (DiagDeaths5to9.out[CurrSim - 1][iy + 20] -
-				ARTdeaths5to9.out[CurrSim - 1][iy + 20])) / (ChildPIPdiag[iy][1] / (1.0 - ChildPIPdiag[iy][1]));
-		}
-		RRdiagDeathsPIP[1] = pow(RRdiagDeathsPIP[1], 1.0 / (13.0 * 2.0));
-		if (RRdiagDeathsPIP[1] > 1.0){ RRdiagDeathsPIP[1] = 1.0; }*/
-	}
-	if (FixedUncertainty == 1){
-		OutRRdiagDeathsPIP.out[CurrSim - 1][0] = RRdiagDeathsPIP[0];
-		OutRRdiagDeathsPIP.out[CurrSim - 1][1] = RRdiagDeathsPIP[1];
-	}
-
 	// Calculate modelled fractions of deaths diagnosed and on ART
 	for (iy = 0; iy < 13; iy++){
 		for (ia = 0; ia < 2; ia++){
@@ -20487,9 +21883,9 @@ double CalcChildPIPlogL()
 			//	(1.0 - ModelPIP_ART[iy][ia])), 2.0) - pow(StdErrorART[iy][ia], 2.0);
 		}
 	}
-	ErrorVar = ErrorVar / (2.0 * 8.0);
-	//ErrorVar = ErrorVar / (13.0 * 2.0);
-	if (ErrorVar < 0.0){ ErrorVar = 0.0; }
+	//ErrorVar = ErrorVar / (2.0 * 8.0);
+	//if (ErrorVar < 0.0){ ErrorVar = 0.0; }
+	ErrorVar = pow(0.1, 2.0);
 
 	// Calculate likelihood for % diagnosed
 	TempLogL = 0.0;
@@ -20707,7 +22103,7 @@ void GetInverse1(double mat[MCMCdim][MCMCdim], double matinv[MCMCdim][MCMCdim])
 void SimulateParameters()
 {
 	int i, is, iy, MCMCindex;
-	double Temp, Temp2, Adj1996;
+	double Temp, Temp2, Adj1996, ORneedleSharingPerYr;
 
 	if(FixedUncertainty==0){
 		int seed = 8222 + CurrSim * 53;
@@ -21043,7 +22439,7 @@ void SimulateParameters()
 	if (InclPriors[105][0] == 1){
 		RRtestVirginTrend[1] = SamplePrior(105);}
 	if (InclPriors[106][0] == 1){
-		RRdiagDeathsPIP[0] = SamplePrior(106);}
+		RRdiagDeathsPIP[0] = SamplePrior(106) * 0.65 + 0.35;}
 	if (InclPriors[107][0] == 1){
 		RRfertART = SamplePrior(107);}
 	if (InclPriors[108][0] == 1){
@@ -21131,6 +22527,19 @@ void SimulateParameters()
 		IncreaseGammaMeanF = SamplePrior(143);}
 	if (InclPriors[144][0] == 1){
 		UntestedRescreen = SamplePrior(144);}
+	if (InclPriors[145][0] == 1) {
+		RR_IDfem[0] = SamplePrior(145);}
+	if (InclPriors[146][0] == 1) {
+		BaseTransmNS = SamplePrior(146);}
+	if (InclPriors[147][0] == 1) {
+		MonthlyInj = SamplePrior(147);}
+	if (InclPriors[148][0] == 1) {
+		ORneedleSharingPerYr = SamplePrior(148);
+		for (iy = 19; iy <= 39; iy++) {
+			PropnNeedleSharing[iy] = 1.0 / (1.0 + (1.0 - 0.32)/(0.32 * pow(ORneedleSharingPerYr, iy-32)));}
+		for (iy = 0; iy < 19; iy++) { PropnNeedleSharing[iy] = PropnNeedleSharing[19]; }
+		for (iy = 40; iy < 86; iy++) { PropnNeedleSharing[iy] = PropnNeedleSharing[39]; }
+	}
 	
 	// Update natural history calculations
 	CD4duration[1] = (1.0/CD4decline[0]) - CD4duration[0];
@@ -21566,7 +22975,6 @@ void RunSample()
 	// Read in random numbers for each parameter combination in sample
 	ReadPriors();
 	if(IMISind==0){
-		// file1.open("./calibration-outputs/RandomUniform.txt");
 
 	    if (IncludeTB == 1) {
         	file1.open("./calibration-outputs/TB/RandomUniform.txt");
@@ -21576,7 +22984,7 @@ void RunSample()
         	file1.open(path.c_str());
     	}
     	else {
-        	file1.open("./calibration-outputs/HIV/RandomUniform.txt");
+		file1.open("./calibration-outputs/HIV/RandomUniform.txt");
     	}
 		
 		for(i=0; i<ResampleSize; i++){
@@ -21597,7 +23005,7 @@ void RunSample()
         	file1.open(path.c_str());
     	}
     	else {
-        	file1.open("./calibration-outputs/HIV/ModelParameters.txt");
+		file1.open("./calibration-outputs/HIV/ModelParameters.txt");
     	}
 		
 		
@@ -21609,7 +23017,6 @@ void RunSample()
 		file1.close();
 		if (VaryFutureInterventions == 1){
 			file2.open("./inputs/FutureInterventions.txt");
-
 			for (i = 0; i<ResampleSize; i++){
 				file2 >> idum;
 				for (c = 0; c<34; c++){
@@ -21637,7 +23044,19 @@ void RunSample()
 			file1>>RandomUniform.out[i][c];}
 	}
 	file1.close();*/
-	cout<<"Read input files"<<endl;
+	if (Optimise == 0) {
+		cout<<"Read input files"<<endl;
+	}
+
+	//LJ
+	for (int ic = 0; ic < ResampleSize; ic++) { 
+		for (iy = 0; iy < 86; iy++) {				
+			CondomUsageAdjFactor.out[ic][iy] = 5.57;  //calculated as # condoms distributed (HST DHB) divide by TotProtSexacts in the same year
+			CovPregWomenTest.out[ic][iy] = 0.98;      //Default Value of CovPregWomenTest
+			TotSTestprimaryPHC.out[ic][iy] = 0;
+		}
+	}
+
 
 	// Run the model for each of the sampled parameter combinations
 	CurrSim = 0;
@@ -21645,8 +23064,9 @@ void RunSample()
 	for(i=1; i<=ResampleSize; i++){ // Same code as in the OneIMISstep function
 		CurrSim += 1;
 		CurrYear = StartYear;
-		if(i==1){
-			ReadAllFiles();}
+		//if(i==1){  //LJ
+			ReadAllFiles();
+		//}
 		if(IMISind==0){
 			if (IncludeTB == 0) { SimulateParameters(); }
 			else { SimulateTBparams(); }
@@ -21679,14 +23099,20 @@ void RunSample()
 		ARTerrorInd = 0;
 		CurrYear = StartYear-1;
 		for(iy=0; iy<ProjectionTerm; iy++){
+			if (Optimise == 0 || Optimise == 2) { SimInvestmentCase(); }
+		
 			OneYear();
 		}
 		CalcLikelihood(); // For getting bias
 		//LogL.out[i-1][0] = LogLikelihood;
 		x1 = CurrSim/100.0;
+		CalcCostModel(); //LJ
 		DoubleIntDif1 = modf(x1, &intpart1);
-		if(DoubleIntDif1==0.0){
-			cout<<"Completed simulation "<<CurrSim<<endl;}
+		//if(DoubleIntDif1==0.0){
+		if (Optimise == 0){
+			cout<<"Completed simulation "<<CurrSim<<endl;
+		}
+		//}
 	}
 
 	// Write prevalence outputs to text files
@@ -21968,7 +23394,28 @@ void RunSample()
 	MarriedPropn2001.RecordSample("MarriedPropn2001.txt");
 	MarriedPropn2007.RecordSample("MarriedPropn2007.txt");
 	MarriedPropn2016.RecordSample("MarriedPropn2016.txt");*/
+	//PWIDbyAge.RecordSample("PWIDbyAge.txt");
+	//MSMbyAge.RecordSample("MSMbyAge.txt");
 
+	PWIDbyAge.RecordSample(getOutputPath("PWIDbyAge.txt", IncludeTB, ProvModel, ProvID).c_str());
+	MSMbyAge.RecordSample(getOutputPath("PWIDbyAge.txt", IncludeTB, ProvModel, ProvID).c_str());
+
+	LYlostAIDS.RecordSample("LYlostAIDS.txt");
+
+	NewCABLAinNonMSM.RecordSample("NewCABLAinNonMSM.txt");
+	NewCABLAinMSM.RecordSample("NewCABLAinMSM.txt");	
+	NewCABLAinNonFSW.RecordSample("NewCABLAinNonFSW.txt");
+	NewCABLAinFSW.RecordSample("NewCABLAinFSW.txt");
+	NewCABLAinPWID.RecordSample("NewCABLAinPWID.txt");
+
+	NewPrEPinNonMSM.RecordSample("NewPrEPinNonMSM.txt");
+	NewPrEPinMSM.RecordSample("NewPrEPinMSM.txt");	
+	NewPrEPinNonFSW.RecordSample("NewPrEPinNonFSW.txt");
+	NewPrEPinFSW.RecordSample("NewPrEPinFSW.txt");
+	NewPrEPinPWID.RecordSample("NewPrEPinPWID.txt");
+
+	TotSexActs.RecordSample("TotSexActs.txt");
+	TotProtSexActs.RecordSample("TotProtSexActs.txt");
 	// Investment case outputs
 	/*NonAIDSdeaths.RecordSample("NonAIDSdeaths.txt");
 	AIDSdeathsART.RecordSample("AIDSdeathsART.txt");
@@ -22079,16 +23526,18 @@ double CalcAdultTBmortLogL()
 	// be under-/over-counting of TB deaths due to problems with cause of death recording,
 	// hence the need for the TBmortAdj factor.
 
-	int ia, ig, iy, UpperAge;
+	int ia, ig, iy, UpperAge, YearLimit;
 	double TempLogL, Temp1, Temp2, ErrorVar, TBmortAdj, Temp3[2], Temp4[2];
 
 	TempLogL = 0.0;
+	if (ProvModel == 0) { YearLimit = 23; }
+	else { YearLimit = 20; }
 
 	// First calculate ModelTBdeathsA, after interpolation
 	UpperAge = (90 / 5) - 3;
 	Temp1 = 0.0;
 	Temp2 = 0.0;
-	for (iy = 0; iy < 23; iy++) {
+	for (iy = 0; iy < YearLimit; iy++) {
 		for (ia = 1; ia < UpperAge; ia++) {
 			for (ig = 0; ig < 2; ig++) {
 				ModelTBdeathsA[ia][iy][ig] = 0.5 * (TBadultMortBy5yr[iy + 11][ia][ig] +
@@ -22106,8 +23555,8 @@ double CalcAdultTBmortLogL()
 
 	// Calculate likelihood
 	TempLogL = 0.0;
-	for (iy = 0; iy < 23; iy++) {
-		if (iy == 21) { ErrorVar *= 0.25; } // To impose a better fit to the most recent data
+	for (iy = 0; iy < YearLimit; iy++) {
+		if (iy == YearLimit - 2) { ErrorVar *= 0.25; } // To impose a better fit to the most recent data
 		for (ig = 0; ig < 2; ig++) {
 			Temp3[ig] = 0.0;
 			Temp4[ig] = 0.0;
@@ -22155,14 +23604,17 @@ double CalcTBmortPLHIVlogL()
 
 double CalcETRmortLogL()
 {
-	int iy, ig, ia;
+	int iy, ig, ia, YrStart;
 	double TempLogL, Temp1, ErrorVar, TBmortAdj, TBcases, TempDeaths, MortPropn[13][2];
 
 	TempLogL = 0.0;
+	YrStart = 0;
+	// In Mpumalanga the first 2 years of death data are problematic, so drop them.
+	if (ProvModel == 1 && ProvID == "MP") { YrStart = 2; }
 
 	// First calculate TBmortAdj and MortPropn, after interpolation
 	TBmortAdj = 0.0;
-	for (iy = 0; iy < 13; iy++) {
+	for (iy = YrStart; iy < 13; iy++) {
 		for (ig = 0; ig < 2; ig++) {
 			TBcases = 0.0;
 			for (ia = 0; ia < 16; ia++) {
@@ -22175,7 +23627,7 @@ double CalcETRmortLogL()
 				log(ETRmortPropn[iy][ig] / (1.0 - ETRmortPropn[iy][ig]));
 		}
 	}
-	TBmortAdj = TBmortAdj / (13.0 * 2.0);
+	TBmortAdj = TBmortAdj / ((13.0 - YrStart) * 2.0);
 	if (TBmortAdj < 0.32) { TBmortAdj = 0.32; } // Previously used a lower limit of 0
 	if (TBmortAdj > 0.66) { TBmortAdj = 0.66; } // Previously no upper limit
 
@@ -22183,7 +23635,7 @@ double CalcETRmortLogL()
 
 	// Calculate likelihood
 	TempLogL = 0.0;
-	for (iy = 0; iy < 13; iy++) {
+	for (iy = YrStart; iy < 13; iy++) {
 		for (ig = 0; ig < 2; ig++) {
 			Temp1 = log(MortPropn[iy][ig] / (1.0 - MortPropn[iy][ig])) -
 				log(ETRmortPropn[iy][ig] / (1.0 - ETRmortPropn[iy][ig]));
@@ -22326,9 +23778,11 @@ double CalcHIVprevETRlogL()
 		for (ia = 0; ia < 16; ia++) {
 			denom += TBadultRxBy5yr[iy + 24][ia][0] + TBadultRxBy5yr[iy + 24][ia][1];
 		}
-		temp1 = (TBadultRxHIV[iy + 24][0] + TBadultRxHIV[iy + 24][1]) / denom;
-		temp2 = log(temp1 / (1 - temp1)) - log(ETR_HIVprev[iy] / (1.0 - ETR_HIVprev[iy]));
-		TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) + pow(temp2, 2.0) / ErrorVar);
+		if (ETR_HIVprev[iy] > 0.0) {
+			temp1 = (TBadultRxHIV[iy + 24][0] + TBadultRxHIV[iy + 24][1]) / denom;
+			temp2 = log(temp1 / (1 - temp1)) - log(ETR_HIVprev[iy] / (1.0 - ETR_HIVprev[iy]));
+			TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) + pow(temp2, 2.0) / ErrorVar);
+		}
 	}
 	if (FixedUncertainty == 1) { TBlogL.out[CurrSim - 1][5] = TempLogL; }
 
@@ -22342,10 +23796,18 @@ double CalcTBprevLogL()
 
 	// Calculate likelihood
 	TempLogL = 0.0;
-	for (ig = 0; ig < 2; ig++) {
-		ErrorVar = 0.2 * pow(TBprevSurveySE[ig] / (TBprevSurvey[ig] * (1.0 - TBprevSurvey[ig])), 2.0);
-		Temp1 = TBprev2018[ig];
-		Temp2 = log(Temp1 / (1.0 - Temp1)) - log(TBprevSurvey[ig] / (1.0 - TBprevSurvey[ig]));
+	if (ProvModel == 0) {
+		for (ig = 0; ig < 2; ig++) {
+			ErrorVar = 0.2 * pow(TBprevSurveySE[ig] / (TBprevSurvey[ig] * (1.0 - TBprevSurvey[ig])), 2.0);
+			Temp1 = TBprev2018[ig];
+			Temp2 = log(Temp1 / (1.0 - Temp1)) - log(TBprevSurvey[ig] / (1.0 - TBprevSurvey[ig]));
+			TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) + pow(Temp2, 2.0) / ErrorVar);
+		}
+	}
+	else {
+		ErrorVar = pow(TBprevSurveySE[0] / (TBprevSurvey[0] * (1.0 - TBprevSurvey[0])), 2.0);
+		Temp1 = 0.5 * (TBprev2018[0] + TBprev2018[1]);
+		Temp2 = log(Temp1 / (1.0 - Temp1)) - log(TBprevSurvey[0] / (1.0 - TBprevSurvey[0]));
 		TempLogL += -0.5 * (log(2.0 * 3.141592654 * ErrorVar) + pow(Temp2, 2.0) / ErrorVar);
 	}
 	if (FixedUncertainty == 1) { TBlogL.out[CurrSim - 1][4] = TempLogL; }
@@ -22618,7 +24080,7 @@ void SimulateTBparams()
 		Cough2wkActiveSmNeg = SamplePrior(34);
 	}
 	if (InclPriors[35][0] == 1) {
-		RRscreenSymptomsUlt = SamplePrior(35);
+		RRscreenSymptomsUlt = SamplePrior(35) + 1.0;
 	}
 	if (InclPriors[36][0] == 1) {
 		RR_TBalcohol = SamplePrior(36) + 1.0;
@@ -22781,15 +24243,8 @@ void ReadPriors()
 
 	ii = 0;
 
-	// if (IncludeTB == 0) { file.open("./inputs/Priors.txt"); }
-	// else { file.open("./inputs/TBpriors.txt"); }
-	// if (file.fail()) {
-    //   cerr << "Could not open Priors.txt\n";
-    //   exit(1);
-    // }
-
 if (IncludeTB == 1) {
-    file.open("./inputs/TBinputs/TBpriors.txt");
+	file.open("./inputs/TBinputs/TBpriors.txt");
     if (file.fail()) {
         cerr << "Could not open TBpriors.txt\n";
         exit(1);
@@ -22802,12 +24257,11 @@ if (IncludeTB == 1) {
     }
 } else {
     file.open("./inputs/Priors.txt");
-    if (file.fail()) {
-        cerr << "Could not open Priors.txt\n";
-        exit(1);
+	if (file.fail()) {
+      cerr << "Could not open Priors.txt\n";
+      exit(1);
     }
 }
-
 
 	for(ir=0; ir<MaxPriors; ir++){
 		file.ignore(255,'\n');
@@ -23222,7 +24676,7 @@ void GetMahalanobis(double distance[TotalSimulations])
 			mean = aParameters[j]/bParameters[j];
 			var[j] *= pow(mean, -2.0);
 		}
-		if(PriorTypes[j]==2){ // Normal prior
+		else{ // Normal prior
 			mean = aParameters[j];
 			var[j] = pow(bParameters[j], 2.0);
 		}
@@ -23318,7 +24772,7 @@ void runIMIS(double CumSteps)
 		denom = 1.0 * (InitSample + i * StepSample);
 		LogIntegratedL[i] = log(sumweights) + MaxLogLxWeight - log(denom);
 		//if(FractionUnique[i] >= 1.0 - exp(-1.0)){
-		if (FractionUnique[i] >= 0.40){
+		if (FractionUnique[i] >= 0.30){
 			totsim = InitSample + i * StepSample;
 			break;
 		}
@@ -23706,7 +25160,7 @@ void OneIMISstep(double CumSteps)
 void SimulateParameters_IMIS()
 {
 	int i, is, iy, offset, MCMCindex;
-	double Temp, Temp2, Adj1996;
+	double Temp, Temp2, Adj1996, ORneedleSharingPerYr;
 	double r[MCMCdim]; // Random variables from U(0, 1)
 	double MultNorm[MCMCdim]; // Sampled parameters from multivariate normal dbn
 
@@ -24051,7 +25505,7 @@ void SimulateParameters_IMIS()
 	if (InclPriors[105][0] == 1){
 		RRtestVirginTrend[1] = GetParameter(105);}
 	if (InclPriors[106][0] == 1){
-		RRdiagDeathsPIP[0] = GetParameter(106);}
+		RRdiagDeathsPIP[0] = GetParameter(106) * 0.65 + 0.35;}
 	if (InclPriors[107][0] == 1){
 		RRfertART = GetParameter(107);}
 	if (InclPriors[108][0] == 1){
@@ -24140,6 +25594,19 @@ void SimulateParameters_IMIS()
 		IncreaseGammaMeanF = GetParameter(143);}
 	if (InclPriors[144][0] == 1){
 		UntestedRescreen = GetParameter(144);}
+	if (InclPriors[145][0] == 1) {
+		RR_IDfem[0] = GetParameter(145);}
+	if (InclPriors[146][0] == 1) {
+		BaseTransmNS = GetParameter(146);}
+	if (InclPriors[147][0] == 1) {
+		MonthlyInj = GetParameter(147);}
+	if (InclPriors[148][0] == 1) {
+		ORneedleSharingPerYr = GetParameter(148);
+		for (iy = 19; iy <= 39; iy++) {
+			PropnNeedleSharing[iy] = 1.0 / (1.0 + (1.0 - 0.32) / (0.32 * pow(ORneedleSharingPerYr, iy - 32))); }
+		for (iy = 0; iy < 19; iy++) { PropnNeedleSharing[iy] = PropnNeedleSharing[19]; }
+		for (iy = 40; iy < 86; iy++) { PropnNeedleSharing[iy] = PropnNeedleSharing[39]; }
+	}
 	
 	// Update natural history calculations
 	CD4duration[1] = (1.0/CD4decline[0]) - CD4duration[0];
@@ -24372,7 +25839,7 @@ void SimulateTBparamsIMIS()
 		Cough2wkActiveSmNeg = GetParameter(34);
 	}
 	if (InclPriors[35][0] == 1) {
-		RRscreenSymptomsUlt = GetParameter(35);
+		RRscreenSymptomsUlt = GetParameter(35) + 1.0;
 	}
 	if (InclPriors[36][0] == 1) {
 		RR_TBalcohol = GetParameter(36) + 1.0;
@@ -24901,3 +26368,7888 @@ void MaximizeLikelihood(double FTol, const char* input, const char* filout)
 	}
 	cout << "Number of iterations: " << it << endl;
 }
+
+
+
+
+void SetSQ() {
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	//                                          standard SQ changes
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	LastHCT = 61;
+	LastSTpack = 73;
+	LastCondomMultiplier = 1.00;
+	AdolHCTMultiplier = 1;	
+	UTTretention = 0;
+	RetIntCost = 0;
+	CABlong = 0;
+	PropWithPOCVL = 0.0;
+	PropWithPN = 0.0;
+	PropMessaging = 0.0;
+	PropInClinics = 0.0;	
+
+	AdolHCTMultiplierPM = 1;
+
+	for (int i = 0; i < 93; i++) {
+		RR_ARTinit[i] = 1;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		for (int g = 0; g < 2; g++) {
+			RR_ARTinitSex[i][g] = RR_ARTinit[i];
+		}
+	}
+	PrEPdur[0] = 0.25; //men nonMSM
+	PrEPdur[1] = 0.25; //women
+	PrEPdur[2] = 0.5;   //MSM
+	PrEPdurPreg = 0.25;   //pregnant women
+
+	//we model LEN, not CAB and assuming 12m duration for all
+	LENmodel = 1;
+	CABmodel = 0;
+	LENdur = "12m";
+
+
+	for (int iy = 0; iy < 93; iy++) {
+		CABLAeligMSM[iy] = 0;
+		CABLAeligOtherG[iy][1] = 0; //other women	
+		CABLAeligOtherG[iy][0] = 0; //other men	
+		CABLAeligAGYW[iy] = 0;	
+
+		RR_CABLAstartF20[iy] = 0.0;
+		RR_CABLAstartMSM[iy] = 0.0;
+		CABLApregnant[iy] = 0; //PBFW
+
+
+	}
+
+	bl = -1;   //0=old baseline, 1=baseline+LEN GF, 2=PEPFAR minimum scenario, 3=BL old + GF LEN + 50% OP to LEN planned, 4=PM + GF LEN + 50% OP to LEN planned
+
+
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	//                                          Specific baseline changes
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	//old baseline
+	if (bl == 0) {
+		//baseline HIVST pack where majority (60%) of tests are going to PHC (200k), total distributed=333,333 at baseline
+		SelfTestUptakeUlt[0] = 0.000673041069773436; //fixed
+		SelfTestUptakeUlt[1] = 0.000164730065841953; //taxi
+		SelfTestUptakeUlt[2] = 0.0183840957930371; //anc
+		SelfTestUptakeUlt[3] = 0.00161757047874691; //index
+		SelfTestUptakeUlt[4] = 0.0072141665070482; //work
+
+		//200kHIVST
+		TotSTestprimaryPHC.out[CurrSim - 1][2023 - 1985] = 400;
+		TotSTestprimaryPHC.out[CurrSim - 1][2024 - 1985] = 600;
+		for (int i = 2025 - 1985; i < 93; i++) {
+			TotSTestprimaryPHC.out[CurrSim - 1][i] = -7344780.6 + 3707.4*(1985 + i); //linear regression based on the change above
+		}
+		//HTS increase for 200k HIVST
+		for (int iy = 2025 - 1985; iy < 93; iy++) {
+			HCT1stTimeF25init[iy] = 0.38304; //default 0.3793
+		}
+	}
+
+	//old baseline + GF LEN 500k-py for 26/27
+	if (bl == 1) {
+
+		/////////////////////////////////////////////////HIVST
+		//baseline HIVST pack where majority (60%) of tests are going to PHC (200k), total distributed=333,333 at baseline
+		SelfTestUptakeUlt[0] = 0.000673041069773436; //fixed
+		SelfTestUptakeUlt[1] = 0.000164730065841953; //taxi
+		SelfTestUptakeUlt[2] = 0.0183840957930371; //anc
+		SelfTestUptakeUlt[3] = 0.00161757047874691; //index
+		SelfTestUptakeUlt[4] = 0.0072141665070482; //work
+
+		//200k HIVST
+		TotSTestprimaryPHC.out[CurrSim - 1][2023 - 1985] = 400;
+		TotSTestprimaryPHC.out[CurrSim - 1][2024 - 1985] = 600;
+		for (int i = 2025 - 1985; i < 93; i++) {
+			TotSTestprimaryPHC.out[CurrSim - 1][i] = -7344780.6 + 3707.4*(1985 + i); //linear regression based on the change above
+		}
+		//HTS increase for 200k HIVST
+		for (int iy = 2025 - 1985; iy < 93; iy++) {
+			HCT1stTimeF25init[iy] = 0.38304; //default 0.3793
+		}
+
+		///////////////////////////////////////////////LEN assumptions
+		LENmodel = 1;
+		CABmodel = 0;
+		LENdur = "12m";
+
+		//LEN duration per group
+		CABLAdur[0] = 1 + 0.5;   //men nonMSM
+		CABLAdur[1] = 1 + 0.5;   //women
+		CABLAdur[2] = 1 + 0.5;   //MSM
+		CABLAdurPreg = 1 + 0.5;  //pregnant women		
+
+		//initialize all values to zero
+		for (int iy = (2025 - 1985); iy < 93; iy++) {
+			RR_CABLAstartF20[iy] = 0.0;
+			RR_CABLAstartMSM[iy] = 0.0;
+
+			CABLApregnant[iy] = 0.0;
+			CABLAeligAGYW[iy] = 0;
+			CABLAeligOtherG[iy][0] = 0.0; //other men
+			CABLAeligOtherG[iy][1] = 0.0; //other women
+			CABLAeligMSM[iy] = 0;
+		}
+
+		//GF LEN 
+		CABLAeligMSM[2026 - 1985] = 1;
+		CABLAeligMSM[2027 - 1985] = 1;
+		CABLAeligOtherG[2026 - 1985][1] = 0.02; //other women
+		CABLAeligOtherG[2027 - 1985][1] = 0.02; //other women	
+		CABLAeligAGYW[2026 - 1985] = 1;
+		CABLAeligAGYW[2027 - 1985] = 1;
+
+		//rates - override
+		if (CurrYear == 2025) { UltCABLArateFSW = 0.17; } //FSW
+		if (CurrYear == 2026) { UltCABLArateFSW = 0.09; }
+		if (CurrYear >= 2027) { UltCABLArateFSW = 0; }
+
+		RR_CABLAstartF20[2026 - 1985] = 0.1848; //AGYW
+		RR_CABLAstartF20[2027 - 1985] = 0.1738;			
+
+		RR_CABLAstartMSM[2026 - 1985] = 0.500; //MSM
+		RR_CABLAstartMSM[2027 - 1985] = 0.490;
+
+		CABLApregnant[2026 - 1985] = 0.054; //PBFW
+		CABLApregnant[2027 - 1985] = 0.054;			
+
+	}
+
+
+	//PEPFAR minimum impact baseline
+	if (bl == 2) {
+		//HTS down 6% but 200k HIVST in PHC remain in circulation (bought by government)
+		for (int iy = 2025 - 1985; iy < 93; iy++) {
+			HCT1stTimeF25init[iy] = 0.3605473564975; //default 0.3793 | pepfarmin:0.356542 without 200kHIVST | pepfarmin: 0.3605473564975 with 200kHIVST
+		}
+
+		//baseline HIVST pack where majority (60%) of tests are going to PHC (200k), total distributed=333,333 at baseline
+		SelfTestUptakeUlt[0] = 0.000673041069773436; //fixed
+		SelfTestUptakeUlt[1] = 0.000164730065841953; //taxi
+		SelfTestUptakeUlt[2] = 0.0183840957930371; //anc
+		SelfTestUptakeUlt[3] = 0.00161757047874691; //index
+		SelfTestUptakeUlt[4] = 0.0072141665070482; //work
+
+		//200kHIVST
+		TotSTestprimaryPHC.out[CurrSim - 1][2023 - 1985] = 400;
+		TotSTestprimaryPHC.out[CurrSim - 1][2024 - 1985] = 600;
+		for (int i = 2025 - 1985; i < 93; i++) {
+			TotSTestprimaryPHC.out[CurrSim - 1][i] = -7344780.6 + 3707.4*(1985 + i); //linear regression based on the change above
+		}
+
+		//Pregnant women tested
+		for (int iy = 2025 - 1985; iy < 93; iy++) {
+			PregnantWomenTested[iy] = 0.92; //0.98 default
+		}
+
+
+
+		//MMC down 45%
+		for (int iy = 2025 - 1985 - 1; iy < 93; iy++) {
+			RR_MMCpromo10[iy] = 0.55;   //default 1
+			RR_MMCpromo15[iy] = 0.3245; //default 0.59
+			RR_MMCpromo20[iy] = 0.1485; //default 0.27
+			RR_MMCpromo25[iy] = 0.077;  //default 0.14
+			RR_MMCpromo50[iy] = 0.0066; //default 0.012
+		}
+		//oral PrEP down 20%
+		//if (CurrYear >= 2024) { UltPrEPrateFSW = 0.028; }  //default 0.035
+		if (CurrYear >= 2025) { UltPrEPrateFSW = 0.028; }  //default 0.035
+
+		for (int iy = 2025 - 1985; iy < 93; iy++) {
+			PrEPpregnant[iy] = 0.07688; //0.0961 default
+		}
+
+
+		//ART reduction by 14%, no recovery (PEPFAR minimum scenario)
+		RR_ARTinityr = 2025;
+
+		RR_ARTinit[0] = 0; //2025
+		RR_ARTinit[1] = 0;
+		RR_ARTinit[2] = 0.12;
+		RR_ARTinit[3] = 0.24;
+		RR_ARTinit[4] = 0.24;
+		RR_ARTinit[5] = 0.28; //2030
+		RR_ARTinit[6] = 0.28;
+		RR_ARTinit[7] = 0.32;
+		RR_ARTinit[8] = 0.32;
+		RR_ARTinit[9] = 0.32;
+		RR_ARTinit[10] = 0.32; //2035
+		RR_ARTinit[11] = 0.32;
+		RR_ARTinit[12] = 0.32;
+		RR_ARTinit[13] = 0.31;
+		RR_ARTinit[14] = 0.31;
+		RR_ARTinit[15] = 0.31; //2040
+		RR_ARTinit[16] = 0.31;
+		RR_ARTinit[17] = 0.31;
+		RR_ARTinit[18] = 0.31;
+		RR_ARTinit[19] = 0.31;
+		RR_ARTinit[20] = 0.31; //2045*/
+		RR_ARTinit[21] = 0.31; //2045*/
+
+		
+		for (int i = 22; i < 93; i++) {  //addd for prevention advocacy work, 50 year time horizon
+			RR_ARTinit[i] = 0.31;
+		}
+
+		for (int i = 0; i < 93; i++) {  //addd for prevention advocacy work, 50 year time horizon
+			for (int g = 0; g < 2; g++) {
+				RR_ARTinitSex[i][g] = RR_ARTinit[i];
+			}
+		}
+
+
+	
+
+	}
+
+
+	if (bl == 3) {  //BL old + GF LEN + 50% OP to LEN (planned dist)
+		//baseline HIVST pack where majority (60%) of tests are going to PHC (200k), total distributed=333,333 at baseline
+		if (CurrYear >= (ICstart + 1985)) {
+			SelfTestUptakeUlt[0] = 0.000673041069773436; //fixed
+			SelfTestUptakeUlt[1] = 0.000164730065841953; //taxi
+			SelfTestUptakeUlt[2] = 0.0183840957930371; //anc
+			SelfTestUptakeUlt[3] = 0.00161757047874691; //index
+			SelfTestUptakeUlt[4] = 0.0072141665070482; //work
+		}
+
+		//200kHIVST
+		TotSTestprimaryPHC.out[CurrSim - 1][2023 - 1985] = 400;
+		TotSTestprimaryPHC.out[CurrSim - 1][2024 - 1985] = 600;
+		for (int i = 2025 - 1985; i < 93; i++) {
+			TotSTestprimaryPHC.out[CurrSim - 1][i] = -7344780.6 + 3707.4*(1985 + i); //linear regression based on the change above
+		}
+		//HTS increase for 200k HIVST
+		for (int iy = 2025 - 1985; iy < 93; iy++) {
+			HCT1stTimeF25init[iy] = 0.38304; //default 0.3793
+		}
+
+		//LEN as per planned distribution, 50% of OP budget
+
+		//LEN duration per group
+		CABLAdur[0] = 1 + 0.5;   //men nonMSM
+		CABLAdur[1] = 1 + 0.5;   //women
+		CABLAdur[2] = 1 + 0.5;   //MSM
+		CABLAdurPreg = 1 + 0.5;  //pregnant women	
+
+
+		//parameters by pop and year, these are from 2028-2045	
+		double tempAGYW[19] = {0.193333690819977,0.209016691611884,0.21976281905511,0.230677519844769,0.238244453582254,0.235042875411287,0.230696005806226,0.239009172499309,0.252619772055518,0.263267870559717,0.260789770073263,0.266013882880684,0.267276156947148,0.275088690639931,0.282586267032557,0.290355349073251,0.29928269819117,0.307542093907507,0.314010459445996};
+		double tempFSW[19] = { 0.0405217371060881,0.028274712793081,0.0216435940060257,0.0208007124986462,0.0202791224801466,0.0204799802497822,0.0208391126972375,0.0205051691799352,0.0198684170049841,0.019438947361809,0.0196395860978148,0.019491471167415,0.0195190755704231,0.0192176007993127,0.0189289937951459,0.0185874698284486,0.018197156461126,0.0178521467507275,0.0176038481279223 };
+		double tempPBFW[19] = { 0.0393488123047293,0.0395260038727235,0.040247173324515,0.0410490419490648,0.0419131898577641,0.0438471019658065,0.0460133130741228,0.0466228006825007,0.0467082620493176,0.0472189971786719,0.049116986096759,0.0501195358875413,0.0515548045765612,0.0521184482357466,0.0526987483409176,0.0533365298637804,0.0537919518525623,0.0541622977107246,0.0549580330487144 };
+		double tempMSM[19] = { 0.432144897532075,0.422611565699208,0.420021001168133,0.425972118251644,0.428687781437232,0.422648380073065,0.427844524792483,0.418609492488757,0.409279568747272,0.411896682890547,0.415865368556489,0.406319300835307,0.403315005186876,0.419320535898175,0.428216076479278,0.427782933584661,0.431305099145499,0.436390974466965,0.468899559103469 }; 
+			   
+		//GF LEN donation for 2026 and 2027		
+		
+		if (CurrYear == 2025) { UltCABLArateFSW = 0.17; }
+		CABLAeligMSM[2026 - 1985] = 1;
+		CABLAeligOtherG[2026 - 1985][1] = 0.02; //other women		
+		CABLAeligAGYW[2026 - 1985] = 1;
+		RR_CABLAstartF20[2026 - 1985] = 0.1848; //AGYW
+		RR_CABLAstartMSM[2026 - 1985] = 0.500; //MSM
+		CABLApregnant[2026 - 1985] = 0.054; //PBFW			
+		
+		//2027
+		CABLAeligMSM[2027 - 1985] = 1;	
+		CABLAeligOtherG[2027 - 1985][1] = 0.02; //other women	
+		CABLAeligAGYW[2027 - 1985] = 1;
+		if (CurrYear == 2026) { UltCABLArateFSW = 0.09; }
+		RR_CABLAstartF20[2027 - 1985] = 0.1738;
+		RR_CABLAstartMSM[2027 - 1985] = 0.490;
+		CABLApregnant[2027 - 1985] = 0.054;		
+		
+		
+		//LEN from 2028
+		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		if (CurrYear > 2045) { UltCABLArateFSW = 0; } //FSW
+
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW			
+			
+		}
+
+
+		//reduction on oral PrEP
+		double OPtempAGYW[19] = {0.284988658904142,0.311236414844098,0.317339542464181,0.315863546498,0.315782215980871,0.328913599638829,0.328514625126812,0.329079570715253,0.330009489402073,0.330691694218155,0.33012062886437,0.330080428539509,0.32956059816084,0.329344953564536,0.329259114407213,0.329358419630089,0.329584304487113,0.329852934067434,0.344983943853991};
+		double OPtempFSW[19] = { 0.0253478397946021,0.0230674126675031,0.0225626151103978,0.0226209881009839,0.0225891294921098,0.0216424687100732,0.0216575985693442,0.0216649074160448,0.0216524540305742,0.0216241212266514,0.0216048619810834,0.0215957938516041,0.0215902870185404,0.0215892569290466,0.0215851279666815,0.0215663361022456,0.0215402542379482,0.0215185380922861,0.0205784930375266 };
+		double OPtempPBFW[19] = { 0.0499505679755955,0.0497046925509099,0.049662906890645,0.0496282992186634,0.04959756408911,0.0495813045154604,0.0495861708759823,0.049584753351655,0.0495628389652968,0.0495332888161316,0.0495199651106715,0.0495169635942209,0.0495185872393578,0.0495165930625585,0.0495087237157914,0.0495003095935348,0.0494921224050725,0.0494839044561883,0.0494775358755037 };
+		double OPtempMSM[19] = { 0.389506918510113,0.407699037760727,0.409954006046206,0.405870196604483,0.405074798788771,0.42129431973938,0.42113953807894,0.419877023588626,0.417706709636956,0.415870631875716,0.415824136339286,0.415151785536109,0.414076587601332,0.414032947427478,0.414169473747495,0.41339533589962,0.412180137905985,0.411020874273844,0.42907992055608 };
+		double Optempmen[19] = { 0.0192966358249795,0.0193219654765607,0.0192679003896619,0.0191988906135866,0.0191399052634929,0.0190731714041869,0.0189899668066841,0.0189182042426897,0.0188517013249968,0.0187863291788027,0.0187356529133891,0.0186801543979811,0.0186240694622907,0.0185602443572411,0.0185126017722302,0.0184606744825046,0.0184039101571664,0.0183434210103421,0.0182784598161834 }; 
+
+
+
+		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltPrEPrateFSW = OPtempFSW[CurrYear - 2027]; } //FSW
+		if (CurrYear > 2045) { UltPrEPrateFSW = 0; } //FSW
+
+		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
+			PrEPeligMSM[iy] = 1;
+			PrEPeligOtherG[iy][1] = 0.02; //other women	
+			PrEPeligOtherG[iy][0] = Optempmen[iy - ICstart - 1]; //other men	
+			PrEPeligAGYW[iy] = 1;
+
+			RR_PrEPstartF20[iy] = OPtempAGYW[iy - ICstart -1]; //AGYW
+			RR_PrEPstartMSM[iy] = OPtempMSM[iy - ICstart - 1]; //MSM
+			PrEPpregnant[iy] = OPtempPBFW[iy - ICstart - 1]; //PBFW	
+			
+		}
+	}
+
+	 
+	if (bl == 4) {  //BL PEPFAR min + GF LEN + 50% OP to LEN (planned dist)
+
+		if (CurrYear >= (ICstart + 1985)) {
+			//baseline HIVST pack where majority (60%) of tests are going to PHC (200k), total distributed=333,333 at baseline
+			SelfTestUptakeUlt[0] = 0.000673041069773436; //fixed
+			SelfTestUptakeUlt[1] = 0.000164730065841953; //taxi
+			SelfTestUptakeUlt[2] = 0.0183840957930371; //anc
+			SelfTestUptakeUlt[3] = 0.00161757047874691; //index
+			SelfTestUptakeUlt[4] = 0.0072141665070482; //work
+		}
+
+	
+		//HTS down 6% but 200k HIVST in PHC remain in circulation (bought by government)
+		for (int iy = 2025 - 1985; iy < 93; iy++) {
+			HCT1stTimeF25init[iy] = 0.3605473564975; //default 0.3793 | pepfarmin:0.356542 without 200kHIVST | pepfarmin: 0.3605473564975 with 200kHIVST
+		}
+		//200kHIVST
+		TotSTestprimaryPHC.out[CurrSim - 1][2023 - 1985] = 400;
+		TotSTestprimaryPHC.out[CurrSim - 1][2024 - 1985] = 600;
+		for (int i = 2025 - 1985; i < 93; i++) {
+			TotSTestprimaryPHC.out[CurrSim - 1][i] = -7344780.6 + 3707.4*(1985 + i); //linear regression based on the change above
+		}
+
+		//MMC down 45%
+		for (int iy = 2025 - 1985 - 1; iy < 93; iy++) {
+			RR_MMCpromo10[iy] = 0.55;   //default 1
+			RR_MMCpromo15[iy] = 0.3245; //default 0.59
+			RR_MMCpromo20[iy] = 0.1485; //default 0.27
+			RR_MMCpromo25[iy] = 0.077;  //default 0.14
+			RR_MMCpromo50[iy] = 0.0066; //default 0.012
+		}
+		//oral PrEP down 20%
+		if (CurrYear > 2025) { UltPrEPrateFSW = 0.028; }  //default 0.035
+
+		//ART reduction by 14%, no recovery (PEPFAR minimum scenario)
+		RR_ARTinityr = 2024;
+
+		RR_ARTinit[0] = 0; //2025
+		RR_ARTinit[1] = 0;
+		RR_ARTinit[2] = 0.12;
+		RR_ARTinit[3] = 0.24;
+		RR_ARTinit[4] = 0.24;
+		RR_ARTinit[5] = 0.28; //2030
+		RR_ARTinit[6] = 0.28;
+		RR_ARTinit[7] = 0.32;
+		RR_ARTinit[8] = 0.32;
+		RR_ARTinit[9] = 0.32;
+		RR_ARTinit[10] = 0.32; //2035
+		RR_ARTinit[11] = 0.32;
+		RR_ARTinit[12] = 0.32;
+		RR_ARTinit[13] = 0.31;
+		RR_ARTinit[14] = 0.31;
+		RR_ARTinit[15] = 0.31; //2040
+		RR_ARTinit[16] = 0.31;
+		RR_ARTinit[17] = 0.31;
+		RR_ARTinit[18] = 0.31;
+		RR_ARTinit[19] = 0.31;
+		RR_ARTinit[20] = 0.31; //2045
+		RR_ARTinit[21] = 0.31; //2046
+
+
+		for (int i = 0; i < 22; i++) {  //addd for prevention advocacy work, 50 year time horizon
+			for (int g = 0; g < 2; g++) {
+				RR_ARTinitSex[i][g] = RR_ARTinit[i];
+			}
+		}
+		//planned LEN
+
+		//LEN duration per group
+		CABLAdur[0] = 1 + 0.5;   //men nonMSM
+		CABLAdur[1] = 1 + 0.5;   //women
+		CABLAdur[2] = 1 + 0.5;   //MSM
+		CABLAdurPreg = 1 + 0.5;  //pregnant women		
+
+		//these are not accurate as it is assuming old baseline
+		double tempAGYW[19] = { 0.193333690819977,0.209016691611884,0.21976281905511,0.230677519844769,0.238244453582254,0.235042875411287,0.230696005806226,0.239009172499309,0.252619772055518,0.263267870559717,0.260789770073263,0.266013882880684,0.267276156947148,0.275088690639931,0.282586267032557,0.290355349073251,0.29928269819117,0.307542093907507,0.314010459445996 };
+		double tempFSW[19] = { 0.0405217371060881,0.028274712793081,0.0216435940060257,0.0208007124986462,0.0202791224801466,0.0204799802497822,0.0208391126972375,0.0205051691799352,0.0198684170049841,0.019438947361809,0.0196395860978148,0.019491471167415,0.0195190755704231,0.0192176007993127,0.0189289937951459,0.0185874698284486,0.018197156461126,0.0178521467507275,0.0176038481279223 };
+		double tempPBFW[19] = { 0.0393488123047293,0.0395260038727235,0.040247173324515,0.0410490419490648,0.0419131898577641,0.0438471019658065,0.0460133130741228,0.0466228006825007,0.0467082620493176,0.0472189971786719,0.049116986096759,0.0501195358875413,0.0515548045765612,0.0521184482357466,0.0526987483409176,0.0533365298637804,0.0537919518525623,0.0541622977107246,0.0549580330487144 };
+		double tempMSM[19] = { 0.432144897532075,0.422611565699208,0.420021001168133,0.425972118251644,0.428687781437232,0.422648380073065,0.427844524792483,0.418609492488757,0.409279568747272,0.411896682890547,0.415865368556489,0.406319300835307,0.403315005186876,0.419320535898175,0.428216076479278,0.427782933584661,0.431305099145499,0.436390974466965,0.468899559103469 };
+
+		//GF LEN donation for 2026
+		if (CurrYear == 2025) { UltCABLArateFSW = 0.17; }
+		CABLAeligMSM[2026 - 1985] = 1;
+		CABLAeligOtherG[2026 - 1985][1] = 1; //other women		
+		CABLAeligAGYW[2026 - 1985] = 1;
+		RR_CABLAstartF20[2026 - 1985] = 0.033; //AGYW
+		RR_CABLAstartMSM[2026 - 1985] = 0.500; //MSM
+		CABLApregnant[2026 - 1985] = 0.054; //PBFW
+
+		//LEN from 2027
+		if (CurrYear >= (ICstart + 1985 - 1) && CurrYear <= 2045) { UltCABLArateFSW = tempFSW[CurrYear - 2026]; } //FSW
+		if (CurrYear > 2045) { UltCABLArateFSW = 0; } //FSW
+
+		for (int iy = ICstart; iy < 93; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart]; //PBFW
+		}
+
+
+		//reduction on oral PrEP
+		double OPtempAGYW[20] = { 0.0449185192751223,0.0481178367014518,0.0544895334188093,0.0564432781088772,0.0566843713535195,0.0558987985266399,0.054457650338534,0.0526313924303909,0.0509679626045153,0.0494243959504602,0.0478599418926793,0.0462366948058533,0.0448368236589839,0.0434493675769212,0.0421389773553893,0.041031059634061,0.0402858650219301,0.0397371094869155,0.0393845065715682,0.0392643120191439 };
+		double OPtempFSW[20] = { 0.0191644134188622,0.0197646801582181,0.0172740686067107,0.0163777021421273,0.0159967094490055,0.015810718502553,0.015728560409162,0.0157066488899985,0.0156758429808126,0.0156053345507765,0.0155263656255683,0.0154824997262143,0.0154522388551283,0.0154242800227396,0.0153846080197642,0.0153372834284121,0.0152891722212207,0.0152395503720741,0.0151930957425228,0.0151454090843067 };
+		double OPtempPBFW[20] = { 0.0675726924964318,0.0675898124727655,0.0683893167552858,0.0692712750779918,0.070091624754363,0.0709633905036695,0.0718549245565968,0.0727343575764936,0.0735913067970215,0.0744751437555695,0.0753981773490508,0.0762720447189409,0.0771967942881696,0.0781687506574088,0.0791318676361985,0.0801119487658186,0.0811189847570118,0.0821529889944375,0.0832090901690509,0.0842335722938514 };
+		double OPtempMSM[20] = { 0.384785359225636,0.386335542401396,0.405959799473164,0.412988658519685,0.418225174633974,0.423078699386503,0.423321588738059,0.422547624675325,0.423331001176747,0.422343947224196,0.421597122234241,0.421790623036649,0.421952625,0.422071476923077,0.42240702668585,0.42286780623608,0.423395795567867,0.423992889215102,0.424570648514851,0.425847248901099 };
+
+		double OPtempmen[20] = { 0.113642603689901,0.111954409416022,0.11158211261834,0.112569445029346,0.114528791099048,0.117204563455895,0.120620048735977,0.124705976616963,0.128857089723576,0.133273228783492,0.138027313987846,0.142846313297448,0.147260649497728,0.151838543236189,  0.156577391139001,0.160921597598497,0.16400367310262,0.166405607891529,0.168022335028178,0.169039266703699 };
+
+		if (CurrYear >= (ICstart + 1985 - 1) && CurrYear <= 2045) { UltPrEPrateFSW = OPtempFSW[CurrYear - 2026]; } //FSW
+		if (CurrYear > 2045) { UltPrEPrateFSW = 0; } //FSW
+
+		for (int iy = ICstart; iy < 93; iy++) {
+			PrEPeligMSM[iy] = 1;
+			PrEPeligOtherG[iy][1] = 0.02; //other women	
+			PrEPeligOtherG[iy][0] = OPtempmen[iy - ICstart];; //other men	
+			PrEPeligAGYW[iy] = 1;
+
+			RR_PrEPstartF20[iy] = OPtempAGYW[iy - ICstart]; //AGYW
+			RR_PrEPstartMSM[iy] = OPtempMSM[iy - ICstart]; //MSM
+			PrEPpregnant[iy] = OPtempPBFW[iy - ICstart]; //PBFW					
+
+		}
+	}
+}
+
+void SimInvestmentCase() {
+	LastCondomMultiplier = 1;
+
+	//SetSQ();	
+	CABLAdur[0] = 1 + 0.5;   //men nonMSM
+	CABLAdur[1] = 1 + 0.5;   //women
+	CABLAdur[2] = 1 + 0.5;   //MSM
+	CABLAdurPreg = 1 + 0.5;  //pregnant women	
+	//CABLAdataYr = 2019;
+	for (int iy = 0; iy<86; iy++){
+		TotStartingCABLA[iy]=0.0;}
+
+	//reset everything to zero
+	UltCABLArateFSW = 0.0;
+	for (int iy = 0; iy < 86; iy++) {
+		CABLAeligMSM[iy] = 0;
+		CABLAeligOtherG[iy][1] = 0; //other women	
+		CABLAeligOtherG[iy][0] = 0; //other women	
+		CABLAeligAGYW[iy] = 0;
+		RR_CABLAstartPWID[iy]=0;//PWID
+		RR_CABLAstartMSM[iy] = 0; //MSM
+		RR_CABLAstartF20[iy] = 0; //AGYW
+		CABLApregnant[iy] = 0; //PBFW
+	}
+
+
+double fswtemp[2][9] = {
+		{0.0025,0.0431473800749345,	0.0895919212834805,	0.140045545316004,	0.195105221326365,	0.255670910516435,	0.323272275274926,	0.488311855298692,	0.713204473774093},
+		{0.0025,0.0202515694775601,	0.0435175425457182,	0.0707156795306143,	0.103020026907676,	0.142201038130744,	0.191209730437152,	0.339619070800907,	0.637055317300535}
+	};
+	
+	//10 MSM/AGYW/PWID targets under 9 FSW targets for 2 years
+double temp[9][2][8] = {
+{{21.6697209485884,45.7030736607546,72.7373029501729,103.307166279031,138.263548805268,180.018115448949,228.817593230993,290.707516985722},
+{11.0445148176293,24.1175829364988,39.6939095099476,58.4449780060495,81.2909448554555,109.229657882466,144.650750081783,189.506998099166}},
+{{1.25561838673902,2.64853905554429,4.21471853849982,5.98656360318831,8.01337586724519,10.4320956694377,13.2619354138344,16.8479921188519},
+{1.36305515018796,2.97141887493461,4.89001821727167,7.17553253737811,9.96542562866038,13.3181560318941,17.5690871980991,22.9341360038132}},
+{{0.604490366513353,1.27578928823675,2.02521501942861,2.88360210238045,3.86049123530026,5.02503767107789,6.3891681416745,8.11625199532425},
+{0.633998789536647,1.38364436451119,2.26947603174254,3.3447222276675,4.62422130602881,6.22129009436114,8.14604778486513,10.6508479671919}},
+{{0.387149608374785,0.816346248096998,1.29623714836144,1.84507805193725,2.47057485619393,3.21535134330338,4.08895390800106,5.19386281112915},
+{0.390913782680808,0.852086436142175,1.39881050529028,2.06226387487651,2.85470382553345,3.84553138631436,5.04491473231399,6.61096162935493}},
+{{0.277724927564143,0.585311277956589,0.930938972416525,1.32465366313767,1.77406642064314,2.30849131792402,2.93628806069985,3.72941505163644},
+{0.268091696293004,0.584057514419687,0.96197986641029,1.41886104262887,1.96698903760974,2.6537918314845,3.48945552434584,4.58490896716954}},
+{{0.211949195124256,0.447863058330129,0.710840597797966,1.0110854177124,1.35440986477137,1.75174792987723,2.24178603238738,2.84705319829378},
+{0.194273009190172,0.424311560534316,0.698502281224909,1.03081943572492,1.43163259889973,1.91808019121749,2.55160845865783,3.32747551984704}},
+{{0.167640027701809,0.353942351401072,0.56127256974227,0.797598413139062,1.07171788289606,1.38662490327087,1.7739570633178,2.25267774513842},
+{0.144524787393437,0.315405206705865,0.518814208981111,0.762736453732494,1.06195709129748,1.42604573884328,1.89220445846258,2.49357593127594}},
+{{0.111002291031824,0.23449721038032,0.373079328383952,0.528508839517116,0.707271605432165,0.91996757766499,1.17600388512085,1.48076807571278},
+{0.081322245773106,0.177717519915327,0.292848150012624,0.430539884057094,0.598724474580196,0.80346865906901,1.06564242317784,1.39979772843458}},
+{{0.076020825497945,0.160398251211686,0.255254804220285,0.364170435551458,0.488065436254075,0.628415246724015,0.801869196608749,1.01721687750932},
+{0.0433638740978652,0.0947107747097209,0.155848098079209,0.230028376496101,0.319986123057665,0.429878336649235,0.566167244668249,0.741114008198964}}
+};
+
+
+
+int FSWindex = CurrSim, PWIDindex = CurrSim;		
+	FSWindex = (FSWindex - 1) / 8; 
+	//MSMindex = (MSMindex - 1) % 10;
+	//AGYWindex = (AGYWindex - 1) % 10;
+	PWIDindex = (PWIDindex - 1) % 8;
+
+//if (CurrYear == 2028){	
+//	cout << "INDEX - CurrSim " << CurrSim << " | FSW index: " << FSWindex << " | PWID index: " << PWIDindex << endl;	
+//}
+
+	if (CurrYear == 2026) { UltCABLArateFSW =  fswtemp[0][FSWindex]; }
+	if (CurrYear == 2027) { UltCABLArateFSW =  fswtemp[1][FSWindex]; }
+	if (CurrYear > 2027) { UltCABLArateFSW =  0.0; }
+
+	//CABLAeligMSM[2027-1985] = 1;
+	//CABLAeligMSM[2028-1985] = 1;
+
+	//RR_CABLAstartMSM[2027-1985] = temp[FSWindex][0][MSMindex];
+	//RR_CABLAstartMSM[2028-1985] = temp[FSWindex][1][MSMindex];
+
+	//CABLAeligOtherG[2027-1985][1] = 0.02; //other women	
+	//CABLAeligAGYW[2027-1985] = 1;
+
+	//CABLAeligOtherG[2028-1985][1] = 0.02; //other women	
+	//CABLAeligAGYW[2028-1985] = 1;
+
+	//RR_CABLAstartF20[2027-1985] = temp[FSWindex][0][AGYWindex];
+	//RR_CABLAstartF20[2028-1985] = temp[FSWindex][1][AGYWindex];
+
+	CABLAeligMSM[2027-1985] = 1;
+	CABLAeligOtherG[2027-1985][1] = 0.02; //other women	
+	CABLAeligOtherG[2027-1985][0] = 0.02; //other women	
+	CABLAeligAGYW[2027-1985] = 1;
+
+	CABLAeligMSM[2028-1985] = 1;
+	CABLAeligOtherG[2028-1985][1] = 0.02; //other women	
+	CABLAeligOtherG[2028-1985][0] = 0.02; //other women	
+	CABLAeligAGYW[2028-1985] = 1;
+
+	RR_CABLAstartPWID[2027-1985]=temp[FSWindex][0][PWIDindex];//PWID
+	RR_CABLAstartPWID[2028-1985]=temp[FSWindex][1][PWIDindex];//PWID	
+
+
+	/*
+	double temp[2][9] = {
+		{0.0025,	0.0431473800749345,	0.0895919212834805,	0.140045545316004,	0.195105221326365,	0.255670910516435,	0.323272275274926,	0.488311855298692,	0.713204473774093},
+		{0.0025,	0.0202515694775601,	0.0435175425457182,	0.0707156795306143,	0.103020026907676,	0.142201038130744,	0.191209730437152,	0.339619070800907,	0.637055317300535}
+	};
+
+	if (CurrYear == 2026) { UltCABLArateFSW =  temp[0][fsw_curr]; }
+	if (CurrYear == 2027) { UltCABLArateFSW =  temp[1][fsw_curr]; }
+	if (CurrYear > 2027) { UltCABLArateFSW =  0.0; }
+	*/
+
+	/*
+	//cout << "used:" << ptest << endl;
+	//testing parameters for FSW
+	if (CurrYear >= (styr-1) && CurrYear <= (styr+1-1)) {		//from 2027 onwards (offset=1)
+		if (CurrYear == (yrtest-1)) {
+			UltCABLArateFSW = ptest; // current test yr uses ptest
+			//cout << endl << UltCABLArateFSW << endl;
+		}
+		else {
+			int id = CurrYear - (styr-1);
+			UltCABLArateFSW = parmyear[target_curr][id];
+			//cout << UltCABLArateFSW << endl;
+		}
+	}
+	if (CurrYear >= (styr+2-1)){UltCABLArateFSW = 0;}*/
+
+	/*
+	for (int iy = ICstart; iy < 86; iy++) {
+		CABLAeligMSM[iy] = 1;
+		CABLAeligOtherG[iy][1] = 0.02; //other women	
+		CABLAeligOtherG[iy][0] = 0.02; //other women	
+		CABLAeligAGYW[iy] = 1;
+		RR_CABLAstartMSM[iy] = 0; //MSM
+		RR_CABLAstartF20[iy] = 0; //AGYW
+		RR_CABLAstartPWID[iy] = 0;//PWID
+		CABLApregnant[iy] = 0; //PBFW
+
+		if (iy == yrtest - 1985) {
+			//RR_CABLAstartMSM[iy] = ptest;
+			//RR_CABLAstartF20[iy] = ptest; //AGYW
+			//CABLApregnant[iy] = ptest; //PBFW
+			RR_CABLAstartPWID[iy]=ptest;//PWID
+		}
+
+		else {
+			int id = iy - (styr - 1);
+			//RR_CABLAstartMSM[iy] = parmyear[target_curr][id]; //MSM
+			//RR_CABLAstartF20[iy] = parmyear[target_curr][id]; //AGYW
+			//CABLApregnant[iy] = parmyear[target_curr][id]; //PBFW
+			RR_CABLAstartPWID[iy]=parmyear[target_curr][id]; ;//PWID
+		}
+	}*/
+}
+
+
+
+
+
+
+void CalcEffect() {
+	//Add up LYlostAIDS or TotalNewHIV for each simulation
+	for (int iy = 0; iy < ResampleSize; iy++) {
+		LYLforICER[iy] = 0; //Reset values to zero, because we will loop through years and add them up
+		DALYforICER[iy] = 0;
+		HIVforICER[iy] = 0;
+		for (int ly = ICstart; ly <= (ICstart + timehorizon - 1); ly++) {
+			LYLforICER[iy] = LYLforICER[iy] + round(LYlostAIDS.out[iy][ly - 1] * 1000) / 1000;
+			DALYforICER[iy] = DALYforICER[iy] + round(DALY_HIV.out[iy][ly - 1] * 1000) / 1000 + round(DALY_HIVpaed.out[iy][ly - 1] * 1000) / 1000;
+			HIVforICER[iy] = HIVforICER[iy] + round(TotalNewHIV.out[iy][ly - 1] * 1000) / 1000;
+
+		}
+	}
+}
+
+
+//Import unit/average costs for all interventions; set up txt files to which costing pop, costs will be exported; 
+void SetupCosts()
+{
+
+	if (Optimise == 1) {
+		ofstream filec;
+		filec.open("Total Costs _firstrun_.txt");
+		filec << "InterventionNo." << "," << "InterventionName" << "," << "Optimisation Set" << "," << "CurrSim" << "," << "Costing Population" << "," << "Unit Cost" << ",";
+		for (int iy = 0; iy <= ICstart + timehorizon; iy++)
+		{
+			if (iy < ICstart + timehorizon) { filec << "y" << iy + ICstart + 1985 << ","; }   //TO DO: need to update ICstart -1 so start from baseline year
+			if (iy == ICstart + timehorizon) { filec << "y" << iy + ICstart + 1985 << endl; }
+		}
+		filec.close();
+
+		ofstream filecp;
+		filecp.open("Costing Population _firstrun_.txt");
+		filecp << "InterventionNo." << "," << "InterventionName" << "," << "Optimisation Set" << "," << "CurrSim" << "," << "Costing Population" << "," << "Stock_Flow" << ",";
+		for (int iy = 0; iy < ProjectionTerm + 1; iy++)
+		{
+			if (iy < ProjectionTerm + 1) { filecp << "y" << iy + 1985 << ","; }
+			if (iy == ProjectionTerm) { filecp << "y" << iy + 1985 << endl; }
+		}
+
+		filecp.close();
+	}
+
+
+	ofstream filecost;
+	filecost.open("Total Costs.txt");
+
+	if (Optimise == 0) { filecost << "CurrSim" << "," << "Costing Population" << "," << "Unit Cost" << ","; }
+	if (Optimise == 1) { filecost << "Optimisation Set" << "," << "CurrSim" << "," << "Costing Population" << "," << "Unit Cost" << ","; }
+
+	for (int iy = 0; iy <= timehorizon - 1; iy++) {
+		if (iy < (timehorizon - 1)) { filecost << "y" << iy + ICstart + 1985 << ","; }   //TO DO: need to update ICstart -1 so start from baseline year
+		if (iy == (timehorizon - 1)) { filecost << "y" << iy + ICstart + 1985 << endl; }
+	}
+	filecost.close();
+
+	ofstream filecostpop;
+	filecostpop.open("Costing Population.txt");
+
+
+	if (Optimise == 0) { filecostpop << "CurrSim" << "," << "Costing Population" << ","; }
+	if (Optimise == 1) { filecostpop << "Optimisation Set" << "," << "CurrSim" << "," << "Costing Population" << ","; }
+
+	for (int iy = 0; iy < ProjectionTerm + 1; iy++) {
+		if (iy < (ProjectionTerm)) { filecostpop << "y" << iy + 1985 << ","; }
+		if (iy == (ProjectionTerm)) { filecostpop << "y" << iy + 1985 << endl; }
+	}
+	filecostpop.close();
+
+
+	ofstream filepar;
+	filepar.open("Param_Rollout_Opt.txt");
+	filepar << "Optimisation Set" << "," << "CurrSim" << "," << "Parameter" << ",";
+	for (int iy = ICstart - 1; iy < ProjectionTerm + 1; iy++)
+	{
+		if (iy < (ProjectionTerm)) { filepar << "y" << iy + 1985 << ","; }
+		if (iy == (ProjectionTerm)) { filepar << "y" << iy + 1985 << endl; }
+	}
+	filepar.close();
+
+	ofstream filepbr;
+	filepbr.open("Param_Opt.txt");
+	filepbr << "Optimisation Set" << "," << "CurrSim" << "," << "Parameter" << "," << "Value" << endl;
+	filepbr.close();
+
+	//Import unit/average costs		
+	ifstream file("Import_costs.csv");
+	for (int row = 0; row < 150; row++) {
+		string line;
+		getline(file, line);
+		stringstream iss(line);
+		costing[row] = 0;
+		costingl[row] = "";
+		for (int col = 0; col < 3; col++) {
+			string val;
+			getline(iss, val, ',');
+			if (!iss.good())
+				break;
+			if (col == 0) {
+				stringstream convertor(val);
+				getline(convertor, costingl[row]);
+			}
+			if (col == 1) {
+				stringstream fs(val);
+				fs >> costing[row];
+			}
+		}
+	}
+	file.close();
+}
+
+
+
+void SaveParmNormal() {
+	//saving parameters for each intervention- for now it was just made for the LEN analysis.
+
+	//for fixed parameters
+	ParmsA[0][0] = CondomRednPrEP[0];
+	ParmsA[0][1] = CondomRednPrEP[1];
+	ParmsA[0][2] = PrEPefficacy[0];
+	ParmsA[0][3] = PrEPefficacy[1];
+	ParmsA[0][4] = PrEPefficacyMSM;
+	ParmsA[0][5] = PrEPefficacyPreg;
+	ParmsA[0][6] = CABLAefficacy[0];
+	ParmsA[0][7] = CABLAefficacy[1];
+	ParmsA[0][8] = CABLAefficacyMSM;
+	ParmsA[0][9] = CABLAefficacyPreg;
+	
+	ParmsA[0][10] = PrEPdur[0];
+	ParmsA[0][11] = PrEPdur[1];
+	ParmsA[0][12] = PrEPdur[2];
+	ParmsA[0][13] = PrEPdurPreg;
+
+	ParmsA[0][14] = CABLAdur[0];
+	ParmsA[0][15] = CABLAdur[1];
+	ParmsA[0][16] = CABLAdur[2];
+	ParmsA[0][17] = CABLAdurPreg;
+
+	ParmsA[0][18] = UltPrEPrateFSW;
+	ParmsA[0][19] = UltCABLArateFSW;
+
+	ParmsA[0][20] = AdolHCTMultiplier;
+	ParmsA[0][21] = LastCondomMultiplier;
+
+	ParmsA[0][22] = SelfTestUptakeUlt[0];
+	ParmsA[0][23] = SelfTestUptakeUlt[1];
+	ParmsA[0][24] = SelfTestUptakeUlt[2];
+	ParmsA[0][25] = SelfTestUptakeUlt[3];
+	ParmsA[0][26] = SelfTestUptakeUlt[4];
+	ParmsA[0][27] = SelfTestUptakeUlt[5];
+
+
+	//for time-varying parameters (usually in rollout sheet)
+
+	for (int k = 0; k < timehorizon + 1; k++)
+	{
+		ParmsB[0][0][k] = HCT1stTimeF25init[ICstart - 1 + k];
+		ParmsB[0][1][k] = RR_MMCpromo10[ICstart - 1 + k];
+		ParmsB[0][2][k] = RR_MMCpromo15[ICstart - 1 + k];
+		ParmsB[0][3][k] = RR_MMCpromo20[ICstart - 1 + k];
+		ParmsB[0][4][k] = RR_MMCpromo25[ICstart - 1 + k];
+		ParmsB[0][5][k] = RR_MMCpromo50[ICstart - 1 + k];
+		ParmsB[0][6][k] = NeonatalMMC[ICstart - 1 + k];
+		ParmsB[0][7][k] = PrEPpregnant[ICstart - 1 + k];
+		ParmsB[0][8][k] = CABLApregnant[ICstart - 1 + k];
+		ParmsB[0][9][k] = RR_PrEPstartMSM[ICstart - 1 + k];
+		ParmsB[0][10][k] = RR_PrEPstartF20[ICstart - 1 + k];
+		ParmsB[0][11][k] = RR_CABLAstartMSM[ICstart - 1 + k];
+		ParmsB[0][12][k] = RR_CABLAstartF20[ICstart - 1 + k];
+	}
+
+	RecordParameters(0);
+}
+
+
+
+void RecordParameters(int chosen) {
+	std::fstream filepbr;
+	filepbr.open("Param_Opt.txt", std::fstream::app);
+
+	int p = 0;
+	//for now just edited to fit the LEN analysis
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "CondomRednPrEP[0]" << "," << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "CondomRednPrEP[1]" << "," << ParmsA[chosen][p] << endl; p++;
+
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "PrEPefficacy[0]" << "," << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "PrEPefficacy[1]" << "," << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "PrEPefficacyMSM" << ", " << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "PrEPefficacyPreg" << ", " << ParmsA[chosen][p] << endl; p++;
+
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "CABLAefficacy[0]" << "," << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "CABLAefficacy[1]" << "," << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "CABLAefficacyMSM" << ", " << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "CABLAefficacyPreg" << ", " << ParmsA[chosen][p] << endl; p++;
+
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "PrEPdur[0]" << "," << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "PrEPdur[1]" << "," << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "PrEPdur[2]" << ", " << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "PrEPdurPreg" << ", " << ParmsA[chosen][p] << endl; p++;
+
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "CABLAdur[0]" << "," << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "CABLAdur[1]" << "," << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "CABLAdur[2]" << ", " << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "CABLAdurPreg" << ", " << ParmsA[chosen][p] << endl; p++;
+
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "UltPrEPrateFSW" << ", " << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "UltCABLArateFSW" << ", " << ParmsA[chosen][p] << endl; p++;
+
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "AdolHCTMultiplier" << ", " << ParmsA[chosen][p] << endl; p++;
+
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "LastCondomMultiplier" << ", " << ParmsA[chosen][p] << endl; p++;
+
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "SelfTestUptakeUlt[0]" << ", " << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "SelfTestUptakeUlt[1]" << ", " << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "SelfTestUptakeUlt[2]" << ", " << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "SelfTestUptakeUlt[3]" << ", " << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "SelfTestUptakeUlt[4]" << ", " << ParmsA[chosen][p] << endl; p++;
+	filepbr << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "SelfTestUptakeUlt[5]" << ", " << ParmsA[chosen][p] << endl; p++;
+
+
+
+	filepbr.close();
+
+
+	std::fstream filepar;
+	filepar.open("Param_Rollout_Opt.txt", std::fstream::app);
+	p = 0;
+	filepar << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "HCT1stTimeF25init" << ",";
+	for (int iy = 0; iy < timehorizon + 1; iy++)
+	{
+		if (iy < timehorizon) { filepar << ParmsB[chosen][p][iy] << ","; }
+		if (iy == timehorizon) { filepar << ParmsB[chosen][p][iy] << endl; }
+	}
+	p++;
+
+	filepar << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "RR_MMCpromo10" << ",";
+	for (int iy = 0; iy < timehorizon + 1; iy++)
+	{
+		if (iy < timehorizon) { filepar << ParmsB[chosen][p][iy] << ","; }
+		if (iy == timehorizon) { filepar << ParmsB[chosen][p][iy] << endl; }
+	}
+	p++;
+
+	filepar << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "RR_MMCpromo15" << ",";
+	for (int iy = 0; iy < timehorizon + 1; iy++)
+	{
+		if (iy < timehorizon) { filepar << ParmsB[chosen][p][iy] << ","; }
+		if (iy == timehorizon) { filepar << ParmsB[chosen][p][iy] << endl; }
+	}
+	p++;
+
+	filepar << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "RR_MMCpromo20" << ",";
+	for (int iy = 0; iy < timehorizon + 1; iy++)
+	{
+		if (iy < timehorizon) { filepar << ParmsB[chosen][p][iy] << ","; }
+		if (iy == timehorizon) { filepar << ParmsB[chosen][p][iy] << endl; }
+	}
+	p++;
+
+	filepar << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "RR_MMCpromo25" << ",";
+	for (int iy = 0; iy < timehorizon + 1; iy++)
+	{
+		if (iy < timehorizon) { filepar << ParmsB[chosen][p][iy] << ","; }
+		if (iy == timehorizon) { filepar << ParmsB[chosen][p][iy] << endl; }
+	}
+	p++;
+
+	filepar << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "RR_MMCpromo50" << ",";
+	for (int iy = 0; iy < timehorizon + 1; iy++)
+	{
+		if (iy < timehorizon) { filepar << ParmsB[chosen][p][iy] << ","; }
+		if (iy == timehorizon) { filepar << ParmsB[chosen][p][iy] << endl; }
+	}
+	p++;
+
+
+
+	filepar << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "NeonatalMMC" << ",";
+	for (int iy = 0; iy < timehorizon + 1; iy++)
+	{
+		if (iy < timehorizon) { filepar << ParmsB[chosen][p][iy] << ","; }
+		if (iy == timehorizon) { filepar << ParmsB[chosen][p][iy] << endl; }
+	}
+	p++;
+
+
+	filepar << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "PrEPpregnant" << ",";
+	for (int iy = 0; iy < timehorizon + 1; iy++)
+	{
+		if (iy < timehorizon) { filepar << ParmsB[chosen][p][iy] << ","; }
+		if (iy == timehorizon) { filepar << ParmsB[chosen][p][iy] << endl; }
+	}
+	p++;
+
+
+	filepar << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "CABLApregnant" << ",";
+	for (int iy = 0; iy < timehorizon + 1; iy++)
+	{
+		if (iy < timehorizon) { filepar << ParmsB[chosen][p][iy] << ","; }
+		if (iy == timehorizon) { filepar << ParmsB[chosen][p][iy] << endl; }
+	}
+	p++;
+
+	filepar << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "RR_PrEPstartMSM" << ",";
+	for (int iy = 0; iy < timehorizon + 1; iy++)
+	{
+		if (iy < timehorizon) { filepar << ParmsB[chosen][p][iy] << ","; }
+		if (iy == timehorizon) { filepar << ParmsB[chosen][p][iy] << endl; }
+	}
+	p++;
+
+	filepar << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "RR_PrEPstartF20" << ",";
+	for (int iy = 0; iy < timehorizon + 1; iy++)
+	{
+		if (iy < timehorizon) { filepar << ParmsB[chosen][p][iy] << ","; }
+		if (iy == timehorizon) { filepar << ParmsB[chosen][p][iy] << endl; }
+	}
+	p++;	
+		
+
+	filepar << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "RR_CABLAstartMSM" << ",";
+	for (int iy = 0; iy < timehorizon + 1; iy++)
+	{
+		if (iy < timehorizon) { filepar << ParmsB[chosen][p][iy] << ","; }
+		if (iy == timehorizon) { filepar << ParmsB[chosen][p][iy] << endl; }
+	}
+	p++;
+
+	filepar << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << "RR_CABLAstartF20" << ",";
+	for (int iy = 0; iy < timehorizon + 1; iy++)
+	{
+		if (iy < timehorizon) { filepar << ParmsB[chosen][p][iy] << ","; }
+		if (iy == timehorizon) { filepar << ParmsB[chosen][p][iy] << endl; }
+	}
+	p++;
+
+
+	filepar.close();
+
+
+}
+
+
+
+void CalcCostModel()
+{
+	//loop through years for given CurrSim, to calculate each of the study populations and costs
+	long long totalHCT[86]; //for additional outputs, to be added up
+
+	//flagcount = 0;
+
+	//cost populations taking into account stock/flow movements, so we are only calculating populations from 1986 onwards, hence ly starts from = 1
+	for (int ly = 1; ly < ProjectionTerm + 1; ly++) {
+		int cc = 0; //cc introduced as a means of looping through the cost population array and not having to manually change the index
+
+		costpopl[cc] = "LYlostAIDS"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(LYlostAIDS.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "DALYs (adults and paeds)"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(DALY_HIV.out[CurrSim - 1][ly - 1] + DALY_HIVpaed.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "TotalNewHIV"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalNewHIV.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "TotalHIV"; //STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalHIV.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "TotPop"; //STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotPop.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "VLSuppressedx1000"; //STOCK- note change to <1000
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(VLsuppressed1000.out[CurrSim - 1][ly] * 1000);
+		cc++;
+
+		costpopl[cc] = "VLSuppressedU15x1000"; //STOCK- note change to <1000
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(VLsuppressed1000P.out[CurrSim - 1][ly] * 1000);
+		cc++;
+
+		costpopl[cc] = "HIVinc15to49"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(HIVinc15to49.out[CurrSim - 1][ly - 1] * 1000);
+		cc++;
+
+		costpopl[cc] = "AIDSdeaths"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(AIDSdeathsTot.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "Total women diagnosed";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(DiagnosedHIV_F.out[CurrSim - 1][ly]);
+		cc++;
+
+
+
+		costpopl[cc] = "Total men diagnosed";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(DiagnosedHIV_M.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Total women undiagnosed";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(UndiagnosedHIV_F.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Total men undiagnosed";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(UndiagnosedHIV_M.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Total U15 diagnosed";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(DiagnosedHIV_U15.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Total U15 undiagnosed";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(UndiagnosedHIV_U15.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Total women on ART";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalART15F.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Total men on ART";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalART15M.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Total U15 on ART";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalARTunder15.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Total number of patients on ART (public + private)"; //STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalART15M.out[CurrSim - 1][ly] + TotalART15F.out[CurrSim - 1][ly] + TotalARTunder15.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Number of people starting ART (public + private)";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewARTunder200.out[CurrSim - 1][ly - 1] + NewART200to349.out[CurrSim - 1][ly - 1] + NewART350to499.out[CurrSim - 1][ly - 1] + NewARTover500.out[CurrSim - 1][ly - 1] +
+			StartingART0.out[CurrSim - 1][ly - 1] + StartingART1.out[CurrSim - 1][ly - 1] + StartingART2to4.out[CurrSim - 1][ly - 1] + StartingART5to14.out[CurrSim - 1][ly - 1]);
+		cc++;		
+
+		costpopl[cc] = "Number re-starting ART";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(RestartARTchild.out[CurrSim - 1][ly] + AdultsRestartingART.out[CurrSim - 1][ly]);
+		cc++;	
+
+
+		costpopl[cc] = "Adults First95";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((DiagnosedHIV_F.out[CurrSim - 1][ly] + DiagnosedHIV_M.out[CurrSim - 1][ly]) * 1000 /
+			(TotHIV15M.out[CurrSim - 1][ly] + TotHIV15F.out[CurrSim - 1][ly]));
+		cc++;
+
+		costpopl[cc] = "Adults Second95";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((TotalART15M.out[CurrSim - 1][ly] + TotalART15F.out[CurrSim - 1][ly]) * 1000 /
+			(DiagnosedHIV_F.out[CurrSim - 1][ly] + DiagnosedHIV_M.out[CurrSim - 1][ly]));
+		cc++;
+
+		costpopl[cc] = "Adults Third95";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((VLsuppressed.out[CurrSim - 1][ly])* 1000);
+		cc++;
+		
+
+		costpopl[cc] = "Children First95";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((DiagnosedHIV_U15.out[CurrSim - 1][ly]) * 1000 /TotPaedHIV.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Children Second95";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((TotalARTunder15.out[CurrSim - 1][ly]) * 1000 / DiagnosedHIV_U15.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Children Third95";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(VLsuppressedU15.out[CurrSim - 1][ly]* 1000);
+		cc++;
+
+
+
+
+		costpopl[cc] = "All First95";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((DiagnosedHIV_U15.out[CurrSim - 1][ly] + DiagnosedHIV_F.out[CurrSim - 1][ly] + DiagnosedHIV_M.out[CurrSim - 1][ly]) * 1000 / 
+			(TotPaedHIV.out[CurrSim - 1][ly]+ TotHIV15M.out[CurrSim - 1][ly] + TotHIV15F.out[CurrSim - 1][ly]));
+		cc++;
+
+		costpopl[cc] = "All Second95";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((TotalARTunder15.out[CurrSim - 1][ly] + TotalART15M.out[CurrSim - 1][ly] + TotalART15F.out[CurrSim - 1][ly]) * 1000 /
+			(DiagnosedHIV_U15.out[CurrSim - 1][ly] + DiagnosedHIV_F.out[CurrSim - 1][ly] + DiagnosedHIV_M.out[CurrSim - 1][ly]));
+		cc++;
+	
+
+		costpopl[cc] = "All Third95";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(VLsuppressed.out[CurrSim - 1][ly] * 1000);
+		cc++;
+
+
+
+
+
+		costpopl[cc] = "Mens clinics (non-ART cost)"; //this will account for cost not related to ART (that is accounted elsewhere)
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalART15M.out[CurrSim - 1][ly] * prop_menclinics);
+		cc++;
+
+		costpopl[cc] = "ART clients with Peer Navigators"; //this will account for cost not related to ART (that is accounted elsewhere)
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((TotalART10to14.out[CurrSim - 1][ly] + TotalART15M.out[CurrSim - 1][ly] + TotalART15F.out[CurrSim - 1][ly])
+			* prop_peernav);
+		cc++;
+
+		//Note MMC is not costed as from overall numbers but under specific age groups		
+		costpopl[cc] = "Medical male circumcision";//FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(MMC10to14.out[CurrSim - 1][ly - 1] + MMC15to19.out[CurrSim - 1][ly - 1] + MMC20to24.out[CurrSim - 1][ly - 1] +
+			MMC25to49.out[CurrSim - 1][ly - 1] + MMCover50.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "MMC 10-14";//FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(MMC10to14.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "MMC 15+";//FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(MMC15to19.out[CurrSim - 1][ly - 1] + MMC20to24.out[CurrSim - 1][ly - 1] +
+			MMC25to49.out[CurrSim - 1][ly - 1] + MMCover50.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "Early infant male circumcision"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotBirths.out[CurrSim - 1][ly - 1] * 0.50388674747718*NeonatalMMC[ly]);
+		cc++;
+			
+		//20% of total condoms (80% via normal distribution channels)
+		costpopl[cc] = "Condom distribution in non-traditional outlets (hotels; shops; malls)"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((TotProtSexActs.out[CurrSim - 1][ly - 1] * CondomUsageAdjFactor.out[CurrSim - 1][ly]) * 0.20);
+		cc++;
+
+		costpopl[cc] = "Condom distribution in clinics"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((TotProtSexActs.out[CurrSim - 1][ly - 1] * CondomUsageAdjFactor.out[CurrSim - 1][ly]) * 0.80);
+		cc++;
+
+		costpopl[cc] = "Condom distribution (all)"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((TotProtSexActs.out[CurrSim - 1][ly - 1] * CondomUsageAdjFactor.out[CurrSim - 1][ly]));
+		cc++;
+
+		costpopl[cc] = "Total protected sex acts"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotProtSexActs.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "Proportion sex acts that are protected x1000"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotProtSexActs.out[CurrSim - 1][ly - 1] / TotSexActs.out[CurrSim - 1][ly - 1] * 1000);
+		cc++;
+
+		costpopl[cc] = "PrEP NonFSW"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewPrEPinNonFSW.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "PrEP FSW"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewPrEPinFSW.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "PrEP men"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewPrEPinNonMSM.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "PrEP MSM"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewPrEPinMSM.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "PrEP PWID"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewPrEPinPWID.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "PrEP total"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewPrEPinNonFSW.out[CurrSim - 1][ly] + NewPrEPinFSW.out[CurrSim - 1][ly] + 
+			NewPrEPinNonMSM.out[CurrSim - 1][ly] + NewPrEPinMSM.out[CurrSim - 1][ly] + NewPrEPinPWID.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "LAPrEP FSW"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewCABLAinFSW.out[CurrSim - 1][ly]);
+		cc++;		
+	
+		costpopl[cc] = "LAPrEP NonFSW"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewCABLAinNonFSW.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "LAPrEP men"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewCABLAinNonMSM.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "LAPrEP MSM"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewCABLAinMSM.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "LAPrEP PWID"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewCABLAinPWID.out[CurrSim - 1][ly]);
+		cc++;
+
+			
+	costpopl[cc] = "LAPrEP Total"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(NewCABLAinFSW.out[CurrSim - 1][ly] + NewCABLAinNonFSW.out[CurrSim - 1][ly] +
+			NewCABLAinMSM.out[CurrSim - 1][ly] + NewCABLAinNonMSM.out[CurrSim - 1][ly] + NewCABLAinPWID.out[CurrSim - 1][ly]);
+		cc++;
+
+
+
+		costpopl[cc] = "Women using the vaginal ring"; //STOCK 
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(WomenOnVM.out[CurrSim - 1][ly]); //using VM framework?!
+		cc++;
+
+		costpopl[cc] = "Total number of births to mothers on ART";//FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotBirthsART.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "PMTCT (mother not on any ART)";//FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotBirthsHIV.out[CurrSim - 1][ly - 1] - TotBirthsART.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "PMTCT (mother not on lifelong ART)";//STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(ChildrenOnExtNVP.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Testing at birth";//FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotBirthsHIV.out[CurrSim - 1][ly - 1] * PCRbirth[ly]);
+		cc++;
+
+		costpopl[cc] = "Testing at 10 weeks";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotBirthsHIV.out[CurrSim - 1][ly - 1] * PCR6week[ly]);
+		cc++;
+
+		costpopl[cc] = "Testing at 6 months";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotBirthsHIV.out[CurrSim - 1][ly - 1] * PCR6month[ly]);
+		cc++;
+
+		costpopl[cc] = "Infant PCR tests total";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotBirthsHIV.out[CurrSim - 1][ly - 1] * PCRbirth[ly] + TotBirthsHIV.out[CurrSim - 1][ly - 1] * PCR6week[ly] + 
+			TotBirthsHIV.out[CurrSim - 1][ly - 1] * PCR6month[ly]);
+		cc++;
+
+
+
+		costpopl[cc] = "Combination prevention package service provision through outreach to CSW"; //STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotSexWorkers.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "U=U messaging to men"; //STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(MalesOver15.out[CurrSim - 1][ly] * PropMessaging);
+		cc++;
+
+		int HIVSTcount = 0;
+
+		//Self-testing modalities
+		costpopl[cc] = "ST distributed (fixed point)";
+		costpop[cc][ly] = 0;
+		//assuming last rate of use (2019) remains constant
+		if (ly <= 34) { costpop[cc][ly] = SelfTestTotals[ly][0]; }
+		if (ly > 34) {
+			if (SelfTestTotals[ly][0] == 0) {
+				if (SelfTestTotals[34][0] != 0) {
+					costpop[cc][ly] = round(TotSTestFixedPoint.out[CurrSim - 1][ly] / (TotSTestFixedPoint.out[CurrSim - 1][34] / SelfTestTotals[34][0]));
+				}
+				else costpop[cc][ly] = 0;
+			}
+			else { costpop[cc][ly] = SelfTestTotals[ly][0]; }
+		}
+		HIVSTcount += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "ST distributed (taxi)";
+		costpop[cc][ly] = 0;
+		//assuming last rate of use (2019) remains constant
+		if (ly <= 34) { costpop[cc][ly] = SelfTestTotals[ly][1]; }
+		if (ly > 34) {
+			if (SelfTestTotals[ly][1] == 0) {
+				if (SelfTestTotals[34][1] != 0) {
+					costpop[cc][ly] = round(TotSTestTaxi.out[CurrSim - 1][ly] / (TotSTestTaxi.out[CurrSim - 1][34] / SelfTestTotals[34][1]));
+				}
+				else costpop[cc][ly] = 0;
+			}
+			else { costpop[cc][ly] = SelfTestTotals[ly][1]; }
+		}
+		HIVSTcount += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "ST distributed (ANC)";
+		costpop[cc][ly] = 0;
+		//assuming last rate of use (2019) remains constant
+		if (ly <= 34) { costpop[cc][ly] = SelfTestTotals[ly][2]; }
+		if (ly > 34) {
+			if (SelfTestTotals[ly][2] == 0) {
+				if (SelfTestTotals[34][2] != 0) {
+					costpop[cc][ly] = round(TotSTestANC.out[CurrSim - 1][ly] / (TotSTestANC.out[CurrSim - 1][34] / SelfTestTotals[34][2]));
+				}
+				else costpop[cc][ly] = 0;
+			}
+			else { costpop[cc][ly] = SelfTestTotals[ly][2]; }
+		}
+		HIVSTcount += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "ST distributed (index)";
+		costpop[cc][ly] = 0;
+		//assuming last rate of use (2019) remains constant
+		if (ly <= 34) { costpop[cc][ly] = SelfTestTotals[ly][3]; }
+		if (ly > 34) {
+			if (SelfTestTotals[ly][3] == 0) {
+				if (SelfTestTotals[34][3] != 0) {
+					costpop[cc][ly] = round(TotSTestIndex.out[CurrSim - 1][ly] / (TotSTestIndex.out[CurrSim - 1][34] / SelfTestTotals[34][3]));
+				}
+				else costpop[cc][ly] = 0;
+			}
+			else { costpop[cc][ly] = SelfTestTotals[ly][3]; }
+		}
+		HIVSTcount += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "ST distributed (workplace)";
+		costpop[cc][ly] = 0;
+		//assuming last rate of use (2019) remains constant
+		if (ly <= 34) { costpop[cc][ly] = SelfTestTotals[ly][4]; }
+		if (ly > 34) {
+			if (SelfTestTotals[ly][4] == 0) {
+				if (SelfTestTotals[34][4] != 0) {
+					costpop[cc][ly] = round(TotSTestWork1.out[CurrSim - 1][ly] / (TotSTestWork1.out[CurrSim - 1][34] / SelfTestTotals[34][4]));
+				}
+				else costpop[cc][ly] = 0;
+			}
+			else { costpop[cc][ly] = SelfTestTotals[ly][4]; }
+		}
+		HIVSTcount += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "ST distributed (PHC)";
+		costpop[cc][ly] = 0;
+		if (ly >= 35) {
+			costpop[cc][ly] = round(TotSTestprimaryPHC.out[CurrSim - 1][ly]);
+		}
+		int HIVSTother = costpop[cc][ly];
+		HIVSTcount += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "ST distributed Total";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = HIVSTcount;
+		cc++;		
+
+
+		long long TestPregNeg = round((round(TotBirths.out[CurrSim - 1][ly - 1]) - round(TotBirthsHIV.out[CurrSim - 1][ly - 1]))*CovPregWomenTest.out[CurrSim - 1][ly]); //used later
+		//long long TestPregPos = round(round(TotBirthDiagnosed.out[CurrSim - 1][ly - 1])* CovPregWomenTest.out[CurrSim - 1][ly]); //used later
+		long long TestPregPos = round(NewDiagnosesPregnancy.out[CurrSim - 1][ly - 1]); //used later, updated in Dec 2024
+
+
+		//For costing purposes specifically, removing this for double counting in costing populations
+		//we remove: HIVtestsforPREP, HIVSTother which represents the HIVST for PHC, tests in adolescents (15-19): these are all accounted for elsewhere wrt cost; also remove 5.8% in private
+		long long HIVtestinNeg = round((round(TotalHIVtests.out[CurrSim - 1][ly - 1])*(1 - pvtsector) 
+			- HIVSTother 
+			- round(TotalHIVtestsPrEP.out[CurrSim - 1][ly - 1])
+			- TotalHIVtests15_19.out[CurrSim - 1][ly-1]) * (1 - HIVtestsPosNoPrEP.out[CurrSim - 1][ly - 1])); //multiply by proportion of negative tests outside of PrEP
+		long long HIVtestinPos = round((round(TotalHIVtests.out[CurrSim - 1][ly - 1])*(1 - pvtsector) 
+			- HIVSTother 
+			- round(TotalHIVtestsPrEP.out[CurrSim - 1][ly - 1])
+			- TotalHIVtests15_19.out[CurrSim - 1][ly-1]) * HIVtestsPosNoPrEP.out[CurrSim - 1][ly - 1]); //multiply by proportion of positive tests outside of PrEP
+
+		
+
+		costpopl[cc] = "TotalHIVtests (public only)";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalHIVtests.out[CurrSim - 1][ly - 1] * (1 - pvtsector)); //accounting for pvt sector - note that HIVSTother should be included here as we assume 100% of them lead to HTS
+		cc++;
+
+		costpopl[cc] = "TotalHIVtests";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalHIVtests.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "Positive HIV tests";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalHIVtests.out[CurrSim - 1][ly - 1] * HIVtestsPos.out[CurrSim - 1][ly - 1]);
+		cc++;
+			   
+		totalHCT[ly] = 0;//to be added up as it goes along;
+		/*adding HCT testing due to PreP*/
+		totalHCT[ly] += round(TotalHIVtestsPrEP.out[CurrSim - 1][ly - 1]);
+
+		costpopl[cc] = "General HCT (negative)";//FLOW
+		costpop[cc][ly] = 0;
+
+		//Thato: ~40% general HTS, 30% mobile HTS, 14% PITC, 0.144725325071604 home-based, 0.00822495939296094 VCT invitations
+		costpop[cc][ly] = round(HIVtestinNeg - TestPregNeg
+			- round((HIVtestinNeg - TestPregNeg)*0.14) //PITC negative
+			- round((HIVtestinNeg - TestPregNeg)*0.00822495939296094) //VCT Invitations (Negative)
+			- round((HIVtestinNeg - TestPregNeg)*0.30) //Mobile HCT negative
+			- round((HIVtestinNeg - TestPregNeg)*0.144725325071604) //Home-based CT (door-to-door) Negative
+			- 0); //supposed to be Workplace HCT screening (negative), not currently included in budget	
+		if (costpop[cc][ly] < 0) { costpop[cc][ly] = 0; }
+		totalHCT[ly] += costpop[cc][ly];
+		cc++;
+
+		//Thato: ~40% general HTS, 30% mobile HTS, 14% PITC, 0.144725325071604 home-based, 0.00822495939296094 VCT invitations
+		costpopl[cc] = "General HCT (positive)"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(HIVtestinPos
+			- 0 //supposed to be Workplace HCT screening (positive)
+			- TestPregPos
+			- round((HIVtestinPos - TestPregPos)*0.14) //PITC positive
+			- round((HIVtestinPos - (HIVtestinPos - TestPregPos)*0.144725325071604)*0.00822495939296094) //VCT Invitations (positive)
+			- round((HIVtestinPos - TestPregPos)*0.30) //Mobile HCT positive
+			- round((HIVtestinPos - TestPregPos)*0.144725325071604)); //Home-based CT (door-to-door) Positive		
+		totalHCT[ly] += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "Adolescent testing (negative)"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalHIVtestsNeg15_19.out[CurrSim - 1][ly - 1]);
+		totalHCT[ly] += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "Adolescent testing (positive)";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalHIVtestsPos15_19.out[CurrSim - 1][ly - 1]);
+		totalHCT[ly] += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "ANC testing (negative)"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TestPregNeg);
+		totalHCT[ly] += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "ANC testing (positive)";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TestPregPos);
+		totalHCT[ly] += costpop[cc][ly];
+		cc++;
+
+		//Thato: ~40% general HTS, 30% mobile HTS, 14% PITC, 0.144725325071604 home-based, 0.00822495939296094 VCT invitations
+		costpopl[cc] = "PITC (negative)"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((HIVtestinNeg - TestPregNeg)*0.14);
+		if (costpop[cc][ly] < 0) { costpop[cc][ly] = 0; }
+		totalHCT[ly] += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "PITC (positive)"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((HIVtestinPos - TestPregPos)*0.14);
+		totalHCT[ly] += costpop[cc][ly];
+		cc++;
+
+		//Thato: ~40% general HTS, 30% mobile HTS, 14% PITC, 0.144725325071604 home-based, 0.00822495939296094 VCT invitations
+		costpopl[cc] = "Mobile testing (negative)"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((HIVtestinNeg - TestPregNeg)*0.30);
+		if (costpop[cc][ly] < 0) { costpop[cc][ly] = 0; }
+		totalHCT[ly] += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "Mobile testing (positive)"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((HIVtestinPos - TestPregPos)*0.30);
+		totalHCT[ly] += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "Home based testing (negative)"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((HIVtestinNeg - TestPregNeg)*0.144725325071604);
+		if (costpop[cc][ly] < 0) { costpop[cc][ly] = 0; }
+		totalHCT[ly] += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "Home based testing (positive)"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((HIVtestinPos - TestPregPos)*0.144725325071604);
+		totalHCT[ly] += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "Partner notification (negative)"; //FLOW	
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((HIVtestinNeg - TestPregNeg)*0.00822495939296094);
+		if (costpop[cc][ly] < 0) { costpop[cc][ly] = 0; }
+		totalHCT[ly] += costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "Partner notification (positive)"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round((HIVtestinPos - 0 - ((HIVtestinPos - TestPregPos)*0.144725325071604))*0.00822495939296094);
+		totalHCT[ly] += costpop[cc][ly];
+		cc++;
+
+
+		costpopl[cc] = "Rapid HIV tests in U15 (negative)"; //STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalHIVtestsU15.out[CurrSim - 1][ly] * (1 - HIVtestsPosU15.out[CurrSim - 1][ly]));
+		cc++;
+
+		costpopl[cc] = "Rapid HIV tests in U15 (positive)"; //STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalHIVtestsU15.out[CurrSim - 1][ly] * HIVtestsPosU15.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Adolescent (15-19) testing coverage x1000";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = (TotalHIVtests15_19.out[CurrSim - 1][ly] / Total15_19.out[CurrSim - 1][ly]) * 1000;
+		cc++;
+
+
+
+		//proportion = number of sexual offences in RSA in 2016/17 [n=49,660] divide by the total population in same year [N=56,910,995]
+		costpopl[cc] = "Post-Exposure Prophylaxis (PEP)"; //STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(round(TotPop.out[CurrSim - 1][ly]) * 0.000872590612708167);
+		cc++;
+
+		/*
+		costpopl[cc] = "Palliative care"; //FLOW
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(((AIDSdeathsAdultM.out[CurrSim - 1][ly - 1] + AIDSdeathsAdultF.out[CurrSim - 1][ly - 1] + AIDSdeathsPaed.out[CurrSim - 1][ly - 1])) * 1);
+		cc++;*/
+
+		costpopl[cc] = "Inpatient care (ART; <200 cells/microl)"; //STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(OnARTcurrUnder200.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Inpatient care (ART; 200-349 cells/microl)"; //STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(OnARTcurr200to349.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Inpatient care (ART; 350-500 cells/microl)"; //STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(OnARTcurr350to499.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Inpatient care (ART; >500 cells/microl)"; //STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(OnARTcurrOver500.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Inpatient care (pre-ART; <200 cells/microl)";//STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(PreARTunder200M.out[CurrSim - 1][ly] + PreARTunder200F.out[CurrSim - 1][ly] + DiscARTunder200.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Inpatient care (pre-ART; 200-349 cells/microl)";//STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(PreART200to349M.out[CurrSim - 1][ly] + PreART200to349F.out[CurrSim - 1][ly] + DiscART200to349.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Inpatient care (pre-ART; 350-500 cells/microl)";//STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(PreART350to499M.out[CurrSim - 1][ly] + PreART350to499F.out[CurrSim - 1][ly] + DiscART350to499.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Inpatient care (pre-ART; >500 cells/microl)";//STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(PreARTover500M.out[CurrSim - 1][ly] + PreARTover500F.out[CurrSim - 1][ly] + DiscARTover500.out[CurrSim - 1][ly]);
+		cc++;
+
+		/*
+		costpopl[cc] = "Supply chain management reform 1: Stock Visibility Solution";//STOCK
+		costpop[cc][ly] = 0;
+		if (ly >= 31) { costpop[cc][ly] = 1; }
+		//if (ly < 31) { costpop[cc][ly] = 0; }
+		cc++;
+
+		costpopl[cc] = "Supply chain management reform 2: Command Centre"; //STOCK
+		costpop[cc][ly] = 0;
+		//if (ly < 31) { costpop[cc][ly] = 0; }
+		if (ly >= 31) { costpop[cc][ly] = 1; }
+		cc++;
+
+		costpopl[cc] = "Supply chain management reform 3: Prov'l Control Tower"; //STOCK
+		costpop[cc][ly] = 0;
+		//if (ly < 31) { costpop[cc][ly] = 0; }
+		if (ly >= 31) { costpop[cc][ly] = 1; }
+		cc++;
+
+		costpopl[cc] = "Pharmacovigilance"; //STOCK
+		costpop[cc][ly] = 1;
+		cc++;
+		*/
+
+		//it is a constant value that is added for each year, hence its = 1
+		costpopl[cc] = "RetentionIntervention";
+		if (UTTretention == 1) { costpop[cc][ly] = 1; }
+		if (UTTretention == 0) { costpop[cc][ly] = 0; }
+		cc++;
+
+
+		//with no POC VL testing included
+
+		//cost only public sector, so ultimately remove 5.8% of ART patients across the board
+		costpopl[cc] = "ART Adults (1st line 1st year)"; //STOCK
+		costpop[cc][ly] = round((StartingART15to24F.out[CurrSim - 1][ly - 1] + StartingART15to24M.out[CurrSim - 1][ly - 1]
+			+ StartingART25to34F.out[CurrSim - 1][ly - 1] + StartingART25to34M.out[CurrSim - 1][ly - 1]
+			+ StartingART35to44F.out[CurrSim - 1][ly - 1] + StartingART35to44M.out[CurrSim - 1][ly - 1]
+			+ StartingART45F.out[CurrSim - 1][ly - 1] + StartingART45M.out[CurrSim - 1][ly - 1])*(1 - pvtsector));
+		double startART = costpop[cc][ly];
+		cc++;
+
+		costpopl[cc] = "ART Adults (1st line followup)"; //STOCK
+		costpop[cc][ly] = round(
+			(TotalART15M.out[CurrSim - 1][ly] + TotalART15F.out[CurrSim - 1][ly])*(1 - pvtsector)
+			- (TotalART15M2L.out[CurrSim - 1][ly] + TotalART15F2L.out[CurrSim - 1][ly])*(1 - pvtsector)
+			- startART);
+		cc++;
+
+		costpopl[cc] = "ART Adults (2nd line followup)"; //STOCK
+		costpop[cc][ly] = round((TotalART15M2L.out[CurrSim - 1][ly] + TotalART15F2L.out[CurrSim - 1][ly])*(1 - pvtsector));
+		cc++;
+
+		costpopl[cc] = "ART Paeds Neonates"; //STOCK
+		costpop[cc][ly] = round(StartingART0.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "ART Paeds Kids <1"; //STOCK
+		costpop[cc][ly] = round(StartingART0.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "ART Paeds Kids 1-2 (1st year)"; //STOCK
+		costpop[cc][ly] = round(StartingART1to2.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "ART Paeds Kids 1-2 (followup)"; //STOCK
+		if (TotalART1to2.out[CurrSim - 1][ly] > StartingART1to2.out[CurrSim - 1][ly - 1]) { costpop[cc][ly] = round((TotalART1to2.out[CurrSim - 1][ly] - StartingART1to2.out[CurrSim - 1][ly - 1])); }
+		else { costpop[cc][ly] = 0.0; }
+		cc++;
+
+		costpopl[cc] = "ART Paeds Kids 3-5 (1st year)"; //STOCK
+		costpop[cc][ly] = round(StartingART3to5.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "ART Paeds Kids 3-5 (followup)"; //STOCK
+		if (TotalART3to5.out[CurrSim - 1][ly] > StartingART3to5.out[CurrSim - 1][ly - 1]) { costpop[cc][ly] = round((TotalART3to5.out[CurrSim - 1][ly] - StartingART3to5.out[CurrSim - 1][ly - 1])); }
+		else { costpop[cc][ly] = 0.0; }
+		cc++;
+
+		costpopl[cc] = "ART Paeds Kids 6-9 (1st year)"; //STOCK
+		costpop[cc][ly] = round(StartingART6to9.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "ART Paeds Kids 6-9 (followup)"; //STOCK
+		if (TotalART6to9.out[CurrSim - 1][ly] > StartingART6to9.out[CurrSim - 1][ly - 1]) { costpop[cc][ly] = round((TotalART6to9.out[CurrSim - 1][ly] - StartingART6to9.out[CurrSim - 1][ly - 1])); }
+		else { costpop[cc][ly] = 0.0; }
+		cc++;
+
+		costpopl[cc] = "ART Paeds Kids 10-14 (1st year)"; //STOCK
+		costpop[cc][ly] = round(StartingART10to14.out[CurrSim - 1][ly - 1]);
+		cc++;
+
+		costpopl[cc] = "ART Paeds Kids 10-14 (followup)"; //STOCK
+		if (TotalART10to14.out[CurrSim - 1][ly] > StartingART10to14.out[CurrSim - 1][ly - 1]) { costpop[cc][ly] = round((TotalART10to14.out[CurrSim - 1][ly] - StartingART10to14.out[CurrSim - 1][ly - 1])); }
+		else { costpop[cc][ly] = 0.0; }
+		cc++;
+
+		//Re-engagements, if baseline CD4<200 and if VL>1000 (assuming one additional CD4 count done in each case)
+		costpopl[cc] = "Additional CD4 counts required";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(RestartARTchild.out[CurrSim - 1][ly] + AdultsRestartingART.out[CurrSim - 1][ly] + 
+			NewARTunder200.out[CurrSim - 1][ly] + 
+			(1 - VLsuppressed1000.out[CurrSim - 1][ly]) *
+			(TotalART15M.out[CurrSim - 1][ly] + TotalART15F.out[CurrSim - 1][ly] + TotalARTunder15.out[CurrSim - 1][ly]));
+		cc++;		
+
+		
+		//toggle only adding on incremental POC VL costs, everyone has one VL per year, those starting have an additional one (so starting added again)
+		costpopl[cc] = "Incremental POCVL costs across all populations"; //STOCK
+		costpop[cc][ly] = round((1 - pvtsector)*PropWithPOCVL*
+			(StartingART0.out[CurrSim - 1][ly - 1] + StartingART1.out[CurrSim - 1][ly - 1] + 
+				StartingART2to4.out[CurrSim - 1][ly - 1] + StartingART5to14.out[CurrSim - 1][ly - 1]
+
+				+ StartingART15to24F.out[CurrSim - 1][ly - 1] + StartingART15to24M.out[CurrSim - 1][ly - 1]
+				+ StartingART25to34F.out[CurrSim - 1][ly - 1] + StartingART25to34M.out[CurrSim - 1][ly - 1]
+				+ StartingART35to44F.out[CurrSim - 1][ly - 1] + StartingART35to44M.out[CurrSim - 1][ly - 1]
+				+ StartingART45F.out[CurrSim - 1][ly - 1] + StartingART45M.out[CurrSim - 1][ly - 1]
+
+				+ TotalART15M.out[CurrSim - 1][ly] + TotalART15F.out[CurrSim - 1][ly] + TotalARTunder15.out[CurrSim - 1][ly]			
+				
+				));
+		cc++;
+
+//-----------------------------------------------------------------------------------------------------------------------------
+// TB Costing populations
+//-----------------------------------------------------------------------------------------------------------------------------
+		//Epi outputs for impact assessment
+		costpopl[cc] = "NewActiveTBadult";
+		costpop[cc][ly] = round(NewActiveTBadult.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "TotTBdeathsAdult";
+		costpop[cc][ly] = round(TotTBdeathsAdult.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "AdultLYlostTB";
+		costpop[cc][ly] = AdultLYlostTB.out[CurrSim - 1][ly];
+		cc++;
+
+		//Dividing in 1000s so remember are in thoudands
+		costpopl[cc] = "Adult TB DALYs";
+		costpop[cc][ly] = round(AdultTBDALYs.out[CurrSim - 1][ly]);// / 1000;
+		cc++;
+
+		// total incidence and mortality 
+		costpopl[cc] = "Adult TB incidence per 100 000";
+		costpop[cc][ly] = NewTBrateAdult.out[CurrSim - 1][ly] * 100000.0;
+		cc++;
+		
+		costpopl[cc] = "Adult TB mortality rate per 100 000";
+		costpop[cc][ly] = TotTBmortRate.out[CurrSim - 1][ly] * 100000.0;
+		cc++;
+
+		costpopl[cc] = "Total Adult TB Pop with prevalent TB";
+		costpop[cc][ly] = TotTBadult.out[CurrSim - 1][ly];
+		cc++;
+
+		costpopl[cc] = "Total Adult Lab diagnoses";
+		costpop[cc][ly] = round(TotLabDiagAllTBscreening.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Testing yield";
+		costpop[cc][ly] = TBtestingYield.out[CurrSim - 1][ly]*100;
+		cc++;
+
+		//-----------------------------------------------------------------------------------------------------------------------------
+		//----------------Coverages and generating denominators 
+		/*
+		costpopl[cc] = "Number of TB contacts";
+		costpop[cc][ly] = TBindexCasesLastYr * HHcontactsPerCase;
+		cc++;
+
+		costpopl[cc] = "Number of adults on ART";
+		costpop[cc][ly] = round(TotalART15M.out[CurrSim - 1][ly] + TotalART15F.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Number of adults starting ART";
+		costpop[cc][ly] = round(StartingART_F15.out[CurrSim - 1][ly] + StartingART_M15.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Total Previous TB";
+		costpop[cc][ly] = round(NumberPreviousTB.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Number of adults in SA";
+		costpop[cc][ly] = round(MalesOver15.out[CurrSim - 1][ly] + FemalesOver15.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "% TPT coverage";
+		costpop[cc][ly] = IPTcoverage.out[CurrSim - 1][ly] * 100.0;
+		cc++;
+
+		costpopl[cc] = "Number of new TPT";
+		costpop[cc][ly] = NewIPTlatent.out[CurrSim - 1][ly];
+		cc++;
+
+		costpopl[cc] = "Number eligible for TPT"; // includes - total on ART, HIV diagnosed, and those starting ART
+		costpop[cc][ly] = round(TPTdenominator.out[CurrSim - 1][ly]); // essentiall NewIPTlatent/coverage
+		cc++;
+
+		costpopl[cc] = "% of symptomatic TB patients screened microbiologically";
+		costpop[cc][ly] = PropnScreened.out[CurrSim - 1][ly] * 100.0;
+		cc++;
+
+		costpopl[cc] = "% of patients with TB/TB-like symptoms screened micro-biologically";
+		costpop[cc][ly] = PropnScreened2.out[CurrSim - 1][ly] * 100.0;
+		cc++;
+		*/
+
+		costpopl[cc] = "% of symptomatic TB patients tested microbiologically";
+		costpop[cc][ly] = PropnScreened.out[CurrSim - 1][ly] * 100.0;
+		cc++;
+
+		costpopl[cc] = "% of patients with TB-like symptoms tested micro-biologically";
+		costpop[cc][ly] = PropnScreened2.out[CurrSim - 1][ly] * 100.0;
+		cc++;
+
+		costpopl[cc] = "Number of TB contacts";
+		costpop[cc][ly] = round((TBindexCasesLastYr * HHcontactsPerCase));
+		cc++;
+
+		costpopl[cc] = "TPT coverage";
+		costpop[cc][ly] = IPTcoverage.out[CurrSim - 1][ly] * 100.0;
+		cc++;
+
+		//-------------- TB Costing populations used for costing, these labels need to match up exactly to the labels in "Import_costs.csv"
+		costpopl[cc] = "IPT for PLHIV";
+		costpop[cc][ly] = IPTforPLHIV.out[CurrSim - 1][ly];
+		cc++;
+		costpopl[cc] = "3HP for PLHIV";
+		costpop[cc][ly] = TPT3HPforPLHIV.out[CurrSim - 1][ly];
+		cc++;
+
+		//TPT for contacts
+		costpopl[cc] = "IPT for household contacts";
+		costpop[cc][ly] = IPTforHH.out[CurrSim - 1][ly];
+		cc++;
+		costpopl[cc] = "3HP for household contacts";
+		costpop[cc][ly] = TPT3HPforHH.out[CurrSim - 1][ly];
+		cc++;
+
+		costpopl[cc] = "TB Screening General PHC";
+		costpop[cc][ly] = round(TotTBsymptomChecks.out[CurrSim - 1][ly]);
+		cc++;
+		costpopl[cc] = "TB Screening PLHIV on ART";
+		costpop[cc][ly] = round(TotTBsymptomChecksART.out[CurrSim - 1][ly]);
+		cc++;
+		costpopl[cc] = "TB Screening (Household contacts and other close contacts)";
+		costpop[cc][ly] = round(TotalScreensACF.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "TB Screening (Door-to-door)";
+		costpop[cc][ly] = round(TotalScreensD2D.out[CurrSim - 1][ly]);
+		cc++;
+
+		//Targetted, halve cost of screening
+		costpopl[cc] = "TB Screening (Door-to-door targetted)";
+		costpop[cc][ly] = round(TotalScreensTargettedD2D.out[CurrSim - 1][ly-1]); 
+		cc++;
+
+		costpopl[cc] = "TB Screening (Digital Chest X-ray)";
+		costpop[cc][ly] = round(Total_dCXRscreensD2D.out[CurrSim - 1][ly-1]);
+		cc++;
+
+		//Digital Chest X-ray, portabled, halve cost of dCXR
+		costpopl[cc] = "TB Screening (Digital Chest X-ray portable)";
+		costpop[cc][ly] = round(Total_dCXRscreensD2DPort.out[CurrSim - 1][ly-1]);
+		cc++;
+
+		// D2D TSwabPlusLife, targeted (20 mil)
+		//halved door to door screening and pluslife (83.76/2)+(30.91/2)
+		costpopl[cc] = "Testing (TSwabPlusLife D2D targeted)"; 
+		costpop[cc][ly] = round(TotTongueSwabsD2D.out[CurrSim - 1][ly-1]);
+		cc++;
+
+		costpopl[cc] = "Testing (Follow-up Xpert DST)"; 
+		costpop[cc][ly] = round(DiagnosedDrugSuscTest.out[CurrSim - 1][ly-1]);
+		cc++;
+		
+		costpopl[cc] = "Testing (TSwabPlusLife PHC)"; 
+		costpop[cc][ly] = round(TotTSwabScreensPHC.out[CurrSim - 1][ly-1]);
+		cc++;
+
+		costpopl[cc] = "Testing (TSwabPlusLife immediate treat)";  //CurrSim == 9
+		costpop[cc][ly] = round(FollowupTreat.out[CurrSim - 1][ly-1]);
+		cc++;
+
+		// Tongue swabs are offered to people seeking treatment for TB symptoms at PHC
+		// UltTBsymptomScreen
+		// Replace the current cost for Xpert testing of symptomatic people in PHC -> TswabPlusLife cost 
+		//costpopl[cc] = "Testing: TSwabPlusLife";
+		//costpop[cc][ly] = ((TotTSwabScreensPHC.out[CurrSim - 1][ly] * (1.0 - MicroscopyPropn[ly]))); 
+		//cc++;
+
+		//costpopl[cc] = "Testing: TSwabPlusLife + SputumXpert"; //CurrSim == 10
+		//costpop[cc][ly] = ((TotTSwabScreensPHC.out[CurrSim - 1][ly] * (1.0 - MicroscopyPropn[ly]))); /// 1000000
+		//cc++;
+		
+		costpopl[cc] = "Testing (Xpert Ultra)"; //Testing: Xpert MTB/RIF Ultra // Testing: SputumXpert
+		costpop[cc][ly] = round((TotalScreens.out[CurrSim - 1][ly] * (1.0 - MicroscopyPropn[ly])));
+		cc++;
+
+		
+	//Create a population for costing Xpert (drug susceptibilty testing) for those diagnosed positively on TSwabPlusLife
+	//	costpopl[cc] = "Testing: TUTT for PLHIV (follow-up)";
+	//	costpop[cc][ly] = round(NewRxAdultTB_ART_ICF.out[CurrSim - 1][ly] / (1.0 - CurrInitLTFU));
+	//	cc++;
+
+		costpopl[cc] = "Testing: Culture in liquid medium (Xpert neg)";
+		costpop[cc][ly] = round(CultureConfirmTests.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Testing: TUTT for PLHIV (screening)";
+		costpop[cc][ly] = round(TotalXpertScreensART_ICF.out[CurrSim - 1][ly]);
+		cc++;
+
+		//testing positive and followed up
+		costpopl[cc] = "Testing: TUTT for PLHIV (follow-up)";
+		costpop[cc][ly] = round(NewRxAdultTB_ART_ICF.out[CurrSim - 1][ly] / (1.0 - CurrInitLTFU));
+		cc++;
+
+		//cost of testing and follow-up, effect of testing 
+		/*costpopl[cc] = "Testing: TUTT for PLHIV (screening + follow-up)";
+		costpop[cc][ly] = round(TotalXpertScreensART_ICF.out[CurrSim - 1][ly]);
+		cc++;*/
+
+		costpopl[cc] = "Testing: TUTT for previous TB (screening)";
+		costpop[cc][ly] = round(TotalXpertScreensPrevTB.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Testing: TUTT for previous TB (follow-up)";
+		costpop[cc][ly] = round(NewRxAdultTBscreenPrev.out[CurrSim - 1][ly] / ((1.0 - CurrInitLTFU) * HHcontactRxUptake));
+		cc++;
+
+		//cost of testing and follow-up, effect of testing 
+		/*costpopl[cc] = "Testing: TUTT for previous TB (screening + follow-up)";
+		costpop[cc][ly] = round(TotalXpertScreensPrevTB.out[CurrSim - 1][ly]);
+		cc++;*/
+
+		//TUTT for household contacts
+		costpopl[cc] = "Testing: TUTT for HH (screening)";
+		costpop[cc][ly] = round(TotalXpertScreensACF.out[CurrSim - 1][ly]);
+		cc++;
+
+		//testing positive and followed up
+		costpopl[cc] = "Testing: TUTT for HH (follow-up)";
+		costpop[cc][ly] = round((NewRxAdultTB_ACF.out[CurrSim - 1][ly] / ((1.0 - CurrInitLTFU) * HHcontactRxUptake)));
+		cc++;
+
+		//Total Xpert Screens
+		costpopl[cc] = "Total Xpert MTB/RIF Ultra";
+		costpop[cc][ly] = round(((TotalScreens.out[CurrSim - 1][ly] * (1 - MicroscopyPropn[ly]))
+			+ TotalXpertScreensACF.out[CurrSim - 1][ly]
+			+ TotalXpertScreensART_ICF.out[CurrSim - 1][ly]
+			+ TotalXpertScreensPrevTB.out[CurrSim - 1][ly]
+			+ TotalXpertScreensD2D.out[CurrSim - 1][ly]));
+		cc++;
+
+
+		//costpopl[cc] = "Treatment initiations: TUTT (hh)";
+		//costpop[cc][ly] = round(NewRxAdultTB_ACF.out[CurrSim - 1][ly]);
+		//cc++;
+
+		//cost of testing and follow-up, effect of testing 
+		//costpopl[cc] = "Testing: TUTT for HH (screening + follow-up)";
+		//costpop[cc][ly] = round(TotalXpertScreensACF.out[CurrSim - 1][ly]);
+		//cc++;
+
+		//Xperts test following screening interventions 
+		//not sure about the cost, should include linkage
+		costpopl[cc] = "Testing: Xpert D2D";
+		costpop[cc][ly] = round(TotalXpertScreensD2D.out[CurrSim - 1][ly-1]);// / 1000000;
+		cc++;
+
+		//treatment initiations following screening interventions 
+		/*costpopl[cc] = "Treatment initiations: TUTT (PLHIV on ART)";
+		costpop[cc][ly] = round(NewRxAdultTB_ART_ICF.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Treatment initiations: TUTT (TB hx)";
+		costpop[cc][ly] = round(NewRxAdultTBscreenPrev.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Treatment initiations: TUTT (hh)";
+		costpop[cc][ly] = round(NewRxAdultTB_ACF.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Treatment initiations: D2D";
+		costpop[cc][ly] = round(NewRxAdultTBscreenD2D.out[CurrSim - 1][ly]);
+		cc++;
+
+		costpopl[cc] = "Treatment initiations: dXCR";
+		costpop[cc][ly] = round(NewRxAdultTBscreenD2D.out[CurrSim - 1][ly]);
+		cc++;*/
+
+		costpopl[cc] = "Treatment DS-TB (Outpatient)";
+		costpop[cc][ly] = round(TotRxInitAllTBscreening.out[CurrSim - 1][ly-1] - New2ndRxAdultTB.out[CurrSim - 1][ly-1]);
+		cc++;
+
+		costpopl[cc] = "Treatment: DS-TB (Inpatient)";
+		costpop[cc][ly] = round((TotRxInitAllTBscreening.out[CurrSim - 1][ly-1] - New2ndRxAdultTB.out[CurrSim - 1][ly-1]) * 0.18);
+		cc++;
+
+		costpopl[cc] = "False Positives on Treatment";
+		costpop[cc][ly] = round((TotRxInitAllTBscreening.out[CurrSim - 1][ly-1]) * (1.0 - CurrSpTB));
+		cc++;
+
+
+		//Linked cost-pop
+		//average cost R31.20 per person diagnosed with TB
+		//applied to 25 % of people newly diagnosed with TB each year(ie, the LinkedIn baseline ILTFU)
+		//reduce ITLFU to 14 % .
+		//NewDiangnoses * 14 % * 25% 
+		costpopl[cc] = "Treatment: Linkage to treatment";
+		costpop[cc][ly] = LinkedToTreatment.out[CurrSim - 1][ly-1];
+		cc++;
+
+		//Linkage to treatment - 
+		//currently the cost of the intervention is applied to all diagnosed individuals (need to be treatmet initiations)
+		//costpopl[cc] = "iLTFU intervention"; //
+		//costpop[cc][ly] = Diagnosed_LinkedIN.out[CurrSim - 1][ly]; //
+		//cc++;
+
+		//assume 18% are inpatients ref: Osman 2021
+		//costpopl[cc] = "Treatment DS-TB (Outpatient)";
+		//costpop[cc][ly] = round(NewRxAdultTB.out[CurrSim - 1][ly] - New2ndRxAdultTB.out[CurrSim - 1][ly]);
+		//cc++;
+
+		//costpopl[cc] = "Treatment: DS-TB (Inpatient)";
+		//costpop[cc][ly] = round((NewRxAdultTB.out[CurrSim - 1][ly] - New2ndRxAdultTB.out[CurrSim - 1][ly]) * 0.18);
+		//cc++;
+
+		costpopl[cc] = "Treatment: DR-TB (In- and Outpatient)";
+		costpop[cc][ly] = round(New2ndRxAdultTB.out[CurrSim - 1][ly]);
+		cc++;
+
+		//For now, the cost of DR TB is estiamted crudely 
+		//costpopl[cc] = "Treatment: DR-TB (Inpatient)"; 
+		//costpop[cc][ly] = round(New2ndRxAdultTB.out[CurrSim - 1][ly]) * 0.18;
+		//costpop[cc][ly] = 0;
+		//cc++;
+
+		//Childhood TB treatment
+		costpopl[cc] = "Treatment: Childhood";
+		costpop[cc][ly] = round(RxChildTB);
+		cc++;
+
+		costpopl[cc] = "Treatment monitoring: Smear microscopy";
+		costpop[cc][ly] = round(NewRxAdultTB.out[CurrSim - 1][ly] * RxMonitorSmearTest2);
+		cc++;
+
+		costpopl[cc] = "Treatment success (%): DS-TB";
+		costpop[cc][ly] = TBRxCompletion.out[CurrSim - 1][ly] * 100;
+		cc++;
+
+		costpopl[cc] = "Treatment success (%): DR-TB";
+		costpop[cc][ly] = TBRx2Completion.out[CurrSim - 1][ly] * 100;
+		cc++;
+
+
+
+		//Calculate total cost = costing population x unit cost, informed by intervention included (based on cost pop label)
+		//We only care to run costs from 2023, for 20 years (though we set it to go to 2045)
+		if (ly >= ICstart && ly < ICstart + timehorizon + 1) {    //TO DO: ly >= ICstart - 1 to get the preceding year
+			for (int tc = 0; tc < cc; tc++) { //loop through cost population array first
+				for (int ic = 0; ic < 150; ic++) { //then loop through unit costs
+					if (costingl[ic] == costpopl[tc] && costpopl[tc] != "") {
+						totalcostl[tc] = costpopl[tc]; //label for cost output	
+
+						double tempcost = (round(costing[ic] * 100) / 100);
+						//make any overriding changes to unit costs here, making changes to tempcost			
+
+
+						//overwriting costs for retention intervention if its >0
+						if (RetIntCost > 0) {
+							if (costpopl[tc] == "RetentionIntervention") { tempcost = RetIntCost; }
+						}
+
+						unitcost2[tc] = tempcost; //for cost output
+						totalcost[tc][ly - ICstart] = round(costpop[tc][ly] * tempcost); //calculate total cost for costing population
+					}
+				}
+			}
+		}
+	}
+
+	//Reset ICER and budget (excl inpatient cost) costs for time period - to be added up in following two for-loops
+	if (Optimise == 1){
+		CostforICER[CurrSim - 1][RunIntervention] = 0;	
+	}
+	if (Optimise == 0){
+		TotalCost[CurrSim - 1] = 0;		
+	}
+
+
+	for (int row = 0; row < 150; row++) {
+		stringstream newline, newlinep;
+		if (Optimise == 0) {
+			newline << CurrSim - 1 << "," << totalcostl[row] << "," << unitcost2[row] << ", ";
+			newlinep << CurrSim - 1 << "," << costpopl[row] << ",";
+		}
+		if (Optimise == 1) {
+			newline << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << totalcostl[row] << "," << unitcost2[row] << ", ";
+			newlinep << CountInt[CurrSim - 1] << "," << CurrSim - 1 << "," << costpopl[row] << ",";
+		}
+
+
+		for (int col = 0; col < ICstart + timehorizon + 1; col++) {
+			//totalcost and costpop running under same loop but starting point is different
+			if (col < timehorizon - 1) {
+				newline << totalcost[row][col] << ",";
+			}
+			if (col == timehorizon - 1) {
+				newline << totalcost[row][col];
+			}
+			//costing population runs from 1985 (col=0) to 2070 (col=85)
+			if (col < ICstart + timehorizon) {
+				newlinep << costpop[row][col] << ",";
+			}
+			if (col == ICstart + timehorizon) {
+				newlinep << costpop[row][col];
+			}
+			//Calc costs for inpatient included for ICER, but not for budget constraint
+			if (col <= timehorizon - 1) {   //TO DO: make it so col only goes from 1 to timehorizon - 1, since we are including the baseline year- we dont want to sum it to total 20yr cost
+				//if (col >= 5) { 
+				if (Optimise == 1) { CostforICER[CurrSim - 1][RunIntervention] = CostforICER[CurrSim - 1][RunIntervention] + totalcost[row][col]; }
+				if (Optimise == 0) { TotalCost[CurrSim - 1] = TotalCost[CurrSim - 1] + totalcost[row][col]; }
+			
+			}
+		}
+
+		if (Optimise == 1) {
+			//only update cost at the time when the baseline interventions are run, and if a new intervention has been added to set
+			if (RunIntervention == 0 && reduceCountInt[CurrSim - 1] == 0) {
+				std::fstream filecost;
+				filecost.open("Total Costs.txt", std::fstream::app);
+				std::fstream filecostpop;
+				filecostpop.open("Costing Population.txt", std::fstream::app);
+				if (totalcostl[row] != "") { filecost << newline.str() << endl; }
+				if (costpopl[row] != "") {
+					filecostpop << newlinep.str() << endl;
+				}
+				filecost.close();
+				filecostpop.close();
+			}
+
+			//get the first run of all intervention tests
+			if (CountInt[CurrSim - 1] == 0) {
+				std::fstream filecost;
+				filecost.open("Total Costs _firstrun_.txt", std::fstream::app);
+				std::fstream filecostpop;
+				filecostpop.open("Costing Population _firstrun_.txt", std::fstream::app);
+				string IntNametemp = IntName;
+				if (RunIntervention == 0) { IntNametemp = "Baseline"; }
+
+				if (totalcostl[row] != "") { filecost << RunIntervention << "," << IntNametemp << "," << newline.str() << endl; }
+				if (costpopl[row] != "") {
+					filecostpop << RunIntervention << "," << IntNametemp << "," << newlinep.str() << endl;
+				}
+				filecost.close();
+				filecostpop.close();
+			}
+
+		}
+		if (Optimise == 0) {
+			std::fstream filecost;
+			filecost.open("Total Costs.txt", std::fstream::app);
+			std::fstream filecostpop;
+			filecostpop.open("Costing Population.txt", std::fstream::app);
+			if (totalcostl[row] != "") { filecost << newline.str() << endl; }
+			if (costpopl[row] != "") {
+				filecostpop << newlinep.str() << endl;
+			}
+
+			filecost.close();
+			filecostpop.close();
+		}
+
+
+	}
+
+
+}
+
+
+
+
+
+void SimInvestmentCaseOpt() {
+	std::fstream filesim;
+	filesim.open("RunningLOG.txt", std::fstream::app);
+
+
+	time_t t = time(0);   // get time now
+	struct tm * now = localtime(&t);
+	stringstream h, m;
+	if (now->tm_hour < 10) { h << "0" << now->tm_hour; }
+	else { h << now->tm_hour; }
+	if (now->tm_min < 10) { m << "0" << now->tm_min; }
+	else { m << now->tm_min; }
+	if (CurrYear == 2026 & (RunIntervention == 0 || RunIntervention == intercount)) {
+		filesim << "Time Check: " << (now->tm_year + 1900) << '-'
+			<< (now->tm_mon + 1) << '-'
+			<< now->tm_mday << "; Time " << h.str() << ":" << m.str() << endl;
+	}
+
+
+	//by default the icer will be calculated, unless it runs into an intervention where the conditions aren't met and the intervention isn't run
+	//where calcICER will be set to zero
+	calcICER[CurrSim - 1] = 1;
+
+	//these are used to record the last coverage of these interventions applied so that we can determine the values of the parameters
+	//Resetting them to default intervention numbers before each run and they are set as the interventions are applied	
+	//Also note- setSQ may contain a different status quo/baseline than what you think you may be running so always check that before a run.
+	SetSQ();
+
+
+	//Initialize order array
+	//Running order of interventions as they get assigned to the baseline scenario. Used to keep track of what has happened
+	//as interventions get added so we can adjust for compounding effects between interventions
+	for (int ic = 0; ic < intercount; ic++) {
+		BaseIntOrder[ic] = -1;
+	}
+	int CountOrder = 0; //This is to keep count of the order the interventions are being applied in. Used for baseline interventions AND testing interventions
+
+	//This is only for display purposes if only baseline is run - should be noted that baseline will always run prior to any intervention
+	if (RunIntervention == 0 & CurrYear == 2026) {
+		filesim << "Running Baseline Intervention(s)" << endl;
+		cout << "Running Baseline Intervention(s)" << endl;
+		IntName = "";
+	}
+
+
+	//loop through baseline intervention toggle to assess which interventions are being applied to baseline
+	for (int iy = 0; iy < CountInt[CurrSim - 1] + 1; iy++) {
+		if (BaseIntToggle[CurrSim - 1][iy] == 1) { BaseIntOrder[1] = CountOrder; Int_MMCBm2(); if (CurrYear == 2026) { filesim << "Baseline: applying MMC Baseline-2" << endl;  cout << "Baseline: applying MMC Baseline-2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 2) { BaseIntOrder[2] = CountOrder; Int_MMCBm1(); if (CurrYear == 2026) { filesim << "Baseline: applying MMC Baseline-1" << endl;  cout << "Baseline: applying MMC Baseline-1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 3) { BaseIntOrder[3] = CountOrder; Int_MMCDefault(); if (CurrYear == 2026) { filesim << "Baseline: applying MMC Default" << endl;  cout << "Baseline: applying MMC Default" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 4) { BaseIntOrder[4] = CountOrder; Int_MMCBp1(); if (CurrYear == 2026) { filesim << "Baseline: applying MMC Baseline+1" << endl;  cout << "Baseline: applying MMC Baseline+1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 5) { BaseIntOrder[5] = CountOrder; Int_MMCBp2(); if (CurrYear == 2026) { filesim << "Baseline: applying MMC Baseline+2" << endl;  cout << "Baseline: applying MMC Baseline+2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 6) { BaseIntOrder[6] = CountOrder; Int_MMCBp3(); if (CurrYear == 2026) { filesim << "Baseline: applying MMC Baseline+3" << endl;  cout << "Baseline: applying MMC Baseline+3" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 7) { BaseIntOrder[7] = CountOrder; Int_MMCMax(); if (CurrYear == 2026) { filesim << "Baseline: applying MMC Max" << endl;  cout << "Baseline: applying MMC Max" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 8) { BaseIntOrder[8] = CountOrder; Int_EIMCBm2(); if (CurrYear == 2026) { filesim << "Baseline: applying EIMC Baseline-2" << endl;  cout << "Baseline: applying EIMC Baseline-2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 9) { BaseIntOrder[9] = CountOrder; Int_EIMCBm1(); if (CurrYear == 2026) { filesim << "Baseline: applying EIMC Baseline-1" << endl;  cout << "Baseline: applying EIMC Baseline-1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 10) { BaseIntOrder[10] = CountOrder; Int_EIMCDefault(); if (CurrYear == 2026) { filesim << "Baseline: applying EIMCDefault" << endl;  cout << "Baseline: applying EIMCDefault" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 11) { BaseIntOrder[11] = CountOrder; Int_EIMCBp1(); if (CurrYear == 2026) { filesim << "Baseline: applying EIMC Baseline+1" << endl;  cout << "Baseline: applying EIMC Baseline+1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 12) { BaseIntOrder[12] = CountOrder; Int_EIMCBp2(); if (CurrYear == 2026) { filesim << "Baseline: applying EIMC Baseline+3" << endl;  cout << "Baseline: applying EIMC Baseline+3" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 13) { BaseIntOrder[13] = CountOrder; Int_EIMCBp3(); if (CurrYear == 2026) { filesim << "Baseline: applying EIMC Baseline+2" << endl;  cout << "Baseline: applying EIMC Baseline+2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 14) { BaseIntOrder[14] = CountOrder; Int_EIMCMax(); if (CurrYear == 2026) { filesim << "Baseline: applying EIMC Max" << endl;  cout << "Baseline: applying EIMC Max" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 15) { BaseIntOrder[15] = CountOrder; Int_CondomSupplyBm2(); if (CurrYear == 2026) { filesim << "Baseline: applying Condom Supply Baseline-2" << endl;  cout << "Baseline: applying Condom Supply Baseline-2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 16) { BaseIntOrder[16] = CountOrder; Int_CondomSupplyBm1(); if (CurrYear == 2026) { filesim << "Baseline: applying Condom Supply Baseline-1" << endl;  cout << "Baseline: applying Condom Supply Baseline-1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 17) { BaseIntOrder[17] = CountOrder; Int_CondomSupplyDefault(); if (CurrYear == 2026) { filesim << "Baseline: applying Condom Supply Default" << endl;  cout << "Baseline: applying Condom Supply Default" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 18) { BaseIntOrder[18] = CountOrder; Int_CondomSupplyBp1(); if (CurrYear == 2026) { filesim << "Baseline: applying Condom Supply Baseline+1" << endl;  cout << "Baseline: applying Condom Supply Baseline+1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 19) { BaseIntOrder[19] = CountOrder; Int_CondomSupplyBp2(); if (CurrYear == 2026) { filesim << "Baseline: applying Condom Supply Baseline+2" << endl;  cout << "Baseline: applying Condom Supply Baseline+2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 20) { BaseIntOrder[20] = CountOrder; Int_CondomSupplyBp3(); if (CurrYear == 2026) { filesim << "Baseline: applying Condom Supply Baseline+3" << endl;  cout << "Baseline: applying Condom Supply Baseline+3" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 21) { BaseIntOrder[21] = CountOrder; Int_CondomSupplyMax(); if (CurrYear == 2026) { filesim << "Baseline: applying Condom Supply Max" << endl;  cout << "Baseline: applying Condom Supply Max" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 22) { BaseIntOrder[22] = CountOrder; Int_Test6monthsBm2(); if (CurrYear == 2026) { filesim << "Baseline: applying PCR 6 months Baseline-2" << endl;  cout << "Baseline: applying PCR 6 months Baseline-2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 23) { BaseIntOrder[23] = CountOrder; Int_Test6monthsBm1(); if (CurrYear == 2026) { filesim << "Baseline: applying PCR 6 months Baseline-1" << endl;  cout << "Baseline: applying PCR 6 months Baseline-1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 24) { BaseIntOrder[24] = CountOrder; Int_Test6monthsDefault();  if (CurrYear == 2026) { filesim << "Baseline: applying PCR 6 months Default" << endl;  cout << "Baseline: applying PCR 6 months Default" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 25) { BaseIntOrder[25] = CountOrder; Int_Test6monthsBp1(); if (CurrYear == 2026) { filesim << "Baseline: applying PCR 6 months Baseline+1" << endl;  cout << "Baseline: applying PCR 6 months Baseline+1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 26) { BaseIntOrder[26] = CountOrder; Int_Test6monthsBp2(); if (CurrYear == 2026) { filesim << "Baseline: applying PCR 6 months Baseline+2" << endl;  cout << "Baseline: applying PCR 6 months Baseline+2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 27) { BaseIntOrder[27] = CountOrder; Int_Test6monthsBp3(); if (CurrYear == 2026) { filesim << "Baseline: applying PCR 6 months Baseline+3" << endl;  cout << "Baseline: applying PCR 6 months Baseline+3" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 28) { BaseIntOrder[28] = CountOrder; Int_Test6monthsMax(); if (CurrYear == 2026) { filesim << "Baseline: applying PCR 6 months Max" << endl;  cout << "Baseline: applying PCR 6 months Max" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 29) { BaseIntOrder[29] = CountOrder; Int_Test10weeksBm2(); if (CurrYear == 2026) { filesim << "Baseline: applying PCR 10 weeks Baseline-2" << endl;  cout << "Baseline: applying PCR 10 weeks Baseline-2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 30) { BaseIntOrder[30] = CountOrder; Int_Test10weeksBm1(); if (CurrYear == 2026) { filesim << "Baseline: applying PCR 10 weeks Baseline-1" << endl;  cout << "Baseline: applying PCR 10 weeks Baseline-1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 31) { BaseIntOrder[31] = CountOrder; Int_Test10weeksDefault(); if (CurrYear == 2026) { filesim << "Baseline: applying PCR 10 weeks Default" << endl;  cout << "Baseline: applying PCR 10 weeks Default" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 32) { BaseIntOrder[32] = CountOrder; Int_Test10weeksBp1(); if (CurrYear == 2026) { filesim << "Baseline: applying PCR 10 weeks Baseline+1" << endl;  cout << "Baseline: applying PCR 10 weeks Baseline+1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 33) { BaseIntOrder[33] = CountOrder; Int_Test10weeksBp2(); if (CurrYear == 2026) { filesim << "Baseline: applying PCR 10 weeks Baseline+2" << endl;  cout << "Baseline: applying PCR 10 weeks Baseline+2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 34) { BaseIntOrder[34] = CountOrder; Int_Test10weeksBp3(); if (CurrYear == 2026) { filesim << "Baseline: applying PCR 10 weeks Baseline+3" << endl;  cout << "Baseline: applying PCR 10 weeks Baseline+3" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 35) { BaseIntOrder[35] = CountOrder; Int_Test10weeksMax(); if (CurrYear == 2026) { filesim << "Baseline: applying PCR 10 weeks Max" << endl;  cout << "Baseline: applying PCR 10 weeks Max" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 36) { BaseIntOrder[36] = CountOrder; Int_OralPrepDefault(); if (CurrYear == 2026) { filesim << "Baseline: applying Oral PrEP Default" << endl;  cout << "Baseline: applying Oral PrEP Default" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 37) { BaseIntOrder[37] = CountOrder; Int_OralPrepMedium(); if (CurrYear == 2026) { filesim << "Baseline: applying Oral PrEP Medium" << endl;  cout << "Baseline: applying Oral PrEP Medium" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 38) { BaseIntOrder[38] = CountOrder; Int_OralPrepHigh(); if (CurrYear == 2026) { filesim << "Baseline: applying Oral PrEP High" << endl;  cout << "Baseline: applying Oral PrEP High" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 39) { BaseIntOrder[39] = CountOrder; Int_OralPrepPregDefault(); if (CurrYear == 2026) { filesim << "Baseline: applying Oral PrEP Preg Default" << endl;  cout << "Baseline: applying Oral PrEP Preg Default" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 40) { BaseIntOrder[40] = CountOrder; Int_OralPrepPregBp1(); if (CurrYear == 2026) { filesim << "Baseline: applying Oral PrEP Preg Baseline+1" << endl;  cout << "Baseline: applying Oral PrEP Preg Baseline+1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 41) { BaseIntOrder[41] = CountOrder; Int_OralPrepPregBp2(); if (CurrYear == 2026) { filesim << "Baseline: applying Oral PrEP Preg Baseline+2" << endl;  cout << "Baseline: applying Oral PrEP Preg Baseline+2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 42) { BaseIntOrder[42] = CountOrder; Int_OralPrepPregBp3(); if (CurrYear == 2026) { filesim << "Baseline: applying Oral PrEP Preg Baseline+3" << endl;  cout << "Baseline: applying Oral PrEP Preg Baseline+3" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 43) { BaseIntOrder[43] = CountOrder; Int_OralPrepPregMax(); if (CurrYear == 2026) { filesim << "Baseline: applying Oral PrEP Preg Max" << endl;  cout << "Baseline: applying Oral PrEP Preg Max" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 44) { BaseIntOrder[44] = CountOrder; Int_LENndohDefault(); if (CurrYear == 2026) { filesim << "Baseline: applying LEN NDOH Default" << endl;  cout << "Baseline: applying LEN NDOH Default" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 45) { BaseIntOrder[45] = CountOrder; Int_LENndohBp1(); if (CurrYear == 2026) { filesim << "Baseline: applying LEN NDOH B+1" << endl;  cout << "Baseline: applying LEN NDOH B+1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 46) { BaseIntOrder[46] = CountOrder; Int_LENndohBp2(); if (CurrYear == 2026) { filesim << "Baseline: applying LEN NDOH B+2" << endl;  cout << "Baseline: applying LEN NDOH B+2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 47) { BaseIntOrder[47] = CountOrder; Int_LENndohBp3(); if (CurrYear == 2026) { filesim << "Baseline: applying LEN NDOH B+3" << endl;  cout << "Baseline: applying LEN NDOH B+3" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 48) { BaseIntOrder[48] = CountOrder; Int_LENndohMax(); if (CurrYear == 2026) { filesim << "Baseline: applying LEN NDOH Max" << endl;  cout << "Baseline: applying LEN NDOH Max" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 49) { BaseIntOrder[49] = CountOrder; Int_LENOptDefault(); if (CurrYear == 2026) { filesim << "Baseline: applying LEN Opt Default" << endl;  cout << "Baseline: applying LEN Opt Default" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 50) { BaseIntOrder[50] = CountOrder; Int_LENOptBp0(); if (CurrYear == 2026) { filesim << "Baseline: applying LEN Opt B+0" << endl;  cout << "Baseline: applying LEN Opt B+0" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 51) { BaseIntOrder[51] = CountOrder; Int_LENOptBp1(); if (CurrYear == 2026) { filesim << "Baseline: applying LEN Opt B+1" << endl;  cout << "Baseline: applying LEN Opt B+1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 52) { BaseIntOrder[52] = CountOrder; Int_LENOptBp2(); if (CurrYear == 2026) { filesim << "Baseline: applying LEN Opt B+2" << endl;  cout << "Baseline: applying LEN Opt B+2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 53) { BaseIntOrder[53] = CountOrder; Int_LENOptBp3(); if (CurrYear == 2026) { filesim << "Baseline: applying LEN Opt B+3" << endl;  cout << "Baseline: applying LEN Opt B+3" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 54) { BaseIntOrder[54] = CountOrder; Int_LENOptMax(); if (CurrYear == 2026) { filesim << "Baseline: applying LEN Opt Max" << endl;  cout << "Baseline: applying LEN Opt Max" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 55) { BaseIntOrder[55] = CountOrder; Int_TestAdolDefault(); if (CurrYear == 2026) { filesim << "Baseline: applying Testing adolescents Default" << endl;  cout << "Baseline: applying Testing adolescents Default" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 56) { BaseIntOrder[56] = CountOrder; Int_TestAdolBp1(); if (CurrYear == 2026) { filesim << "Baseline: applying Testing adolescents Baseline+1" << endl;  cout << "Baseline: applying Testing adolescents Baseline+1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 57) { BaseIntOrder[57] = CountOrder; Int_TestAdolBp2(); if (CurrYear == 2026) { filesim << "Baseline: applying Testing adolescents Baseline+2" << endl;  cout << "Baseline: applying Testing adolescents Baseline+2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 58) { BaseIntOrder[58] = CountOrder; Int_TestAdolBp3(); if (CurrYear == 2026) { filesim << "Baseline: applying Testing adolescents Baseline+3" << endl;  cout << "Baseline: applying Testing adolescents Baseline+3" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 59) { BaseIntOrder[59] = CountOrder; Int_TestAdolMax(); if (CurrYear == 2026) { filesim << "Baseline: applying Testing adolescents Max" << endl;  cout << "Baseline: applying Testing adolescents Max" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 60) { BaseIntOrder[60] = CountOrder; Int_HCTBm2(); if (CurrYear == 2026) { filesim << "Baseline: applying HTS Baseline-2" << endl;  cout << "Baseline: applying HTS Baseline-2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 61) { BaseIntOrder[61] = CountOrder; Int_HCTBm1(); if (CurrYear == 2026) { filesim << "Baseline: applying HTS Baseline-1" << endl;  cout << "Baseline: applying HTS Baseline-1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 62) { BaseIntOrder[62] = CountOrder; Int_HCTDefault(); if (CurrYear == 2026) { filesim << "Baseline: applying HTS Default" << endl;  cout << "Baseline: applying HTS Default" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 63) { BaseIntOrder[63] = CountOrder; Int_HCTBp1(); if (CurrYear == 2026) { filesim << "Baseline: applying HTS Baseline+1" << endl;  cout << "Baseline: applying HTS Baseline+1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 64) { BaseIntOrder[64] = CountOrder; Int_HCTBp2(); if (CurrYear == 2026) { filesim << "Baseline: applying HTS Baseline+2" << endl;  cout << "Baseline: applying HTS Baseline+2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 65) { BaseIntOrder[65] = CountOrder; Int_HCTBp3(); if (CurrYear == 2026) { filesim << "Baseline: applying HTS Baseline+3" << endl;  cout << "Baseline: applying HTS Baseline+3" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 66) { BaseIntOrder[66] = CountOrder; Int_HCTMax(); if (CurrYear == 2026) { filesim << "Baseline: applying HTS Max" << endl;  cout << "Baseline: applying HTS Max" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 67) { BaseIntOrder[67] = CountOrder; Int_ARTuniversalBm2(); if (CurrYear == 2026) { filesim << "Baseline: applying ART linkage Baseline-2" << endl;  cout << "Baseline: applying ART linkage Baseline-2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 68) { BaseIntOrder[68] = CountOrder; Int_ARTuniversalBm1(); if (CurrYear == 2026) { filesim << "Baseline: applying ART linkage Baseline-1" << endl;  cout << "Baseline: applying ART linkage Baseline-1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 69) { BaseIntOrder[69] = CountOrder; Int_ARTuniversalDefault(); if (CurrYear == 2026) { filesim << "Baseline: applying ART linkage Default" << endl;  cout << "Baseline: applying ART linkage Default" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 70) { BaseIntOrder[70] = CountOrder; Int_ARTuniversalBp1(); if (CurrYear == 2026) { filesim << "Baseline: applying ART linkage Baseline+1" << endl;  cout << "Baseline: applying ART linkage Baseline+1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 71) { BaseIntOrder[71] = CountOrder; Int_ARTuniversalBp2(); if (CurrYear == 2026) { filesim << "Baseline: applying ART linkage Baseline+2" << endl;  cout << "Baseline: applying ART linkage Baseline+2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 72) { BaseIntOrder[72] = CountOrder; Int_ARTuniversalBp3(); if (CurrYear == 2026) { filesim << "Baseline: applying ART linkage Baseline+3" << endl;  cout << "Baseline: applying ART linkage Baseline+3" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 73) { BaseIntOrder[73] = CountOrder; Int_ARTuniversalBp4(); if (CurrYear == 2026) { filesim << "Baseline: applying ART linkage Baseline+4" << endl;  cout << "Baseline: applying ART linkage Baseline+4" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 74) { BaseIntOrder[74] = CountOrder; Int_ARTuniversalBp5(); if (CurrYear == 2026) { filesim << "Baseline: applying ART linkage Baseline+5" << endl;  cout << "Baseline: applying ART linkage Baseline+5" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 75) { BaseIntOrder[75] = CountOrder; Int_ARTuniversalBp6(); if (CurrYear == 2026) { filesim << "Baseline: applying ART linkage Baseline+6" << endl;  cout << "Baseline: applying ART linkage Baseline+6" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 76) { BaseIntOrder[76] = CountOrder; Int_ARTuniversalMax(); if (CurrYear == 2026) { filesim << "Baseline: applying ART linkage Max" << endl;  cout << "Baseline: applying ART linkage Max" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 77) { BaseIntOrder[77] = CountOrder; Int_STpackDefault(); if (CurrYear == 2026) { filesim << "Baseline: applying HIVST Default" << endl;  cout << "Baseline: applying HIVST Default" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 78) { BaseIntOrder[78] = CountOrder; Int_STpackBp1(); if (CurrYear == 2026) { filesim << "Baseline: applying HIVST Baseline+1" << endl;  cout << "Baseline: applying HIVST Baseline+1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 79) { BaseIntOrder[79] = CountOrder; Int_STpackBp2(); if (CurrYear == 2026) { filesim << "Baseline: applying HIVST Baseline+2" << endl;  cout << "Baseline: applying HIVST Baseline+2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 80) { BaseIntOrder[80] = CountOrder; Int_STpackBp3(); if (CurrYear == 2026) { filesim << "Baseline: applying HIVST Baseline+3" << endl;  cout << "Baseline: applying HIVST Baseline+3" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 81) { BaseIntOrder[81] = CountOrder; Int_STpackMax(); if (CurrYear == 2026) { filesim << "Baseline: applying HIVST Max" << endl;  cout << "Baseline: applying HIVST Max" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 82) { BaseIntOrder[82] = CountOrder; Int_Test18monthsBm2(); if (CurrYear == 2026) { filesim << "Baseline: applying Testing 18 months Baseline-2" << endl;  cout << "Baseline: applying Testing 18 months Baseline-2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 83) { BaseIntOrder[83] = CountOrder; Int_Test18monthsBm1(); if (CurrYear == 2026) { filesim << "Baseline: applying Testing 18 months Baseline-1" << endl;  cout << "Baseline: applying Testing 18 months Baseline-1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 84) { BaseIntOrder[84] = CountOrder; Int_Test18monthsDefault(); if (CurrYear == 2026) { filesim << "Baseline: applying Testing 18 months Default" << endl;  cout << "Baseline: applying Testing 18 months Default" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 85) { BaseIntOrder[85] = CountOrder; Int_Test18monthsBp1(); if (CurrYear == 2026) { filesim << "Baseline: applying Testing 18 months Baseline+1" << endl;  cout << "Baseline: applying Testing 18 months Baseline+1" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 86) { BaseIntOrder[86] = CountOrder; Int_Test18monthsBp2(); if (CurrYear == 2026) { filesim << "Baseline: applying Testing 18 months Baseline+2" << endl;  cout << "Baseline: applying Testing 18 months Baseline+2" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 87) { BaseIntOrder[87] = CountOrder; Int_Test18monthsBp3(); if (CurrYear == 2026) { filesim << "Baseline: applying Testing 18 months Baseline+3" << endl;  cout << "Baseline: applying Testing 18 months Baseline+3" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 88) { BaseIntOrder[88] = CountOrder; Int_Test18monthsMax(); if (CurrYear == 2026) { filesim << "Baseline: applying Testing 18 months Max" << endl;  cout << "Baseline: applying Testing 18 months Max" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 89) { BaseIntOrder[89] = CountOrder; Int_POCVL_Inactive(); if (CurrYear == 2026) { filesim << "Baseline: applying POC VL Inactive" << endl;  cout << "Baseline: applying POC VL Inactive" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 90) { BaseIntOrder[90] = CountOrder; Int_POCVL_Active(); if (CurrYear == 2026) { filesim << "Baseline: applying POC VL Active" << endl;  cout << "Baseline: applying POC VL Active" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 91) { BaseIntOrder[91] = CountOrder; Int_UU_Inactive(); if (CurrYear == 2026) { filesim << "Baseline: applying U=U Messaging Inactive" << endl;  cout << "Baseline: applying U=U Messaging Inactive" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 92) { BaseIntOrder[92] = CountOrder; Int_UU_Active(); if (CurrYear == 2026) { filesim << "Baseline: applying U=U Messaging Active" << endl;  cout << "Baseline: applying U=U Messaging Active" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 93) { BaseIntOrder[93] = CountOrder; Int_MensClinics_Inactive(); if (CurrYear == 2026) { filesim << "Baseline: applying MensClinics Inactive" << endl;  cout << "Baseline: applying MensClinics Inactive" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 94) { BaseIntOrder[94] = CountOrder; Int_MensClinics_Active(); if (CurrYear == 2026) { filesim << "Baseline: applying MensClinics Active" << endl;  cout << "Baseline: applying MensClinics Active" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 95) { BaseIntOrder[95] = CountOrder; Int_PeerNav_Inactive(); if (CurrYear == 2026) { filesim << "Baseline: applying PeerNav Inactive" << endl;  cout << "Baseline: applying PeerNav Inactive" << endl; } }
+		if (BaseIntToggle[CurrSim - 1][iy] == 96) { BaseIntOrder[96] = CountOrder; Int_PeerNav_Active(); if (CurrYear == 2026) { filesim << "Baseline: applying PeerNav Active" << endl;  cout << "Baseline: applying PeerNav Active" << endl; } }
+			   		 
+		CountOrder++;
+	}
+
+	//Runintervention if:
+	//If not default - and allowed, and no delay, and not in baseline already
+	//If default - ant allowed, and no delay and not in baseline already AND non-default interventions are also in [OR alternative (ART) non-default interventions are already in
+
+
+
+	if (RunIntervention == 1) {
+		if ((IntDefault[CurrSim - 1][1 - 1] == 0 && IntAllow[CurrSim - 1][1 - 1] == 1 && DelayConsider[CurrSim - 1][1 - 1] == 0 && BaseInt[CurrSim - 1][1 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][1 - 1] == 1 && IntAllow[CurrSim - 1][1 - 1] == 1 && DelayConsider[CurrSim - 1][1 - 1] == 0 && BaseInt[CurrSim - 1][1 - 1] == 0 && (BaseInt[CurrSim - 1][2 - 1] != 0 || BaseInt[CurrSim - 1][3 - 1] != 0 || BaseInt[CurrSim - 1][4 - 1] != 0 || BaseInt[CurrSim - 1][5 - 1] != 0 || BaseInt[CurrSim - 1][6 - 1] != 0 || BaseInt[CurrSim - 1][7 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "MMC Baseline-2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "MMC Baseline-2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_MMCBm2();
+			IntName = "MMC Baseline-2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 2) {
+		if ((IntDefault[CurrSim - 1][2 - 1] == 0 && IntAllow[CurrSim - 1][2 - 1] == 1 && DelayConsider[CurrSim - 1][2 - 1] == 0 && BaseInt[CurrSim - 1][2 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][2 - 1] == 1 && IntAllow[CurrSim - 1][2 - 1] == 1 && DelayConsider[CurrSim - 1][2 - 1] == 0 && BaseInt[CurrSim - 1][2 - 1] == 0 && (BaseInt[CurrSim - 1][1 - 1] != 0 || BaseInt[CurrSim - 1][3 - 1] != 0 || BaseInt[CurrSim - 1][4 - 1] != 0 || BaseInt[CurrSim - 1][5 - 1] != 0 || BaseInt[CurrSim - 1][6 - 1] != 0 || BaseInt[CurrSim - 1][7 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "MMC Baseline-1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "MMC Baseline-1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_MMCBm1();
+			IntName = "MMC Baseline-1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 3) {
+		if ((IntDefault[CurrSim - 1][3 - 1] == 0 && IntAllow[CurrSim - 1][3 - 1] == 1 && DelayConsider[CurrSim - 1][3 - 1] == 0 && BaseInt[CurrSim - 1][3 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][3 - 1] == 1 && IntAllow[CurrSim - 1][3 - 1] == 1 && DelayConsider[CurrSim - 1][3 - 1] == 0 && BaseInt[CurrSim - 1][3 - 1] == 0 && (BaseInt[CurrSim - 1][1 - 1] != 0 || BaseInt[CurrSim - 1][2 - 1] != 0 || BaseInt[CurrSim - 1][4 - 1] != 0 || BaseInt[CurrSim - 1][5 - 1] != 0 || BaseInt[CurrSim - 1][6 - 1] != 0 || BaseInt[CurrSim - 1][7 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "MMC Default" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "MMC Default" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_MMCDefault();
+			IntName = "MMC Default";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 4) {
+		if ((IntDefault[CurrSim - 1][4 - 1] == 0 && IntAllow[CurrSim - 1][4 - 1] == 1 && DelayConsider[CurrSim - 1][4 - 1] == 0 && BaseInt[CurrSim - 1][4 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][4 - 1] == 1 && IntAllow[CurrSim - 1][4 - 1] == 1 && DelayConsider[CurrSim - 1][4 - 1] == 0 && BaseInt[CurrSim - 1][4 - 1] == 0 && (BaseInt[CurrSim - 1][1 - 1] != 0 || BaseInt[CurrSim - 1][2 - 1] != 0 || BaseInt[CurrSim - 1][3 - 1] != 0 || BaseInt[CurrSim - 1][5 - 1] != 0 || BaseInt[CurrSim - 1][6 - 1] != 0 || BaseInt[CurrSim - 1][7 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "MMC Baseline+1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "MMC Baseline+1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_MMCBp1();
+			IntName = "MMC Baseline+1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 5) {
+		if ((IntDefault[CurrSim - 1][5 - 1] == 0 && IntAllow[CurrSim - 1][5 - 1] == 1 && DelayConsider[CurrSim - 1][5 - 1] == 0 && BaseInt[CurrSim - 1][5 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][5 - 1] == 1 && IntAllow[CurrSim - 1][5 - 1] == 1 && DelayConsider[CurrSim - 1][5 - 1] == 0 && BaseInt[CurrSim - 1][5 - 1] == 0 && (BaseInt[CurrSim - 1][1 - 1] != 0 || BaseInt[CurrSim - 1][2 - 1] != 0 || BaseInt[CurrSim - 1][3 - 1] != 0 || BaseInt[CurrSim - 1][4 - 1] != 0 || BaseInt[CurrSim - 1][6 - 1] != 0 || BaseInt[CurrSim - 1][7 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "MMC Baseline+2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "MMC Baseline+2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_MMCBp2();
+			IntName = "MMC Baseline+2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 6) {
+		if ((IntDefault[CurrSim - 1][6 - 1] == 0 && IntAllow[CurrSim - 1][6 - 1] == 1 && DelayConsider[CurrSim - 1][6 - 1] == 0 && BaseInt[CurrSim - 1][6 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][6 - 1] == 1 && IntAllow[CurrSim - 1][6 - 1] == 1 && DelayConsider[CurrSim - 1][6 - 1] == 0 && BaseInt[CurrSim - 1][6 - 1] == 0 && (BaseInt[CurrSim - 1][1 - 1] != 0 || BaseInt[CurrSim - 1][2 - 1] != 0 || BaseInt[CurrSim - 1][3 - 1] != 0 || BaseInt[CurrSim - 1][4 - 1] != 0 || BaseInt[CurrSim - 1][5 - 1] != 0 || BaseInt[CurrSim - 1][7 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "MMC Baseline+3" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "MMC Baseline+3" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_MMCBp3();
+			IntName = "MMC Baseline+3";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 7) {
+		if ((IntDefault[CurrSim - 1][7 - 1] == 0 && IntAllow[CurrSim - 1][7 - 1] == 1 && DelayConsider[CurrSim - 1][7 - 1] == 0 && BaseInt[CurrSim - 1][7 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][7 - 1] == 1 && IntAllow[CurrSim - 1][7 - 1] == 1 && DelayConsider[CurrSim - 1][7 - 1] == 0 && BaseInt[CurrSim - 1][7 - 1] == 0 && (BaseInt[CurrSim - 1][1 - 1] != 0 || BaseInt[CurrSim - 1][2 - 1] != 0 || BaseInt[CurrSim - 1][3 - 1] != 0 || BaseInt[CurrSim - 1][4 - 1] != 0 || BaseInt[CurrSim - 1][5 - 1] != 0 || BaseInt[CurrSim - 1][6 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "MMC Max" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "MMC Max" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_MMCMax();
+			IntName = "MMC Max";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 8) {
+		if ((IntDefault[CurrSim - 1][8 - 1] == 0 && IntAllow[CurrSim - 1][8 - 1] == 1 && DelayConsider[CurrSim - 1][8 - 1] == 0 && BaseInt[CurrSim - 1][8 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][8 - 1] == 1 && IntAllow[CurrSim - 1][8 - 1] == 1 && DelayConsider[CurrSim - 1][8 - 1] == 0 && BaseInt[CurrSim - 1][8 - 1] == 0 && (BaseInt[CurrSim - 1][9 - 1] != 0 || BaseInt[CurrSim - 1][10 - 1] != 0 || BaseInt[CurrSim - 1][11 - 1] != 0 || BaseInt[CurrSim - 1][12 - 1] != 0 || BaseInt[CurrSim - 1][13 - 1] != 0 || BaseInt[CurrSim - 1][14 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "EIMC Baseline-2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "EIMC Baseline-2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_EIMCBm2();
+			IntName = "EIMC Baseline-2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 9) {
+		if ((IntDefault[CurrSim - 1][9 - 1] == 0 && IntAllow[CurrSim - 1][9 - 1] == 1 && DelayConsider[CurrSim - 1][9 - 1] == 0 && BaseInt[CurrSim - 1][9 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][9 - 1] == 1 && IntAllow[CurrSim - 1][9 - 1] == 1 && DelayConsider[CurrSim - 1][9 - 1] == 0 && BaseInt[CurrSim - 1][9 - 1] == 0 && (BaseInt[CurrSim - 1][8 - 1] != 0 || BaseInt[CurrSim - 1][10 - 1] != 0 || BaseInt[CurrSim - 1][11 - 1] != 0 || BaseInt[CurrSim - 1][12 - 1] != 0 || BaseInt[CurrSim - 1][13 - 1] != 0 || BaseInt[CurrSim - 1][14 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "EIMC Baseline-1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "EIMC Baseline-1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_EIMCBm1();
+			IntName = "EIMC Baseline-1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 10) {
+		if ((IntDefault[CurrSim - 1][10 - 1] == 0 && IntAllow[CurrSim - 1][10 - 1] == 1 && DelayConsider[CurrSim - 1][10 - 1] == 0 && BaseInt[CurrSim - 1][10 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][10 - 1] == 1 && IntAllow[CurrSim - 1][10 - 1] == 1 && DelayConsider[CurrSim - 1][10 - 1] == 0 && BaseInt[CurrSim - 1][10 - 1] == 0 && (BaseInt[CurrSim - 1][8 - 1] != 0 || BaseInt[CurrSim - 1][9 - 1] != 0 || BaseInt[CurrSim - 1][11 - 1] != 0 || BaseInt[CurrSim - 1][12 - 1] != 0 || BaseInt[CurrSim - 1][13 - 1] != 0 || BaseInt[CurrSim - 1][14 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "EIMCDefault" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "EIMCDefault" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_EIMCDefault();
+			IntName = "EIMCDefault";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 11) {
+		if ((IntDefault[CurrSim - 1][11 - 1] == 0 && IntAllow[CurrSim - 1][11 - 1] == 1 && DelayConsider[CurrSim - 1][11 - 1] == 0 && BaseInt[CurrSim - 1][11 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][11 - 1] == 1 && IntAllow[CurrSim - 1][11 - 1] == 1 && DelayConsider[CurrSim - 1][11 - 1] == 0 && BaseInt[CurrSim - 1][11 - 1] == 0 && (BaseInt[CurrSim - 1][8 - 1] != 0 || BaseInt[CurrSim - 1][9 - 1] != 0 || BaseInt[CurrSim - 1][10 - 1] != 0 || BaseInt[CurrSim - 1][12 - 1] != 0 || BaseInt[CurrSim - 1][13 - 1] != 0 || BaseInt[CurrSim - 1][14 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "EIMC Baseline+1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "EIMC Baseline+1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_EIMCBp1();
+			IntName = "EIMC Baseline+1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 12) {
+		if ((IntDefault[CurrSim - 1][12 - 1] == 0 && IntAllow[CurrSim - 1][12 - 1] == 1 && DelayConsider[CurrSim - 1][12 - 1] == 0 && BaseInt[CurrSim - 1][12 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][12 - 1] == 1 && IntAllow[CurrSim - 1][12 - 1] == 1 && DelayConsider[CurrSim - 1][12 - 1] == 0 && BaseInt[CurrSim - 1][12 - 1] == 0 && (BaseInt[CurrSim - 1][8 - 1] != 0 || BaseInt[CurrSim - 1][9 - 1] != 0 || BaseInt[CurrSim - 1][10 - 1] != 0 || BaseInt[CurrSim - 1][11 - 1] != 0 || BaseInt[CurrSim - 1][13 - 1] != 0 || BaseInt[CurrSim - 1][14 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "EIMC Baseline+3" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "EIMC Baseline+3" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_EIMCBp2();
+			IntName = "EIMC Baseline+3";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 13) {
+		if ((IntDefault[CurrSim - 1][13 - 1] == 0 && IntAllow[CurrSim - 1][13 - 1] == 1 && DelayConsider[CurrSim - 1][13 - 1] == 0 && BaseInt[CurrSim - 1][13 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][13 - 1] == 1 && IntAllow[CurrSim - 1][13 - 1] == 1 && DelayConsider[CurrSim - 1][13 - 1] == 0 && BaseInt[CurrSim - 1][13 - 1] == 0 && (BaseInt[CurrSim - 1][8 - 1] != 0 || BaseInt[CurrSim - 1][9 - 1] != 0 || BaseInt[CurrSim - 1][10 - 1] != 0 || BaseInt[CurrSim - 1][11 - 1] != 0 || BaseInt[CurrSim - 1][12 - 1] != 0 || BaseInt[CurrSim - 1][14 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "EIMC Baseline+2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "EIMC Baseline+2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_EIMCBp3();
+			IntName = "EIMC Baseline+2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 14) {
+		if ((IntDefault[CurrSim - 1][14 - 1] == 0 && IntAllow[CurrSim - 1][14 - 1] == 1 && DelayConsider[CurrSim - 1][14 - 1] == 0 && BaseInt[CurrSim - 1][14 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][14 - 1] == 1 && IntAllow[CurrSim - 1][14 - 1] == 1 && DelayConsider[CurrSim - 1][14 - 1] == 0 && BaseInt[CurrSim - 1][14 - 1] == 0 && (BaseInt[CurrSim - 1][8 - 1] != 0 || BaseInt[CurrSim - 1][9 - 1] != 0 || BaseInt[CurrSim - 1][10 - 1] != 0 || BaseInt[CurrSim - 1][11 - 1] != 0 || BaseInt[CurrSim - 1][12 - 1] != 0 || BaseInt[CurrSim - 1][13 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "EIMC Max" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "EIMC Max" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_EIMCMax();
+			IntName = "EIMC Max";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 15) {
+		if ((IntDefault[CurrSim - 1][15 - 1] == 0 && IntAllow[CurrSim - 1][15 - 1] == 1 && DelayConsider[CurrSim - 1][15 - 1] == 0 && BaseInt[CurrSim - 1][15 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][15 - 1] == 1 && IntAllow[CurrSim - 1][15 - 1] == 1 && DelayConsider[CurrSim - 1][15 - 1] == 0 && BaseInt[CurrSim - 1][15 - 1] == 0 && (BaseInt[CurrSim - 1][16 - 1] != 0 || BaseInt[CurrSim - 1][17 - 1] != 0 || BaseInt[CurrSim - 1][18 - 1] != 0 || BaseInt[CurrSim - 1][19 - 1] != 0 || BaseInt[CurrSim - 1][20 - 1] != 0 || BaseInt[CurrSim - 1][21 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Condom Supply Baseline-2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Condom Supply Baseline-2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_CondomSupplyBm2();
+			IntName = "Condom Supply Baseline-2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 16) {
+		if ((IntDefault[CurrSim - 1][16 - 1] == 0 && IntAllow[CurrSim - 1][16 - 1] == 1 && DelayConsider[CurrSim - 1][16 - 1] == 0 && BaseInt[CurrSim - 1][16 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][16 - 1] == 1 && IntAllow[CurrSim - 1][16 - 1] == 1 && DelayConsider[CurrSim - 1][16 - 1] == 0 && BaseInt[CurrSim - 1][16 - 1] == 0 && (BaseInt[CurrSim - 1][15 - 1] != 0 || BaseInt[CurrSim - 1][17 - 1] != 0 || BaseInt[CurrSim - 1][18 - 1] != 0 || BaseInt[CurrSim - 1][19 - 1] != 0 || BaseInt[CurrSim - 1][20 - 1] != 0 || BaseInt[CurrSim - 1][21 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Condom Supply Baseline-1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Condom Supply Baseline-1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_CondomSupplyBm1();
+			IntName = "Condom Supply Baseline-1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 17) {
+		if ((IntDefault[CurrSim - 1][17 - 1] == 0 && IntAllow[CurrSim - 1][17 - 1] == 1 && DelayConsider[CurrSim - 1][17 - 1] == 0 && BaseInt[CurrSim - 1][17 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][17 - 1] == 1 && IntAllow[CurrSim - 1][17 - 1] == 1 && DelayConsider[CurrSim - 1][17 - 1] == 0 && BaseInt[CurrSim - 1][17 - 1] == 0 && (BaseInt[CurrSim - 1][15 - 1] != 0 || BaseInt[CurrSim - 1][16 - 1] != 0 || BaseInt[CurrSim - 1][18 - 1] != 0 || BaseInt[CurrSim - 1][19 - 1] != 0 || BaseInt[CurrSim - 1][20 - 1] != 0 || BaseInt[CurrSim - 1][21 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Condom Supply Default" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Condom Supply Default" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_CondomSupplyDefault();
+			IntName = "Condom Supply Default";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 18) {
+		if ((IntDefault[CurrSim - 1][18 - 1] == 0 && IntAllow[CurrSim - 1][18 - 1] == 1 && DelayConsider[CurrSim - 1][18 - 1] == 0 && BaseInt[CurrSim - 1][18 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][18 - 1] == 1 && IntAllow[CurrSim - 1][18 - 1] == 1 && DelayConsider[CurrSim - 1][18 - 1] == 0 && BaseInt[CurrSim - 1][18 - 1] == 0 && (BaseInt[CurrSim - 1][15 - 1] != 0 || BaseInt[CurrSim - 1][16 - 1] != 0 || BaseInt[CurrSim - 1][17 - 1] != 0 || BaseInt[CurrSim - 1][19 - 1] != 0 || BaseInt[CurrSim - 1][20 - 1] != 0 || BaseInt[CurrSim - 1][21 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Condom Supply Baseline+1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Condom Supply Baseline+1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_CondomSupplyBp1();
+			IntName = "Condom Supply Baseline+1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 19) {
+		if ((IntDefault[CurrSim - 1][19 - 1] == 0 && IntAllow[CurrSim - 1][19 - 1] == 1 && DelayConsider[CurrSim - 1][19 - 1] == 0 && BaseInt[CurrSim - 1][19 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][19 - 1] == 1 && IntAllow[CurrSim - 1][19 - 1] == 1 && DelayConsider[CurrSim - 1][19 - 1] == 0 && BaseInt[CurrSim - 1][19 - 1] == 0 && (BaseInt[CurrSim - 1][15 - 1] != 0 || BaseInt[CurrSim - 1][16 - 1] != 0 || BaseInt[CurrSim - 1][17 - 1] != 0 || BaseInt[CurrSim - 1][18 - 1] != 0 || BaseInt[CurrSim - 1][20 - 1] != 0 || BaseInt[CurrSim - 1][21 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Condom Supply Baseline+2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Condom Supply Baseline+2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_CondomSupplyBp2();
+			IntName = "Condom Supply Baseline+2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 20) {
+		if ((IntDefault[CurrSim - 1][20 - 1] == 0 && IntAllow[CurrSim - 1][20 - 1] == 1 && DelayConsider[CurrSim - 1][20 - 1] == 0 && BaseInt[CurrSim - 1][20 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][20 - 1] == 1 && IntAllow[CurrSim - 1][20 - 1] == 1 && DelayConsider[CurrSim - 1][20 - 1] == 0 && BaseInt[CurrSim - 1][20 - 1] == 0 && (BaseInt[CurrSim - 1][15 - 1] != 0 || BaseInt[CurrSim - 1][16 - 1] != 0 || BaseInt[CurrSim - 1][17 - 1] != 0 || BaseInt[CurrSim - 1][18 - 1] != 0 || BaseInt[CurrSim - 1][19 - 1] != 0 || BaseInt[CurrSim - 1][21 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Condom Supply Baseline+3" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Condom Supply Baseline+3" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_CondomSupplyBp3();
+			IntName = "Condom Supply Baseline+3";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 21) {
+		if ((IntDefault[CurrSim - 1][21 - 1] == 0 && IntAllow[CurrSim - 1][21 - 1] == 1 && DelayConsider[CurrSim - 1][21 - 1] == 0 && BaseInt[CurrSim - 1][21 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][21 - 1] == 1 && IntAllow[CurrSim - 1][21 - 1] == 1 && DelayConsider[CurrSim - 1][21 - 1] == 0 && BaseInt[CurrSim - 1][21 - 1] == 0 && (BaseInt[CurrSim - 1][15 - 1] != 0 || BaseInt[CurrSim - 1][16 - 1] != 0 || BaseInt[CurrSim - 1][17 - 1] != 0 || BaseInt[CurrSim - 1][18 - 1] != 0 || BaseInt[CurrSim - 1][19 - 1] != 0 || BaseInt[CurrSim - 1][20 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Condom Supply Max" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Condom Supply Max" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_CondomSupplyMax();
+			IntName = "Condom Supply Max";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 22) {
+		if ((IntDefault[CurrSim - 1][22 - 1] == 0 && IntAllow[CurrSim - 1][22 - 1] == 1 && DelayConsider[CurrSim - 1][22 - 1] == 0 && BaseInt[CurrSim - 1][22 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][22 - 1] == 1 && IntAllow[CurrSim - 1][22 - 1] == 1 && DelayConsider[CurrSim - 1][22 - 1] == 0 && BaseInt[CurrSim - 1][22 - 1] == 0 && (BaseInt[CurrSim - 1][23 - 1] != 0 || BaseInt[CurrSim - 1][24 - 1] != 0 || BaseInt[CurrSim - 1][25 - 1] != 0 || BaseInt[CurrSim - 1][26 - 1] != 0 || BaseInt[CurrSim - 1][27 - 1] != 0 || BaseInt[CurrSim - 1][28 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PCR 6 months Baseline-2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PCR 6 months Baseline-2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test6monthsBm2();
+			IntName = "PCR 6 months Baseline-2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 23) {
+		if ((IntDefault[CurrSim - 1][23 - 1] == 0 && IntAllow[CurrSim - 1][23 - 1] == 1 && DelayConsider[CurrSim - 1][23 - 1] == 0 && BaseInt[CurrSim - 1][23 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][23 - 1] == 1 && IntAllow[CurrSim - 1][23 - 1] == 1 && DelayConsider[CurrSim - 1][23 - 1] == 0 && BaseInt[CurrSim - 1][23 - 1] == 0 && (BaseInt[CurrSim - 1][22 - 1] != 0 || BaseInt[CurrSim - 1][24 - 1] != 0 || BaseInt[CurrSim - 1][25 - 1] != 0 || BaseInt[CurrSim - 1][26 - 1] != 0 || BaseInt[CurrSim - 1][27 - 1] != 0 || BaseInt[CurrSim - 1][28 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PCR 6 months Baseline-1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PCR 6 months Baseline-1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test6monthsBm1();
+			IntName = "PCR 6 months Baseline-1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 24) {
+		if ((IntDefault[CurrSim - 1][24 - 1] == 0 && IntAllow[CurrSim - 1][24 - 1] == 1 && DelayConsider[CurrSim - 1][24 - 1] == 0 && BaseInt[CurrSim - 1][24 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][24 - 1] == 1 && IntAllow[CurrSim - 1][24 - 1] == 1 && DelayConsider[CurrSim - 1][24 - 1] == 0 && BaseInt[CurrSim - 1][24 - 1] == 0 && (BaseInt[CurrSim - 1][22 - 1] != 0 || BaseInt[CurrSim - 1][23 - 1] != 0 || BaseInt[CurrSim - 1][25 - 1] != 0 || BaseInt[CurrSim - 1][26 - 1] != 0 || BaseInt[CurrSim - 1][27 - 1] != 0 || BaseInt[CurrSim - 1][28 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PCR 6 months Default" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PCR 6 months Default" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test6monthsDefault();
+			IntName = "PCR 6 months Default";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 25) {
+		if ((IntDefault[CurrSim - 1][25 - 1] == 0 && IntAllow[CurrSim - 1][25 - 1] == 1 && DelayConsider[CurrSim - 1][25 - 1] == 0 && BaseInt[CurrSim - 1][25 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][25 - 1] == 1 && IntAllow[CurrSim - 1][25 - 1] == 1 && DelayConsider[CurrSim - 1][25 - 1] == 0 && BaseInt[CurrSim - 1][25 - 1] == 0 && (BaseInt[CurrSim - 1][22 - 1] != 0 || BaseInt[CurrSim - 1][23 - 1] != 0 || BaseInt[CurrSim - 1][24 - 1] != 0 || BaseInt[CurrSim - 1][26 - 1] != 0 || BaseInt[CurrSim - 1][27 - 1] != 0 || BaseInt[CurrSim - 1][28 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PCR 6 months Baseline+1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PCR 6 months Baseline+1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test6monthsBp1();
+			IntName = "PCR 6 months Baseline+1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 26) {
+		if ((IntDefault[CurrSim - 1][26 - 1] == 0 && IntAllow[CurrSim - 1][26 - 1] == 1 && DelayConsider[CurrSim - 1][26 - 1] == 0 && BaseInt[CurrSim - 1][26 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][26 - 1] == 1 && IntAllow[CurrSim - 1][26 - 1] == 1 && DelayConsider[CurrSim - 1][26 - 1] == 0 && BaseInt[CurrSim - 1][26 - 1] == 0 && (BaseInt[CurrSim - 1][22 - 1] != 0 || BaseInt[CurrSim - 1][23 - 1] != 0 || BaseInt[CurrSim - 1][24 - 1] != 0 || BaseInt[CurrSim - 1][25 - 1] != 0 || BaseInt[CurrSim - 1][27 - 1] != 0 || BaseInt[CurrSim - 1][28 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PCR 6 months Baseline+2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PCR 6 months Baseline+2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test6monthsBp2();
+			IntName = "PCR 6 months Baseline+2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 27) {
+		if ((IntDefault[CurrSim - 1][27 - 1] == 0 && IntAllow[CurrSim - 1][27 - 1] == 1 && DelayConsider[CurrSim - 1][27 - 1] == 0 && BaseInt[CurrSim - 1][27 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][27 - 1] == 1 && IntAllow[CurrSim - 1][27 - 1] == 1 && DelayConsider[CurrSim - 1][27 - 1] == 0 && BaseInt[CurrSim - 1][27 - 1] == 0 && (BaseInt[CurrSim - 1][22 - 1] != 0 || BaseInt[CurrSim - 1][23 - 1] != 0 || BaseInt[CurrSim - 1][24 - 1] != 0 || BaseInt[CurrSim - 1][25 - 1] != 0 || BaseInt[CurrSim - 1][26 - 1] != 0 || BaseInt[CurrSim - 1][28 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PCR 6 months Baseline+3" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PCR 6 months Baseline+3" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test6monthsBp3();
+			IntName = "PCR 6 months Baseline+3";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 28) {
+		if ((IntDefault[CurrSim - 1][28 - 1] == 0 && IntAllow[CurrSim - 1][28 - 1] == 1 && DelayConsider[CurrSim - 1][28 - 1] == 0 && BaseInt[CurrSim - 1][28 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][28 - 1] == 1 && IntAllow[CurrSim - 1][28 - 1] == 1 && DelayConsider[CurrSim - 1][28 - 1] == 0 && BaseInt[CurrSim - 1][28 - 1] == 0 && (BaseInt[CurrSim - 1][22 - 1] != 0 || BaseInt[CurrSim - 1][23 - 1] != 0 || BaseInt[CurrSim - 1][24 - 1] != 0 || BaseInt[CurrSim - 1][25 - 1] != 0 || BaseInt[CurrSim - 1][26 - 1] != 0 || BaseInt[CurrSim - 1][27 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PCR 6 months Max" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PCR 6 months Max" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test6monthsMax();
+			IntName = "PCR 6 months Max";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 29) {
+		if ((IntDefault[CurrSim - 1][29 - 1] == 0 && IntAllow[CurrSim - 1][29 - 1] == 1 && DelayConsider[CurrSim - 1][29 - 1] == 0 && BaseInt[CurrSim - 1][29 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][29 - 1] == 1 && IntAllow[CurrSim - 1][29 - 1] == 1 && DelayConsider[CurrSim - 1][29 - 1] == 0 && BaseInt[CurrSim - 1][29 - 1] == 0 && (BaseInt[CurrSim - 1][30 - 1] != 0 || BaseInt[CurrSim - 1][31 - 1] != 0 || BaseInt[CurrSim - 1][32 - 1] != 0 || BaseInt[CurrSim - 1][33 - 1] != 0 || BaseInt[CurrSim - 1][34 - 1] != 0 || BaseInt[CurrSim - 1][35 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PCR 10 weeks Baseline-2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PCR 10 weeks Baseline-2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test10weeksBm2();
+			IntName = "PCR 10 weeks Baseline-2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 30) {
+		if ((IntDefault[CurrSim - 1][30 - 1] == 0 && IntAllow[CurrSim - 1][30 - 1] == 1 && DelayConsider[CurrSim - 1][30 - 1] == 0 && BaseInt[CurrSim - 1][30 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][30 - 1] == 1 && IntAllow[CurrSim - 1][30 - 1] == 1 && DelayConsider[CurrSim - 1][30 - 1] == 0 && BaseInt[CurrSim - 1][30 - 1] == 0 && (BaseInt[CurrSim - 1][29 - 1] != 0 || BaseInt[CurrSim - 1][31 - 1] != 0 || BaseInt[CurrSim - 1][32 - 1] != 0 || BaseInt[CurrSim - 1][33 - 1] != 0 || BaseInt[CurrSim - 1][34 - 1] != 0 || BaseInt[CurrSim - 1][35 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PCR 10 weeks Baseline-1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PCR 10 weeks Baseline-1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test10weeksBm1();
+			IntName = "PCR 10 weeks Baseline-1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 31) {
+		if ((IntDefault[CurrSim - 1][31 - 1] == 0 && IntAllow[CurrSim - 1][31 - 1] == 1 && DelayConsider[CurrSim - 1][31 - 1] == 0 && BaseInt[CurrSim - 1][31 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][31 - 1] == 1 && IntAllow[CurrSim - 1][31 - 1] == 1 && DelayConsider[CurrSim - 1][31 - 1] == 0 && BaseInt[CurrSim - 1][31 - 1] == 0 && (BaseInt[CurrSim - 1][29 - 1] != 0 || BaseInt[CurrSim - 1][30 - 1] != 0 || BaseInt[CurrSim - 1][32 - 1] != 0 || BaseInt[CurrSim - 1][33 - 1] != 0 || BaseInt[CurrSim - 1][34 - 1] != 0 || BaseInt[CurrSim - 1][35 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PCR 10 weeks Default" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PCR 10 weeks Default" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test10weeksDefault();
+			IntName = "PCR 10 weeks Default";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 32) {
+		if ((IntDefault[CurrSim - 1][32 - 1] == 0 && IntAllow[CurrSim - 1][32 - 1] == 1 && DelayConsider[CurrSim - 1][32 - 1] == 0 && BaseInt[CurrSim - 1][32 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][32 - 1] == 1 && IntAllow[CurrSim - 1][32 - 1] == 1 && DelayConsider[CurrSim - 1][32 - 1] == 0 && BaseInt[CurrSim - 1][32 - 1] == 0 && (BaseInt[CurrSim - 1][29 - 1] != 0 || BaseInt[CurrSim - 1][30 - 1] != 0 || BaseInt[CurrSim - 1][31 - 1] != 0 || BaseInt[CurrSim - 1][33 - 1] != 0 || BaseInt[CurrSim - 1][34 - 1] != 0 || BaseInt[CurrSim - 1][35 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PCR 10 weeks Baseline+1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PCR 10 weeks Baseline+1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test10weeksBp1();
+			IntName = "PCR 10 weeks Baseline+1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 33) {
+		if ((IntDefault[CurrSim - 1][33 - 1] == 0 && IntAllow[CurrSim - 1][33 - 1] == 1 && DelayConsider[CurrSim - 1][33 - 1] == 0 && BaseInt[CurrSim - 1][33 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][33 - 1] == 1 && IntAllow[CurrSim - 1][33 - 1] == 1 && DelayConsider[CurrSim - 1][33 - 1] == 0 && BaseInt[CurrSim - 1][33 - 1] == 0 && (BaseInt[CurrSim - 1][29 - 1] != 0 || BaseInt[CurrSim - 1][30 - 1] != 0 || BaseInt[CurrSim - 1][31 - 1] != 0 || BaseInt[CurrSim - 1][32 - 1] != 0 || BaseInt[CurrSim - 1][34 - 1] != 0 || BaseInt[CurrSim - 1][35 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PCR 10 weeks Baseline+2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PCR 10 weeks Baseline+2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test10weeksBp2();
+			IntName = "PCR 10 weeks Baseline+2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 34) {
+		if ((IntDefault[CurrSim - 1][34 - 1] == 0 && IntAllow[CurrSim - 1][34 - 1] == 1 && DelayConsider[CurrSim - 1][34 - 1] == 0 && BaseInt[CurrSim - 1][34 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][34 - 1] == 1 && IntAllow[CurrSim - 1][34 - 1] == 1 && DelayConsider[CurrSim - 1][34 - 1] == 0 && BaseInt[CurrSim - 1][34 - 1] == 0 && (BaseInt[CurrSim - 1][29 - 1] != 0 || BaseInt[CurrSim - 1][30 - 1] != 0 || BaseInt[CurrSim - 1][31 - 1] != 0 || BaseInt[CurrSim - 1][32 - 1] != 0 || BaseInt[CurrSim - 1][33 - 1] != 0 || BaseInt[CurrSim - 1][35 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PCR 10 weeks Baseline+3" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PCR 10 weeks Baseline+3" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test10weeksBp3();
+			IntName = "PCR 10 weeks Baseline+3";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 35) {
+		if ((IntDefault[CurrSim - 1][35 - 1] == 0 && IntAllow[CurrSim - 1][35 - 1] == 1 && DelayConsider[CurrSim - 1][35 - 1] == 0 && BaseInt[CurrSim - 1][35 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][35 - 1] == 1 && IntAllow[CurrSim - 1][35 - 1] == 1 && DelayConsider[CurrSim - 1][35 - 1] == 0 && BaseInt[CurrSim - 1][35 - 1] == 0 && (BaseInt[CurrSim - 1][29 - 1] != 0 || BaseInt[CurrSim - 1][30 - 1] != 0 || BaseInt[CurrSim - 1][31 - 1] != 0 || BaseInt[CurrSim - 1][32 - 1] != 0 || BaseInt[CurrSim - 1][33 - 1] != 0 || BaseInt[CurrSim - 1][34 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PCR 10 weeks Max" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PCR 10 weeks Max" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test10weeksMax();
+			IntName = "PCR 10 weeks Max";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 36) {
+		if ((IntDefault[CurrSim - 1][36 - 1] == 0 && IntAllow[CurrSim - 1][36 - 1] == 1 && DelayConsider[CurrSim - 1][36 - 1] == 0 && BaseInt[CurrSim - 1][36 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][36 - 1] == 1 && IntAllow[CurrSim - 1][36 - 1] == 1 && DelayConsider[CurrSim - 1][36 - 1] == 0 && BaseInt[CurrSim - 1][36 - 1] == 0 && (BaseInt[CurrSim - 1][37 - 1] != 0 || BaseInt[CurrSim - 1][38 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Oral PrEP Default" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Oral PrEP Default" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_OralPrepDefault();
+			IntName = "Oral PrEP Default";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 37) {
+		if ((IntDefault[CurrSim - 1][37 - 1] == 0 && IntAllow[CurrSim - 1][37 - 1] == 1 && DelayConsider[CurrSim - 1][37 - 1] == 0 && BaseInt[CurrSim - 1][37 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][37 - 1] == 1 && IntAllow[CurrSim - 1][37 - 1] == 1 && DelayConsider[CurrSim - 1][37 - 1] == 0 && BaseInt[CurrSim - 1][37 - 1] == 0 && (BaseInt[CurrSim - 1][36 - 1] != 0 || BaseInt[CurrSim - 1][38 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Oral PrEP Medium" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Oral PrEP Medium" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_OralPrepMedium();
+			IntName = "Oral PrEP Medium";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 38) {
+		if ((IntDefault[CurrSim - 1][38 - 1] == 0 && IntAllow[CurrSim - 1][38 - 1] == 1 && DelayConsider[CurrSim - 1][38 - 1] == 0 && BaseInt[CurrSim - 1][38 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][38 - 1] == 1 && IntAllow[CurrSim - 1][38 - 1] == 1 && DelayConsider[CurrSim - 1][38 - 1] == 0 && BaseInt[CurrSim - 1][38 - 1] == 0 && (BaseInt[CurrSim - 1][36 - 1] != 0 || BaseInt[CurrSim - 1][37 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Oral PrEP High" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Oral PrEP High" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_OralPrepHigh();
+			IntName = "Oral PrEP High";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 39) {
+		if ((IntDefault[CurrSim - 1][39 - 1] == 0 && IntAllow[CurrSim - 1][39 - 1] == 1 && DelayConsider[CurrSim - 1][39 - 1] == 0 && BaseInt[CurrSim - 1][39 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][39 - 1] == 1 && IntAllow[CurrSim - 1][39 - 1] == 1 && DelayConsider[CurrSim - 1][39 - 1] == 0 && BaseInt[CurrSim - 1][39 - 1] == 0 && (BaseInt[CurrSim - 1][40 - 1] != 0 || BaseInt[CurrSim - 1][41 - 1] != 0 || BaseInt[CurrSim - 1][42 - 1] != 0 || BaseInt[CurrSim - 1][43 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Oral PrEP Preg Default" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Oral PrEP Preg Default" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_OralPrepPregDefault();
+			IntName = "Oral PrEP Preg Default";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 40) {
+		if ((IntDefault[CurrSim - 1][40 - 1] == 0 && IntAllow[CurrSim - 1][40 - 1] == 1 && DelayConsider[CurrSim - 1][40 - 1] == 0 && BaseInt[CurrSim - 1][40 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][40 - 1] == 1 && IntAllow[CurrSim - 1][40 - 1] == 1 && DelayConsider[CurrSim - 1][40 - 1] == 0 && BaseInt[CurrSim - 1][40 - 1] == 0 && (BaseInt[CurrSim - 1][39 - 1] != 0 || BaseInt[CurrSim - 1][41 - 1] != 0 || BaseInt[CurrSim - 1][42 - 1] != 0 || BaseInt[CurrSim - 1][43 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Oral PrEP Preg Baseline+1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Oral PrEP Preg Baseline+1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_OralPrepPregBp1();
+			IntName = "Oral PrEP Preg Baseline+1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 41) {
+		if ((IntDefault[CurrSim - 1][41 - 1] == 0 && IntAllow[CurrSim - 1][41 - 1] == 1 && DelayConsider[CurrSim - 1][41 - 1] == 0 && BaseInt[CurrSim - 1][41 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][41 - 1] == 1 && IntAllow[CurrSim - 1][41 - 1] == 1 && DelayConsider[CurrSim - 1][41 - 1] == 0 && BaseInt[CurrSim - 1][41 - 1] == 0 && (BaseInt[CurrSim - 1][39 - 1] != 0 || BaseInt[CurrSim - 1][40 - 1] != 0 || BaseInt[CurrSim - 1][42 - 1] != 0 || BaseInt[CurrSim - 1][43 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Oral PrEP Preg Baseline+2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Oral PrEP Preg Baseline+2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_OralPrepPregBp2();
+			IntName = "Oral PrEP Preg Baseline+2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 42) {
+		if ((IntDefault[CurrSim - 1][42 - 1] == 0 && IntAllow[CurrSim - 1][42 - 1] == 1 && DelayConsider[CurrSim - 1][42 - 1] == 0 && BaseInt[CurrSim - 1][42 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][42 - 1] == 1 && IntAllow[CurrSim - 1][42 - 1] == 1 && DelayConsider[CurrSim - 1][42 - 1] == 0 && BaseInt[CurrSim - 1][42 - 1] == 0 && (BaseInt[CurrSim - 1][39 - 1] != 0 || BaseInt[CurrSim - 1][40 - 1] != 0 || BaseInt[CurrSim - 1][41 - 1] != 0 || BaseInt[CurrSim - 1][43 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Oral PrEP Preg Baseline+3" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Oral PrEP Preg Baseline+3" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_OralPrepPregBp3();
+			IntName = "Oral PrEP Preg Baseline+3";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 43) {
+		if ((IntDefault[CurrSim - 1][43 - 1] == 0 && IntAllow[CurrSim - 1][43 - 1] == 1 && DelayConsider[CurrSim - 1][43 - 1] == 0 && BaseInt[CurrSim - 1][43 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][43 - 1] == 1 && IntAllow[CurrSim - 1][43 - 1] == 1 && DelayConsider[CurrSim - 1][43 - 1] == 0 && BaseInt[CurrSim - 1][43 - 1] == 0 && (BaseInt[CurrSim - 1][39 - 1] != 0 || BaseInt[CurrSim - 1][40 - 1] != 0 || BaseInt[CurrSim - 1][41 - 1] != 0 || BaseInt[CurrSim - 1][42 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Oral PrEP Preg Max" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Oral PrEP Preg Max" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_OralPrepPregMax();
+			IntName = "Oral PrEP Preg Max";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 44) {
+		if ((IntDefault[CurrSim - 1][44 - 1] == 0 && IntAllow[CurrSim - 1][44 - 1] == 1 && DelayConsider[CurrSim - 1][44 - 1] == 0 && BaseInt[CurrSim - 1][44 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][44 - 1] == 1 && IntAllow[CurrSim - 1][44 - 1] == 1 && DelayConsider[CurrSim - 1][44 - 1] == 0 && BaseInt[CurrSim - 1][44 - 1] == 0 && (BaseInt[CurrSim - 1][45 - 1] != 0 || BaseInt[CurrSim - 1][46 - 1] != 0 || BaseInt[CurrSim - 1][47 - 1] != 0 || BaseInt[CurrSim - 1][48 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "LEN NDOH Default" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "LEN NDOH Default" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_LENndohDefault();
+			IntName = "LEN NDOH Default";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 45) {
+		if ((IntDefault[CurrSim - 1][45 - 1] == 0 && IntAllow[CurrSim - 1][45 - 1] == 1 && DelayConsider[CurrSim - 1][45 - 1] == 0 && BaseInt[CurrSim - 1][45 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][45 - 1] == 1 && IntAllow[CurrSim - 1][45 - 1] == 1 && DelayConsider[CurrSim - 1][45 - 1] == 0 && BaseInt[CurrSim - 1][45 - 1] == 0 && (BaseInt[CurrSim - 1][44 - 1] != 0 || BaseInt[CurrSim - 1][46 - 1] != 0 || BaseInt[CurrSim - 1][47 - 1] != 0 || BaseInt[CurrSim - 1][48 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "LEN NDOH B+1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "LEN NDOH B+1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_LENndohBp1();
+			IntName = "LEN NDOH B+1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 46) {
+		if ((IntDefault[CurrSim - 1][46 - 1] == 0 && IntAllow[CurrSim - 1][46 - 1] == 1 && DelayConsider[CurrSim - 1][46 - 1] == 0 && BaseInt[CurrSim - 1][46 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][46 - 1] == 1 && IntAllow[CurrSim - 1][46 - 1] == 1 && DelayConsider[CurrSim - 1][46 - 1] == 0 && BaseInt[CurrSim - 1][46 - 1] == 0 && (BaseInt[CurrSim - 1][44 - 1] != 0 || BaseInt[CurrSim - 1][45 - 1] != 0 || BaseInt[CurrSim - 1][47 - 1] != 0 || BaseInt[CurrSim - 1][48 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "LEN NDOH B+2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "LEN NDOH B+2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_LENndohBp2();
+			IntName = "LEN NDOH B+2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 47) {
+		if ((IntDefault[CurrSim - 1][47 - 1] == 0 && IntAllow[CurrSim - 1][47 - 1] == 1 && DelayConsider[CurrSim - 1][47 - 1] == 0 && BaseInt[CurrSim - 1][47 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][47 - 1] == 1 && IntAllow[CurrSim - 1][47 - 1] == 1 && DelayConsider[CurrSim - 1][47 - 1] == 0 && BaseInt[CurrSim - 1][47 - 1] == 0 && (BaseInt[CurrSim - 1][44 - 1] != 0 || BaseInt[CurrSim - 1][45 - 1] != 0 || BaseInt[CurrSim - 1][46 - 1] != 0 || BaseInt[CurrSim - 1][48 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "LEN NDOH B+3" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "LEN NDOH B+3" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_LENndohBp3();
+			IntName = "LEN NDOH B+3";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 48) {
+		if ((IntDefault[CurrSim - 1][48 - 1] == 0 && IntAllow[CurrSim - 1][48 - 1] == 1 && DelayConsider[CurrSim - 1][48 - 1] == 0 && BaseInt[CurrSim - 1][48 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][48 - 1] == 1 && IntAllow[CurrSim - 1][48 - 1] == 1 && DelayConsider[CurrSim - 1][48 - 1] == 0 && BaseInt[CurrSim - 1][48 - 1] == 0 && (BaseInt[CurrSim - 1][44 - 1] != 0 || BaseInt[CurrSim - 1][45 - 1] != 0 || BaseInt[CurrSim - 1][46 - 1] != 0 || BaseInt[CurrSim - 1][47 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "LEN NDOH Max" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "LEN NDOH Max" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_LENndohMax();
+			IntName = "LEN NDOH Max";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 49) {
+		if ((IntDefault[CurrSim - 1][49 - 1] == 0 && IntAllow[CurrSim - 1][49 - 1] == 1 && DelayConsider[CurrSim - 1][49 - 1] == 0 && BaseInt[CurrSim - 1][49 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][49 - 1] == 1 && IntAllow[CurrSim - 1][49 - 1] == 1 && DelayConsider[CurrSim - 1][49 - 1] == 0 && BaseInt[CurrSim - 1][49 - 1] == 0 && (BaseInt[CurrSim - 1][50 - 1] != 0 || BaseInt[CurrSim - 1][51 - 1] != 0 || BaseInt[CurrSim - 1][52 - 1] != 0 || BaseInt[CurrSim - 1][53 - 1] != 0 || BaseInt[CurrSim - 1][54 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "LEN Opt Default" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "LEN Opt Default" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_LENOptDefault();
+			IntName = "LEN Opt Default";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 50) {
+		if ((IntDefault[CurrSim - 1][50 - 1] == 0 && IntAllow[CurrSim - 1][50 - 1] == 1 && DelayConsider[CurrSim - 1][50 - 1] == 0 && BaseInt[CurrSim - 1][50 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][50 - 1] == 1 && IntAllow[CurrSim - 1][50 - 1] == 1 && DelayConsider[CurrSim - 1][50 - 1] == 0 && BaseInt[CurrSim - 1][50 - 1] == 0 && (BaseInt[CurrSim - 1][49 - 1] != 0 || BaseInt[CurrSim - 1][51 - 1] != 0 || BaseInt[CurrSim - 1][52 - 1] != 0 || BaseInt[CurrSim - 1][53 - 1] != 0 || BaseInt[CurrSim - 1][54 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "LEN Opt B+0" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "LEN Opt B+0" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_LENOptBp0();
+			IntName = "LEN Opt B+0";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 51) {
+		if ((IntDefault[CurrSim - 1][51 - 1] == 0 && IntAllow[CurrSim - 1][51 - 1] == 1 && DelayConsider[CurrSim - 1][51 - 1] == 0 && BaseInt[CurrSim - 1][51 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][51 - 1] == 1 && IntAllow[CurrSim - 1][51 - 1] == 1 && DelayConsider[CurrSim - 1][51 - 1] == 0 && BaseInt[CurrSim - 1][51 - 1] == 0 && (BaseInt[CurrSim - 1][49 - 1] != 0 || BaseInt[CurrSim - 1][50 - 1] != 0 || BaseInt[CurrSim - 1][52 - 1] != 0 || BaseInt[CurrSim - 1][53 - 1] != 0 || BaseInt[CurrSim - 1][54 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "LEN Opt B+1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "LEN Opt B+1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_LENOptBp1();
+			IntName = "LEN Opt B+1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 52) {
+		if ((IntDefault[CurrSim - 1][52 - 1] == 0 && IntAllow[CurrSim - 1][52 - 1] == 1 && DelayConsider[CurrSim - 1][52 - 1] == 0 && BaseInt[CurrSim - 1][52 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][52 - 1] == 1 && IntAllow[CurrSim - 1][52 - 1] == 1 && DelayConsider[CurrSim - 1][52 - 1] == 0 && BaseInt[CurrSim - 1][52 - 1] == 0 && (BaseInt[CurrSim - 1][49 - 1] != 0 || BaseInt[CurrSim - 1][50 - 1] != 0 || BaseInt[CurrSim - 1][51 - 1] != 0 || BaseInt[CurrSim - 1][53 - 1] != 0 || BaseInt[CurrSim - 1][54 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "LEN Opt B+2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "LEN Opt B+2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_LENOptBp2();
+			IntName = "LEN Opt B+2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 53) {
+		if ((IntDefault[CurrSim - 1][53 - 1] == 0 && IntAllow[CurrSim - 1][53 - 1] == 1 && DelayConsider[CurrSim - 1][53 - 1] == 0 && BaseInt[CurrSim - 1][53 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][53 - 1] == 1 && IntAllow[CurrSim - 1][53 - 1] == 1 && DelayConsider[CurrSim - 1][53 - 1] == 0 && BaseInt[CurrSim - 1][53 - 1] == 0 && (BaseInt[CurrSim - 1][49 - 1] != 0 || BaseInt[CurrSim - 1][50 - 1] != 0 || BaseInt[CurrSim - 1][51 - 1] != 0 || BaseInt[CurrSim - 1][52 - 1] != 0 || BaseInt[CurrSim - 1][54 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "LEN Opt B+3" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "LEN Opt B+3" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_LENOptBp3();
+			IntName = "LEN Opt B+3";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 54) {
+		if ((IntDefault[CurrSim - 1][54 - 1] == 0 && IntAllow[CurrSim - 1][54 - 1] == 1 && DelayConsider[CurrSim - 1][54 - 1] == 0 && BaseInt[CurrSim - 1][54 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][54 - 1] == 1 && IntAllow[CurrSim - 1][54 - 1] == 1 && DelayConsider[CurrSim - 1][54 - 1] == 0 && BaseInt[CurrSim - 1][54 - 1] == 0 && (BaseInt[CurrSim - 1][49 - 1] != 0 || BaseInt[CurrSim - 1][50 - 1] != 0 || BaseInt[CurrSim - 1][51 - 1] != 0 || BaseInt[CurrSim - 1][52 - 1] != 0 || BaseInt[CurrSim - 1][53 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "LEN Opt Max" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "LEN Opt Max" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_LENOptMax();
+			IntName = "LEN Opt Max";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 55) {
+		if ((IntDefault[CurrSim - 1][55 - 1] == 0 && IntAllow[CurrSim - 1][55 - 1] == 1 && DelayConsider[CurrSim - 1][55 - 1] == 0 && BaseInt[CurrSim - 1][55 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][55 - 1] == 1 && IntAllow[CurrSim - 1][55 - 1] == 1 && DelayConsider[CurrSim - 1][55 - 1] == 0 && BaseInt[CurrSim - 1][55 - 1] == 0 && (BaseInt[CurrSim - 1][56 - 1] != 0 || BaseInt[CurrSim - 1][57 - 1] != 0 || BaseInt[CurrSim - 1][58 - 1] != 0 || BaseInt[CurrSim - 1][59 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Testing adolescents Default" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Testing adolescents Default" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_TestAdolDefault();
+			IntName = "Testing adolescents Default";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 56) {
+		if ((IntDefault[CurrSim - 1][56 - 1] == 0 && IntAllow[CurrSim - 1][56 - 1] == 1 && DelayConsider[CurrSim - 1][56 - 1] == 0 && BaseInt[CurrSim - 1][56 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][56 - 1] == 1 && IntAllow[CurrSim - 1][56 - 1] == 1 && DelayConsider[CurrSim - 1][56 - 1] == 0 && BaseInt[CurrSim - 1][56 - 1] == 0 && (BaseInt[CurrSim - 1][55 - 1] != 0 || BaseInt[CurrSim - 1][57 - 1] != 0 || BaseInt[CurrSim - 1][58 - 1] != 0 || BaseInt[CurrSim - 1][59 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Testing adolescents Baseline+1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Testing adolescents Baseline+1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_TestAdolBp1();
+			IntName = "Testing adolescents Baseline+1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 57) {
+		if ((IntDefault[CurrSim - 1][57 - 1] == 0 && IntAllow[CurrSim - 1][57 - 1] == 1 && DelayConsider[CurrSim - 1][57 - 1] == 0 && BaseInt[CurrSim - 1][57 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][57 - 1] == 1 && IntAllow[CurrSim - 1][57 - 1] == 1 && DelayConsider[CurrSim - 1][57 - 1] == 0 && BaseInt[CurrSim - 1][57 - 1] == 0 && (BaseInt[CurrSim - 1][55 - 1] != 0 || BaseInt[CurrSim - 1][56 - 1] != 0 || BaseInt[CurrSim - 1][58 - 1] != 0 || BaseInt[CurrSim - 1][59 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Testing adolescents Baseline+2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Testing adolescents Baseline+2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_TestAdolBp2();
+			IntName = "Testing adolescents Baseline+2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 58) {
+		if ((IntDefault[CurrSim - 1][58 - 1] == 0 && IntAllow[CurrSim - 1][58 - 1] == 1 && DelayConsider[CurrSim - 1][58 - 1] == 0 && BaseInt[CurrSim - 1][58 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][58 - 1] == 1 && IntAllow[CurrSim - 1][58 - 1] == 1 && DelayConsider[CurrSim - 1][58 - 1] == 0 && BaseInt[CurrSim - 1][58 - 1] == 0 && (BaseInt[CurrSim - 1][55 - 1] != 0 || BaseInt[CurrSim - 1][56 - 1] != 0 || BaseInt[CurrSim - 1][57 - 1] != 0 || BaseInt[CurrSim - 1][59 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Testing adolescents Baseline+3" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Testing adolescents Baseline+3" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_TestAdolBp3();
+			IntName = "Testing adolescents Baseline+3";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 59) {
+		if ((IntDefault[CurrSim - 1][59 - 1] == 0 && IntAllow[CurrSim - 1][59 - 1] == 1 && DelayConsider[CurrSim - 1][59 - 1] == 0 && BaseInt[CurrSim - 1][59 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][59 - 1] == 1 && IntAllow[CurrSim - 1][59 - 1] == 1 && DelayConsider[CurrSim - 1][59 - 1] == 0 && BaseInt[CurrSim - 1][59 - 1] == 0 && (BaseInt[CurrSim - 1][55 - 1] != 0 || BaseInt[CurrSim - 1][56 - 1] != 0 || BaseInt[CurrSim - 1][57 - 1] != 0 || BaseInt[CurrSim - 1][58 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Testing adolescents Max" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Testing adolescents Max" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_TestAdolMax();
+			IntName = "Testing adolescents Max";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 60) {
+		if ((IntDefault[CurrSim - 1][60 - 1] == 0 && IntAllow[CurrSim - 1][60 - 1] == 1 && DelayConsider[CurrSim - 1][60 - 1] == 0 && BaseInt[CurrSim - 1][60 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][60 - 1] == 1 && IntAllow[CurrSim - 1][60 - 1] == 1 && DelayConsider[CurrSim - 1][60 - 1] == 0 && BaseInt[CurrSim - 1][60 - 1] == 0 && (BaseInt[CurrSim - 1][61 - 1] != 0 || BaseInt[CurrSim - 1][62 - 1] != 0 || BaseInt[CurrSim - 1][63 - 1] != 0 || BaseInt[CurrSim - 1][64 - 1] != 0 || BaseInt[CurrSim - 1][65 - 1] != 0 || BaseInt[CurrSim - 1][66 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "HTS Baseline-2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "HTS Baseline-2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_HCTBm2();
+			IntName = "HTS Baseline-2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 61) {
+		if ((IntDefault[CurrSim - 1][61 - 1] == 0 && IntAllow[CurrSim - 1][61 - 1] == 1 && DelayConsider[CurrSim - 1][61 - 1] == 0 && BaseInt[CurrSim - 1][61 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][61 - 1] == 1 && IntAllow[CurrSim - 1][61 - 1] == 1 && DelayConsider[CurrSim - 1][61 - 1] == 0 && BaseInt[CurrSim - 1][61 - 1] == 0 && (BaseInt[CurrSim - 1][60 - 1] != 0 || BaseInt[CurrSim - 1][62 - 1] != 0 || BaseInt[CurrSim - 1][63 - 1] != 0 || BaseInt[CurrSim - 1][64 - 1] != 0 || BaseInt[CurrSim - 1][65 - 1] != 0 || BaseInt[CurrSim - 1][66 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "HTS Baseline-1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "HTS Baseline-1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_HCTBm1();
+			IntName = "HTS Baseline-1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 62) {
+		if ((IntDefault[CurrSim - 1][62 - 1] == 0 && IntAllow[CurrSim - 1][62 - 1] == 1 && DelayConsider[CurrSim - 1][62 - 1] == 0 && BaseInt[CurrSim - 1][62 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][62 - 1] == 1 && IntAllow[CurrSim - 1][62 - 1] == 1 && DelayConsider[CurrSim - 1][62 - 1] == 0 && BaseInt[CurrSim - 1][62 - 1] == 0 && (BaseInt[CurrSim - 1][60 - 1] != 0 || BaseInt[CurrSim - 1][61 - 1] != 0 || BaseInt[CurrSim - 1][63 - 1] != 0 || BaseInt[CurrSim - 1][64 - 1] != 0 || BaseInt[CurrSim - 1][65 - 1] != 0 || BaseInt[CurrSim - 1][66 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "HTS Default" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "HTS Default" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_HCTDefault();
+			IntName = "HTS Default";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 63) {
+		if ((IntDefault[CurrSim - 1][63 - 1] == 0 && IntAllow[CurrSim - 1][63 - 1] == 1 && DelayConsider[CurrSim - 1][63 - 1] == 0 && BaseInt[CurrSim - 1][63 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][63 - 1] == 1 && IntAllow[CurrSim - 1][63 - 1] == 1 && DelayConsider[CurrSim - 1][63 - 1] == 0 && BaseInt[CurrSim - 1][63 - 1] == 0 && (BaseInt[CurrSim - 1][60 - 1] != 0 || BaseInt[CurrSim - 1][61 - 1] != 0 || BaseInt[CurrSim - 1][62 - 1] != 0 || BaseInt[CurrSim - 1][64 - 1] != 0 || BaseInt[CurrSim - 1][65 - 1] != 0 || BaseInt[CurrSim - 1][66 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "HTS Baseline+1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "HTS Baseline+1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_HCTBp1();
+			IntName = "HTS Baseline+1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 64) {
+		if ((IntDefault[CurrSim - 1][64 - 1] == 0 && IntAllow[CurrSim - 1][64 - 1] == 1 && DelayConsider[CurrSim - 1][64 - 1] == 0 && BaseInt[CurrSim - 1][64 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][64 - 1] == 1 && IntAllow[CurrSim - 1][64 - 1] == 1 && DelayConsider[CurrSim - 1][64 - 1] == 0 && BaseInt[CurrSim - 1][64 - 1] == 0 && (BaseInt[CurrSim - 1][60 - 1] != 0 || BaseInt[CurrSim - 1][61 - 1] != 0 || BaseInt[CurrSim - 1][62 - 1] != 0 || BaseInt[CurrSim - 1][63 - 1] != 0 || BaseInt[CurrSim - 1][65 - 1] != 0 || BaseInt[CurrSim - 1][66 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "HTS Baseline+2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "HTS Baseline+2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_HCTBp2();
+			IntName = "HTS Baseline+2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 65) {
+		if ((IntDefault[CurrSim - 1][65 - 1] == 0 && IntAllow[CurrSim - 1][65 - 1] == 1 && DelayConsider[CurrSim - 1][65 - 1] == 0 && BaseInt[CurrSim - 1][65 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][65 - 1] == 1 && IntAllow[CurrSim - 1][65 - 1] == 1 && DelayConsider[CurrSim - 1][65 - 1] == 0 && BaseInt[CurrSim - 1][65 - 1] == 0 && (BaseInt[CurrSim - 1][60 - 1] != 0 || BaseInt[CurrSim - 1][61 - 1] != 0 || BaseInt[CurrSim - 1][62 - 1] != 0 || BaseInt[CurrSim - 1][63 - 1] != 0 || BaseInt[CurrSim - 1][64 - 1] != 0 || BaseInt[CurrSim - 1][66 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "HTS Baseline+3" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "HTS Baseline+3" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_HCTBp3();
+			IntName = "HTS Baseline+3";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 66) {
+		if ((IntDefault[CurrSim - 1][66 - 1] == 0 && IntAllow[CurrSim - 1][66 - 1] == 1 && DelayConsider[CurrSim - 1][66 - 1] == 0 && BaseInt[CurrSim - 1][66 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][66 - 1] == 1 && IntAllow[CurrSim - 1][66 - 1] == 1 && DelayConsider[CurrSim - 1][66 - 1] == 0 && BaseInt[CurrSim - 1][66 - 1] == 0 && (BaseInt[CurrSim - 1][60 - 1] != 0 || BaseInt[CurrSim - 1][61 - 1] != 0 || BaseInt[CurrSim - 1][62 - 1] != 0 || BaseInt[CurrSim - 1][63 - 1] != 0 || BaseInt[CurrSim - 1][64 - 1] != 0 || BaseInt[CurrSim - 1][65 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "HTS Max" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "HTS Max" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_HCTMax();
+			IntName = "HTS Max";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 67) {
+		if ((IntDefault[CurrSim - 1][67 - 1] == 0 && IntAllow[CurrSim - 1][67 - 1] == 1 && DelayConsider[CurrSim - 1][67 - 1] == 0 && BaseInt[CurrSim - 1][67 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][67 - 1] == 1 && IntAllow[CurrSim - 1][67 - 1] == 1 && DelayConsider[CurrSim - 1][67 - 1] == 0 && BaseInt[CurrSim - 1][67 - 1] == 0 && (BaseInt[CurrSim - 1][68 - 1] != 0 || BaseInt[CurrSim - 1][69 - 1] != 0 || BaseInt[CurrSim - 1][70 - 1] != 0 || BaseInt[CurrSim - 1][71 - 1] != 0 || BaseInt[CurrSim - 1][72 - 1] != 0 || BaseInt[CurrSim - 1][73 - 1] != 0 || BaseInt[CurrSim - 1][74 - 1] != 0 || BaseInt[CurrSim - 1][75 - 1] != 0 || BaseInt[CurrSim - 1][76 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "ART linkage Baseline-2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "ART linkage Baseline-2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_ARTuniversalBm2();
+			IntName = "ART linkage Baseline-2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 68) {
+		if ((IntDefault[CurrSim - 1][68 - 1] == 0 && IntAllow[CurrSim - 1][68 - 1] == 1 && DelayConsider[CurrSim - 1][68 - 1] == 0 && BaseInt[CurrSim - 1][68 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][68 - 1] == 1 && IntAllow[CurrSim - 1][68 - 1] == 1 && DelayConsider[CurrSim - 1][68 - 1] == 0 && BaseInt[CurrSim - 1][68 - 1] == 0 && (BaseInt[CurrSim - 1][67 - 1] != 0 || BaseInt[CurrSim - 1][69 - 1] != 0 || BaseInt[CurrSim - 1][70 - 1] != 0 || BaseInt[CurrSim - 1][71 - 1] != 0 || BaseInt[CurrSim - 1][72 - 1] != 0 || BaseInt[CurrSim - 1][73 - 1] != 0 || BaseInt[CurrSim - 1][74 - 1] != 0 || BaseInt[CurrSim - 1][75 - 1] != 0 || BaseInt[CurrSim - 1][76 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "ART linkage Baseline-1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "ART linkage Baseline-1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_ARTuniversalBm1();
+			IntName = "ART linkage Baseline-1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 69) {
+		if ((IntDefault[CurrSim - 1][69 - 1] == 0 && IntAllow[CurrSim - 1][69 - 1] == 1 && DelayConsider[CurrSim - 1][69 - 1] == 0 && BaseInt[CurrSim - 1][69 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][69 - 1] == 1 && IntAllow[CurrSim - 1][69 - 1] == 1 && DelayConsider[CurrSim - 1][69 - 1] == 0 && BaseInt[CurrSim - 1][69 - 1] == 0 && (BaseInt[CurrSim - 1][67 - 1] != 0 || BaseInt[CurrSim - 1][68 - 1] != 0 || BaseInt[CurrSim - 1][70 - 1] != 0 || BaseInt[CurrSim - 1][71 - 1] != 0 || BaseInt[CurrSim - 1][72 - 1] != 0 || BaseInt[CurrSim - 1][73 - 1] != 0 || BaseInt[CurrSim - 1][74 - 1] != 0 || BaseInt[CurrSim - 1][75 - 1] != 0 || BaseInt[CurrSim - 1][76 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "ART linkage Default" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "ART linkage Default" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_ARTuniversalDefault();
+			IntName = "ART linkage Default";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 70) {
+		if ((IntDefault[CurrSim - 1][70 - 1] == 0 && IntAllow[CurrSim - 1][70 - 1] == 1 && DelayConsider[CurrSim - 1][70 - 1] == 0 && BaseInt[CurrSim - 1][70 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][70 - 1] == 1 && IntAllow[CurrSim - 1][70 - 1] == 1 && DelayConsider[CurrSim - 1][70 - 1] == 0 && BaseInt[CurrSim - 1][70 - 1] == 0 && (BaseInt[CurrSim - 1][67 - 1] != 0 || BaseInt[CurrSim - 1][68 - 1] != 0 || BaseInt[CurrSim - 1][69 - 1] != 0 || BaseInt[CurrSim - 1][71 - 1] != 0 || BaseInt[CurrSim - 1][72 - 1] != 0 || BaseInt[CurrSim - 1][73 - 1] != 0 || BaseInt[CurrSim - 1][74 - 1] != 0 || BaseInt[CurrSim - 1][75 - 1] != 0 || BaseInt[CurrSim - 1][76 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "ART linkage Baseline+1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "ART linkage Baseline+1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_ARTuniversalBp1();
+			IntName = "ART linkage Baseline+1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 71) {
+		if ((IntDefault[CurrSim - 1][71 - 1] == 0 && IntAllow[CurrSim - 1][71 - 1] == 1 && DelayConsider[CurrSim - 1][71 - 1] == 0 && BaseInt[CurrSim - 1][71 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][71 - 1] == 1 && IntAllow[CurrSim - 1][71 - 1] == 1 && DelayConsider[CurrSim - 1][71 - 1] == 0 && BaseInt[CurrSim - 1][71 - 1] == 0 && (BaseInt[CurrSim - 1][67 - 1] != 0 || BaseInt[CurrSim - 1][68 - 1] != 0 || BaseInt[CurrSim - 1][69 - 1] != 0 || BaseInt[CurrSim - 1][70 - 1] != 0 || BaseInt[CurrSim - 1][72 - 1] != 0 || BaseInt[CurrSim - 1][73 - 1] != 0 || BaseInt[CurrSim - 1][74 - 1] != 0 || BaseInt[CurrSim - 1][75 - 1] != 0 || BaseInt[CurrSim - 1][76 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "ART linkage Baseline+2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "ART linkage Baseline+2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_ARTuniversalBp2();
+			IntName = "ART linkage Baseline+2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 72) {
+		if ((IntDefault[CurrSim - 1][72 - 1] == 0 && IntAllow[CurrSim - 1][72 - 1] == 1 && DelayConsider[CurrSim - 1][72 - 1] == 0 && BaseInt[CurrSim - 1][72 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][72 - 1] == 1 && IntAllow[CurrSim - 1][72 - 1] == 1 && DelayConsider[CurrSim - 1][72 - 1] == 0 && BaseInt[CurrSim - 1][72 - 1] == 0 && (BaseInt[CurrSim - 1][67 - 1] != 0 || BaseInt[CurrSim - 1][68 - 1] != 0 || BaseInt[CurrSim - 1][69 - 1] != 0 || BaseInt[CurrSim - 1][70 - 1] != 0 || BaseInt[CurrSim - 1][71 - 1] != 0 || BaseInt[CurrSim - 1][73 - 1] != 0 || BaseInt[CurrSim - 1][74 - 1] != 0 || BaseInt[CurrSim - 1][75 - 1] != 0 || BaseInt[CurrSim - 1][76 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "ART linkage Baseline+3" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "ART linkage Baseline+3" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_ARTuniversalBp3();
+			IntName = "ART linkage Baseline+3";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 73) {
+		if ((IntDefault[CurrSim - 1][73 - 1] == 0 && IntAllow[CurrSim - 1][73 - 1] == 1 && DelayConsider[CurrSim - 1][73 - 1] == 0 && BaseInt[CurrSim - 1][73 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][73 - 1] == 1 && IntAllow[CurrSim - 1][73 - 1] == 1 && DelayConsider[CurrSim - 1][73 - 1] == 0 && BaseInt[CurrSim - 1][73 - 1] == 0 && (BaseInt[CurrSim - 1][67 - 1] != 0 || BaseInt[CurrSim - 1][68 - 1] != 0 || BaseInt[CurrSim - 1][70 - 1] != 0 || BaseInt[CurrSim - 1][71 - 1] != 0 || BaseInt[CurrSim - 1][72 - 1] != 0 || BaseInt[CurrSim - 1][74 - 1] != 0 || BaseInt[CurrSim - 1][75 - 1] != 0 || BaseInt[CurrSim - 1][76 - 1] != 0 || BaseInt[CurrSim - 1][77 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "ART linkage Baseline+4" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "ART linkage Baseline+4" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_ARTuniversalBp4();
+			IntName = "ART linkage Baseline+4";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 74) {
+		if ((IntDefault[CurrSim - 1][74 - 1] == 0 && IntAllow[CurrSim - 1][74 - 1] == 1 && DelayConsider[CurrSim - 1][74 - 1] == 0 && BaseInt[CurrSim - 1][74 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][74 - 1] == 1 && IntAllow[CurrSim - 1][74 - 1] == 1 && DelayConsider[CurrSim - 1][74 - 1] == 0 && BaseInt[CurrSim - 1][74 - 1] == 0 && (BaseInt[CurrSim - 1][67 - 1] != 0 || BaseInt[CurrSim - 1][68 - 1] != 0 || BaseInt[CurrSim - 1][71 - 1] != 0 || BaseInt[CurrSim - 1][72 - 1] != 0 || BaseInt[CurrSim - 1][73 - 1] != 0 || BaseInt[CurrSim - 1][75 - 1] != 0 || BaseInt[CurrSim - 1][76 - 1] != 0 || BaseInt[CurrSim - 1][77 - 1] != 0 || BaseInt[CurrSim - 1][78 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "ART linkage Baseline+5" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "ART linkage Baseline+5" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_ARTuniversalBp5();
+			IntName = "ART linkage Baseline+5";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 75) {
+		if ((IntDefault[CurrSim - 1][75 - 1] == 0 && IntAllow[CurrSim - 1][75 - 1] == 1 && DelayConsider[CurrSim - 1][75 - 1] == 0 && BaseInt[CurrSim - 1][75 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][75 - 1] == 1 && IntAllow[CurrSim - 1][75 - 1] == 1 && DelayConsider[CurrSim - 1][75 - 1] == 0 && BaseInt[CurrSim - 1][75 - 1] == 0 && (BaseInt[CurrSim - 1][67 - 1] != 0 || BaseInt[CurrSim - 1][68 - 1] != 0 || BaseInt[CurrSim - 1][72 - 1] != 0 || BaseInt[CurrSim - 1][73 - 1] != 0 || BaseInt[CurrSim - 1][74 - 1] != 0 || BaseInt[CurrSim - 1][76 - 1] != 0 || BaseInt[CurrSim - 1][77 - 1] != 0 || BaseInt[CurrSim - 1][78 - 1] != 0 || BaseInt[CurrSim - 1][79 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "ART linkage Baseline+6" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "ART linkage Baseline+6" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_ARTuniversalBp6();
+			IntName = "ART linkage Baseline+6";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 76) {
+		if ((IntDefault[CurrSim - 1][76 - 1] == 0 && IntAllow[CurrSim - 1][76 - 1] == 1 && DelayConsider[CurrSim - 1][76 - 1] == 0 && BaseInt[CurrSim - 1][76 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][76 - 1] == 1 && IntAllow[CurrSim - 1][76 - 1] == 1 && DelayConsider[CurrSim - 1][76 - 1] == 0 && BaseInt[CurrSim - 1][76 - 1] == 0 && (BaseInt[CurrSim - 1][67 - 1] != 0 || BaseInt[CurrSim - 1][68 - 1] != 0 || BaseInt[CurrSim - 1][69 - 1] != 0 || BaseInt[CurrSim - 1][70 - 1] != 0 || BaseInt[CurrSim - 1][71 - 1] != 0 || BaseInt[CurrSim - 1][72 - 1] != 0 || BaseInt[CurrSim - 1][73 - 1] != 0 || BaseInt[CurrSim - 1][74 - 1] != 0 || BaseInt[CurrSim - 1][75 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "ART linkage Max" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "ART linkage Max" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_ARTuniversalMax();
+			IntName = "ART linkage Max";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 77) {
+		if ((IntDefault[CurrSim - 1][77 - 1] == 0 && IntAllow[CurrSim - 1][77 - 1] == 1 && DelayConsider[CurrSim - 1][77 - 1] == 0 && BaseInt[CurrSim - 1][77 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][77 - 1] == 1 && IntAllow[CurrSim - 1][77 - 1] == 1 && DelayConsider[CurrSim - 1][77 - 1] == 0 && BaseInt[CurrSim - 1][77 - 1] == 0 && (BaseInt[CurrSim - 1][78 - 1] != 0 || BaseInt[CurrSim - 1][79 - 1] != 0 || BaseInt[CurrSim - 1][80 - 1] != 0 || BaseInt[CurrSim - 1][81 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "HIVST Default" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "HIVST Default" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_STpackDefault();
+			IntName = "HIVST Default";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 78) {
+		if ((IntDefault[CurrSim - 1][78 - 1] == 0 && IntAllow[CurrSim - 1][78 - 1] == 1 && DelayConsider[CurrSim - 1][78 - 1] == 0 && BaseInt[CurrSim - 1][78 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][78 - 1] == 1 && IntAllow[CurrSim - 1][78 - 1] == 1 && DelayConsider[CurrSim - 1][78 - 1] == 0 && BaseInt[CurrSim - 1][78 - 1] == 0 && (BaseInt[CurrSim - 1][77 - 1] != 0 || BaseInt[CurrSim - 1][79 - 1] != 0 || BaseInt[CurrSim - 1][80 - 1] != 0 || BaseInt[CurrSim - 1][81 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "HIVST Baseline+1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "HIVST Baseline+1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_STpackBp1();
+			IntName = "HIVST Baseline+1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 79) {
+		if ((IntDefault[CurrSim - 1][79 - 1] == 0 && IntAllow[CurrSim - 1][79 - 1] == 1 && DelayConsider[CurrSim - 1][79 - 1] == 0 && BaseInt[CurrSim - 1][79 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][79 - 1] == 1 && IntAllow[CurrSim - 1][79 - 1] == 1 && DelayConsider[CurrSim - 1][79 - 1] == 0 && BaseInt[CurrSim - 1][79 - 1] == 0 && (BaseInt[CurrSim - 1][77 - 1] != 0 || BaseInt[CurrSim - 1][78 - 1] != 0 || BaseInt[CurrSim - 1][80 - 1] != 0 || BaseInt[CurrSim - 1][81 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "HIVST Baseline+2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "HIVST Baseline+2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_STpackBp2();
+			IntName = "HIVST Baseline+2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 80) {
+		if ((IntDefault[CurrSim - 1][80 - 1] == 0 && IntAllow[CurrSim - 1][80 - 1] == 1 && DelayConsider[CurrSim - 1][80 - 1] == 0 && BaseInt[CurrSim - 1][80 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][80 - 1] == 1 && IntAllow[CurrSim - 1][80 - 1] == 1 && DelayConsider[CurrSim - 1][80 - 1] == 0 && BaseInt[CurrSim - 1][80 - 1] == 0 && (BaseInt[CurrSim - 1][77 - 1] != 0 || BaseInt[CurrSim - 1][78 - 1] != 0 || BaseInt[CurrSim - 1][79 - 1] != 0 || BaseInt[CurrSim - 1][81 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "HIVST Baseline+3" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "HIVST Baseline+3" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_STpackBp3();
+			IntName = "HIVST Baseline+3";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 81) {
+		if ((IntDefault[CurrSim - 1][81 - 1] == 0 && IntAllow[CurrSim - 1][81 - 1] == 1 && DelayConsider[CurrSim - 1][81 - 1] == 0 && BaseInt[CurrSim - 1][81 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][81 - 1] == 1 && IntAllow[CurrSim - 1][81 - 1] == 1 && DelayConsider[CurrSim - 1][81 - 1] == 0 && BaseInt[CurrSim - 1][81 - 1] == 0 && (BaseInt[CurrSim - 1][77 - 1] != 0 || BaseInt[CurrSim - 1][78 - 1] != 0 || BaseInt[CurrSim - 1][79 - 1] != 0 || BaseInt[CurrSim - 1][80 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "HIVST Max" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "HIVST Max" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_STpackMax();
+			IntName = "HIVST Max";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 82) {
+		if ((IntDefault[CurrSim - 1][82 - 1] == 0 && IntAllow[CurrSim - 1][82 - 1] == 1 && DelayConsider[CurrSim - 1][82 - 1] == 0 && BaseInt[CurrSim - 1][82 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][82 - 1] == 1 && IntAllow[CurrSim - 1][82 - 1] == 1 && DelayConsider[CurrSim - 1][82 - 1] == 0 && BaseInt[CurrSim - 1][82 - 1] == 0 && (BaseInt[CurrSim - 1][83 - 1] != 0 || BaseInt[CurrSim - 1][84 - 1] != 0 || BaseInt[CurrSim - 1][85 - 1] != 0 || BaseInt[CurrSim - 1][86 - 1] != 0 || BaseInt[CurrSim - 1][87 - 1] != 0 || BaseInt[CurrSim - 1][88 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Testing 18 months Baseline-2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Testing 18 months Baseline-2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test18monthsBm2();
+			IntName = "Testing 18 months Baseline-2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 83) {
+		if ((IntDefault[CurrSim - 1][83 - 1] == 0 && IntAllow[CurrSim - 1][83 - 1] == 1 && DelayConsider[CurrSim - 1][83 - 1] == 0 && BaseInt[CurrSim - 1][83 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][83 - 1] == 1 && IntAllow[CurrSim - 1][83 - 1] == 1 && DelayConsider[CurrSim - 1][83 - 1] == 0 && BaseInt[CurrSim - 1][83 - 1] == 0 && (BaseInt[CurrSim - 1][82 - 1] != 0 || BaseInt[CurrSim - 1][84 - 1] != 0 || BaseInt[CurrSim - 1][85 - 1] != 0 || BaseInt[CurrSim - 1][86 - 1] != 0 || BaseInt[CurrSim - 1][87 - 1] != 0 || BaseInt[CurrSim - 1][88 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Testing 18 months Baseline-1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Testing 18 months Baseline-1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test18monthsBm1();
+			IntName = "Testing 18 months Baseline-1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 84) {
+		if ((IntDefault[CurrSim - 1][84 - 1] == 0 && IntAllow[CurrSim - 1][84 - 1] == 1 && DelayConsider[CurrSim - 1][84 - 1] == 0 && BaseInt[CurrSim - 1][84 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][84 - 1] == 1 && IntAllow[CurrSim - 1][84 - 1] == 1 && DelayConsider[CurrSim - 1][84 - 1] == 0 && BaseInt[CurrSim - 1][84 - 1] == 0 && (BaseInt[CurrSim - 1][82 - 1] != 0 || BaseInt[CurrSim - 1][83 - 1] != 0 || BaseInt[CurrSim - 1][85 - 1] != 0 || BaseInt[CurrSim - 1][86 - 1] != 0 || BaseInt[CurrSim - 1][87 - 1] != 0 || BaseInt[CurrSim - 1][88 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Testing 18 months Default" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Testing 18 months Default" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test18monthsDefault();
+			IntName = "Testing 18 months Default";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 85) {
+		if ((IntDefault[CurrSim - 1][85 - 1] == 0 && IntAllow[CurrSim - 1][85 - 1] == 1 && DelayConsider[CurrSim - 1][85 - 1] == 0 && BaseInt[CurrSim - 1][85 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][85 - 1] == 1 && IntAllow[CurrSim - 1][85 - 1] == 1 && DelayConsider[CurrSim - 1][85 - 1] == 0 && BaseInt[CurrSim - 1][85 - 1] == 0 && (BaseInt[CurrSim - 1][82 - 1] != 0 || BaseInt[CurrSim - 1][83 - 1] != 0 || BaseInt[CurrSim - 1][84 - 1] != 0 || BaseInt[CurrSim - 1][86 - 1] != 0 || BaseInt[CurrSim - 1][87 - 1] != 0 || BaseInt[CurrSim - 1][88 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Testing 18 months Baseline+1" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Testing 18 months Baseline+1" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test18monthsBp1();
+			IntName = "Testing 18 months Baseline+1";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 86) {
+		if ((IntDefault[CurrSim - 1][86 - 1] == 0 && IntAllow[CurrSim - 1][86 - 1] == 1 && DelayConsider[CurrSim - 1][86 - 1] == 0 && BaseInt[CurrSim - 1][86 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][86 - 1] == 1 && IntAllow[CurrSim - 1][86 - 1] == 1 && DelayConsider[CurrSim - 1][86 - 1] == 0 && BaseInt[CurrSim - 1][86 - 1] == 0 && (BaseInt[CurrSim - 1][82 - 1] != 0 || BaseInt[CurrSim - 1][83 - 1] != 0 || BaseInt[CurrSim - 1][84 - 1] != 0 || BaseInt[CurrSim - 1][85 - 1] != 0 || BaseInt[CurrSim - 1][87 - 1] != 0 || BaseInt[CurrSim - 1][88 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Testing 18 months Baseline+2" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Testing 18 months Baseline+2" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test18monthsBp2();
+			IntName = "Testing 18 months Baseline+2";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 87) {
+		if ((IntDefault[CurrSim - 1][87 - 1] == 0 && IntAllow[CurrSim - 1][87 - 1] == 1 && DelayConsider[CurrSim - 1][87 - 1] == 0 && BaseInt[CurrSim - 1][87 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][87 - 1] == 1 && IntAllow[CurrSim - 1][87 - 1] == 1 && DelayConsider[CurrSim - 1][87 - 1] == 0 && BaseInt[CurrSim - 1][87 - 1] == 0 && (BaseInt[CurrSim - 1][82 - 1] != 0 || BaseInt[CurrSim - 1][83 - 1] != 0 || BaseInt[CurrSim - 1][84 - 1] != 0 || BaseInt[CurrSim - 1][85 - 1] != 0 || BaseInt[CurrSim - 1][86 - 1] != 0 || BaseInt[CurrSim - 1][88 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Testing 18 months Baseline+3" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Testing 18 months Baseline+3" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test18monthsBp3();
+			IntName = "Testing 18 months Baseline+3";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 88) {
+		if ((IntDefault[CurrSim - 1][88 - 1] == 0 && IntAllow[CurrSim - 1][88 - 1] == 1 && DelayConsider[CurrSim - 1][88 - 1] == 0 && BaseInt[CurrSim - 1][88 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][88 - 1] == 1 && IntAllow[CurrSim - 1][88 - 1] == 1 && DelayConsider[CurrSim - 1][88 - 1] == 0 && BaseInt[CurrSim - 1][88 - 1] == 0 && (BaseInt[CurrSim - 1][82 - 1] != 0 || BaseInt[CurrSim - 1][83 - 1] != 0 || BaseInt[CurrSim - 1][84 - 1] != 0 || BaseInt[CurrSim - 1][85 - 1] != 0 || BaseInt[CurrSim - 1][86 - 1] != 0 || BaseInt[CurrSim - 1][87 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "Testing 18 months Max" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "Testing 18 months Max" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_Test18monthsMax();
+			IntName = "Testing 18 months Max";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 89) {
+		if ((IntDefault[CurrSim - 1][89 - 1] == 0 && IntAllow[CurrSim - 1][89 - 1] == 1 && DelayConsider[CurrSim - 1][89 - 1] == 0 && BaseInt[CurrSim - 1][89 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][89 - 1] == 1 && IntAllow[CurrSim - 1][89 - 1] == 1 && DelayConsider[CurrSim - 1][89 - 1] == 0 && BaseInt[CurrSim - 1][89 - 1] == 0 && (BaseInt[CurrSim - 1][90 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "POC VL Inactive" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "POC VL Inactive" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_POCVL_Inactive();
+			IntName = "POC VL Inactive";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 90) {
+		if ((IntDefault[CurrSim - 1][90 - 1] == 0 && IntAllow[CurrSim - 1][90 - 1] == 1 && DelayConsider[CurrSim - 1][90 - 1] == 0 && BaseInt[CurrSim - 1][90 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][90 - 1] == 1 && IntAllow[CurrSim - 1][90 - 1] == 1 && DelayConsider[CurrSim - 1][90 - 1] == 0 && BaseInt[CurrSim - 1][90 - 1] == 0 && (BaseInt[CurrSim - 1][89 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "POC VL Active" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "POC VL Active" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_POCVL_Active();
+			IntName = "POC VL Active";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 91) {
+		if ((IntDefault[CurrSim - 1][91 - 1] == 0 && IntAllow[CurrSim - 1][91 - 1] == 1 && DelayConsider[CurrSim - 1][91 - 1] == 0 && BaseInt[CurrSim - 1][91 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][91 - 1] == 1 && IntAllow[CurrSim - 1][91 - 1] == 1 && DelayConsider[CurrSim - 1][91 - 1] == 0 && BaseInt[CurrSim - 1][91 - 1] == 0 && (BaseInt[CurrSim - 1][92 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "U=U Messaging Inactive" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "U=U Messaging Inactive" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_UU_Inactive();
+			IntName = "U=U Messaging Inactive";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 92) {
+		if ((IntDefault[CurrSim - 1][92 - 1] == 0 && IntAllow[CurrSim - 1][92 - 1] == 1 && DelayConsider[CurrSim - 1][92 - 1] == 0 && BaseInt[CurrSim - 1][92 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][92 - 1] == 1 && IntAllow[CurrSim - 1][92 - 1] == 1 && DelayConsider[CurrSim - 1][92 - 1] == 0 && BaseInt[CurrSim - 1][92 - 1] == 0 && (BaseInt[CurrSim - 1][91 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "U=U Messaging Active" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "U=U Messaging Active" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_UU_Active();
+			IntName = "U=U Messaging Active";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 93) {
+		if ((IntDefault[CurrSim - 1][93 - 1] == 0 && IntAllow[CurrSim - 1][93 - 1] == 1 && DelayConsider[CurrSim - 1][93 - 1] == 0 && BaseInt[CurrSim - 1][93 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][93 - 1] == 1 && IntAllow[CurrSim - 1][93 - 1] == 1 && DelayConsider[CurrSim - 1][93 - 1] == 0 && BaseInt[CurrSim - 1][93 - 1] == 0 && (BaseInt[CurrSim - 1][94 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "MensClinics Inactive" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "MensClinics Inactive" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_MensClinics_Inactive();
+			IntName = "MensClinics Inactive";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 94) {
+		if ((IntDefault[CurrSim - 1][94 - 1] == 0 && IntAllow[CurrSim - 1][94 - 1] == 1 && DelayConsider[CurrSim - 1][94 - 1] == 0 && BaseInt[CurrSim - 1][94 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][94 - 1] == 1 && IntAllow[CurrSim - 1][94 - 1] == 1 && DelayConsider[CurrSim - 1][94 - 1] == 0 && BaseInt[CurrSim - 1][94 - 1] == 0 && (BaseInt[CurrSim - 1][93 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "MensClinics Active" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "MensClinics Active" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_MensClinics_Active();
+			IntName = "MensClinics Active";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 95) {
+		if ((IntDefault[CurrSim - 1][95 - 1] == 0 && IntAllow[CurrSim - 1][95 - 1] == 1 && DelayConsider[CurrSim - 1][95 - 1] == 0 && BaseInt[CurrSim - 1][95 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][95 - 1] == 1 && IntAllow[CurrSim - 1][95 - 1] == 1 && DelayConsider[CurrSim - 1][95 - 1] == 0 && BaseInt[CurrSim - 1][95 - 1] == 0 && (BaseInt[CurrSim - 1][96 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PeerNav Inactive" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PeerNav Inactive" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_PeerNav_Inactive();
+			IntName = "PeerNav Inactive";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+	if (RunIntervention == 96) {
+		if ((IntDefault[CurrSim - 1][96 - 1] == 0 && IntAllow[CurrSim - 1][96 - 1] == 1 && DelayConsider[CurrSim - 1][96 - 1] == 0 && BaseInt[CurrSim - 1][96 - 1] == 0) ||
+			(IntDefault[CurrSim - 1][96 - 1] == 1 && IntAllow[CurrSim - 1][96 - 1] == 1 && DelayConsider[CurrSim - 1][96 - 1] == 0 && BaseInt[CurrSim - 1][96 - 1] == 0 && (BaseInt[CurrSim - 1][95 - 1] != 0))) {
+			if (CurrYear == 2026) {
+				cout << "Running Intervention " << RunIntervention << ":" << "PeerNav Active" << endl;
+				filesim << "Running Intervention " << RunIntervention << ": " << "PeerNav Active" << endl;
+			}
+			BaseIntOrder[RunIntervention] = CountOrder;
+			Int_PeerNav_Active();
+			IntName = "PeerNav Active";
+		}
+		else { calcICER[CurrSim - 1] = 0; }
+	}
+
+
+	filesim.close();
+
+	//saving parameters for each intervention
+
+
+	//for fixed parameters
+	ParmsA[RunIntervention][0] = CondomRednPrEP[0];
+	ParmsA[RunIntervention][1] = CondomRednPrEP[1];
+	ParmsA[RunIntervention][2] = PrEPefficacy[0];
+	ParmsA[RunIntervention][3] = PrEPefficacy[1];
+	ParmsA[RunIntervention][4] = PrEPefficacyMSM;
+	ParmsA[RunIntervention][5] = PrEPefficacyPreg;
+	ParmsA[RunIntervention][6] = CABLAefficacy[0];
+	ParmsA[RunIntervention][7] = CABLAefficacy[1];
+	ParmsA[RunIntervention][8] = CABLAefficacyMSM;
+	ParmsA[RunIntervention][9] = CABLAefficacyPreg;
+
+
+	ParmsA[RunIntervention][10] = PrEPdur[0];
+	ParmsA[RunIntervention][11] = PrEPdur[1];
+	ParmsA[RunIntervention][12] = PrEPdur[2];
+	ParmsA[RunIntervention][13] = PrEPdurPreg;
+
+	ParmsA[RunIntervention][14] = CABLAdur[0];
+	ParmsA[RunIntervention][15] = CABLAdur[1];
+	ParmsA[RunIntervention][16] = CABLAdur[2];
+	ParmsA[RunIntervention][17] = CABLAdurPreg;
+
+	ParmsA[RunIntervention][18] = UltPrEPrateFSW;
+	ParmsA[RunIntervention][19] = UltCABLArateFSW;
+
+	ParmsA[RunIntervention][20] = AdolHCTMultiplier;
+	ParmsA[RunIntervention][21] = LastCondomMultiplier;
+
+	ParmsA[RunIntervention][22] = SelfTestUptakeUlt[0];
+	ParmsA[RunIntervention][23] = SelfTestUptakeUlt[1];
+	ParmsA[RunIntervention][24] = SelfTestUptakeUlt[2];
+	ParmsA[RunIntervention][25] = SelfTestUptakeUlt[3];
+	ParmsA[RunIntervention][26] = SelfTestUptakeUlt[4];
+	ParmsA[RunIntervention][27] = SelfTestUptakeUlt[5];
+
+
+	//for time-varying parameters (usually in rollout sheet)
+
+	for (int k = 0; k < timehorizon + 1; k++)
+	{
+		ParmsB[RunIntervention][0][k] = HCT1stTimeF25init[ICstart - 1 + k];
+		ParmsB[RunIntervention][1][k] = RR_MMCpromo10[ICstart - 1 + k];
+		ParmsB[RunIntervention][2][k] = RR_MMCpromo15[ICstart - 1 + k];
+		ParmsB[RunIntervention][3][k] = RR_MMCpromo20[ICstart - 1 + k];
+		ParmsB[RunIntervention][4][k] = RR_MMCpromo25[ICstart - 1 + k];
+		ParmsB[RunIntervention][5][k] = RR_MMCpromo50[ICstart - 1 + k];
+		ParmsB[RunIntervention][6][k] = NeonatalMMC[ICstart - 1 + k];
+		ParmsB[RunIntervention][7][k] = PrEPpregnant[ICstart - 1 + k];
+		ParmsB[RunIntervention][8][k] = CABLApregnant[ICstart - 1 + k];
+		ParmsB[RunIntervention][9][k] = RR_PrEPstartMSM[ICstart - 1 + k];
+		ParmsB[RunIntervention][10][k] = RR_PrEPstartF20[ICstart - 1 + k];
+
+	}
+
+
+}
+
+
+
+int DontRunModel() {
+	return (Optimise == 1 && (
+		(NoNonNWleft[CurrSim - 1] == 1) || //if there are no more non-NW interventions left
+
+		(RunIntervention == 1 && IntDefault[CurrSim - 1][1 - 1] == 0 && (IntAllow[CurrSim - 1][1 - 1] == 0 || BaseInt[CurrSim - 1][1 - 1] != 0 || DelayConsider[CurrSim - 1][1 - 1] != 0)) ||
+		(RunIntervention == 1 && IntDefault[CurrSim - 1][1 - 1] == 1 && (IntAllow[CurrSim - 1][1 - 1] == 0 || BaseInt[CurrSim - 1][1 - 1] != 0 || DelayConsider[CurrSim - 1][1 - 1] != 0)) ||
+		(RunIntervention == 1 && IntDefault[CurrSim - 1][1 - 1] == 1 && BaseInt[CurrSim - 1][2 - 1] == 0 && BaseInt[CurrSim - 1][3 - 1] == 0 && BaseInt[CurrSim - 1][4 - 1] == 0 && BaseInt[CurrSim - 1][5 - 1] == 0 && BaseInt[CurrSim - 1][6 - 1] == 0 && BaseInt[CurrSim - 1][7 - 1] == 0) ||
+		(RunIntervention == 1 && IntDefault[CurrSim - 1][1 - 1] == 1 && IntAllow[CurrSim - 1][2 - 1] == 0 && IntAllow[CurrSim - 1][3 - 1] == 0 && IntAllow[CurrSim - 1][4 - 1] == 0 && IntAllow[CurrSim - 1][5 - 1] == 0 && IntAllow[CurrSim - 1][6 - 1] == 0 && IntAllow[CurrSim - 1][7 - 1] == 0) ||
+		(RunIntervention == 2 && IntDefault[CurrSim - 1][2 - 1] == 0 && (IntAllow[CurrSim - 1][2 - 1] == 0 || BaseInt[CurrSim - 1][2 - 1] != 0 || DelayConsider[CurrSim - 1][2 - 1] != 0)) ||
+		(RunIntervention == 2 && IntDefault[CurrSim - 1][2 - 1] == 1 && (IntAllow[CurrSim - 1][2 - 1] == 0 || BaseInt[CurrSim - 1][2 - 1] != 0 || DelayConsider[CurrSim - 1][2 - 1] != 0)) ||
+		(RunIntervention == 2 && IntDefault[CurrSim - 1][2 - 1] == 1 && BaseInt[CurrSim - 1][1 - 1] == 0 && BaseInt[CurrSim - 1][3 - 1] == 0 && BaseInt[CurrSim - 1][4 - 1] == 0 && BaseInt[CurrSim - 1][5 - 1] == 0 && BaseInt[CurrSim - 1][6 - 1] == 0 && BaseInt[CurrSim - 1][7 - 1] == 0) ||
+		(RunIntervention == 2 && IntDefault[CurrSim - 1][2 - 1] == 1 && IntAllow[CurrSim - 1][1 - 1] == 0 && IntAllow[CurrSim - 1][3 - 1] == 0 && IntAllow[CurrSim - 1][4 - 1] == 0 && IntAllow[CurrSim - 1][5 - 1] == 0 && IntAllow[CurrSim - 1][6 - 1] == 0 && IntAllow[CurrSim - 1][7 - 1] == 0) ||
+		(RunIntervention == 3 && IntDefault[CurrSim - 1][3 - 1] == 0 && (IntAllow[CurrSim - 1][3 - 1] == 0 || BaseInt[CurrSim - 1][3 - 1] != 0 || DelayConsider[CurrSim - 1][3 - 1] != 0)) ||
+		(RunIntervention == 3 && IntDefault[CurrSim - 1][3 - 1] == 1 && (IntAllow[CurrSim - 1][3 - 1] == 0 || BaseInt[CurrSim - 1][3 - 1] != 0 || DelayConsider[CurrSim - 1][3 - 1] != 0)) ||
+		(RunIntervention == 3 && IntDefault[CurrSim - 1][3 - 1] == 1 && BaseInt[CurrSim - 1][1 - 1] == 0 && BaseInt[CurrSim - 1][2 - 1] == 0 && BaseInt[CurrSim - 1][4 - 1] == 0 && BaseInt[CurrSim - 1][5 - 1] == 0 && BaseInt[CurrSim - 1][6 - 1] == 0 && BaseInt[CurrSim - 1][7 - 1] == 0) ||
+		(RunIntervention == 3 && IntDefault[CurrSim - 1][3 - 1] == 1 && IntAllow[CurrSim - 1][1 - 1] == 0 && IntAllow[CurrSim - 1][2 - 1] == 0 && IntAllow[CurrSim - 1][4 - 1] == 0 && IntAllow[CurrSim - 1][5 - 1] == 0 && IntAllow[CurrSim - 1][6 - 1] == 0 && IntAllow[CurrSim - 1][7 - 1] == 0) ||
+		(RunIntervention == 4 && IntDefault[CurrSim - 1][4 - 1] == 0 && (IntAllow[CurrSim - 1][4 - 1] == 0 || BaseInt[CurrSim - 1][4 - 1] != 0 || DelayConsider[CurrSim - 1][4 - 1] != 0)) ||
+		(RunIntervention == 4 && IntDefault[CurrSim - 1][4 - 1] == 1 && (IntAllow[CurrSim - 1][4 - 1] == 0 || BaseInt[CurrSim - 1][4 - 1] != 0 || DelayConsider[CurrSim - 1][4 - 1] != 0)) ||
+		(RunIntervention == 4 && IntDefault[CurrSim - 1][4 - 1] == 1 && BaseInt[CurrSim - 1][1 - 1] == 0 && BaseInt[CurrSim - 1][2 - 1] == 0 && BaseInt[CurrSim - 1][3 - 1] == 0 && BaseInt[CurrSim - 1][5 - 1] == 0 && BaseInt[CurrSim - 1][6 - 1] == 0 && BaseInt[CurrSim - 1][7 - 1] == 0) ||
+		(RunIntervention == 4 && IntDefault[CurrSim - 1][4 - 1] == 1 && IntAllow[CurrSim - 1][1 - 1] == 0 && IntAllow[CurrSim - 1][2 - 1] == 0 && IntAllow[CurrSim - 1][3 - 1] == 0 && IntAllow[CurrSim - 1][5 - 1] == 0 && IntAllow[CurrSim - 1][6 - 1] == 0 && IntAllow[CurrSim - 1][7 - 1] == 0) ||
+		(RunIntervention == 5 && IntDefault[CurrSim - 1][5 - 1] == 0 && (IntAllow[CurrSim - 1][5 - 1] == 0 || BaseInt[CurrSim - 1][5 - 1] != 0 || DelayConsider[CurrSim - 1][5 - 1] != 0)) ||
+		(RunIntervention == 5 && IntDefault[CurrSim - 1][5 - 1] == 1 && (IntAllow[CurrSim - 1][5 - 1] == 0 || BaseInt[CurrSim - 1][5 - 1] != 0 || DelayConsider[CurrSim - 1][5 - 1] != 0)) ||
+		(RunIntervention == 5 && IntDefault[CurrSim - 1][5 - 1] == 1 && BaseInt[CurrSim - 1][1 - 1] == 0 && BaseInt[CurrSim - 1][2 - 1] == 0 && BaseInt[CurrSim - 1][3 - 1] == 0 && BaseInt[CurrSim - 1][4 - 1] == 0 && BaseInt[CurrSim - 1][6 - 1] == 0 && BaseInt[CurrSim - 1][7 - 1] == 0) ||
+		(RunIntervention == 5 && IntDefault[CurrSim - 1][5 - 1] == 1 && IntAllow[CurrSim - 1][1 - 1] == 0 && IntAllow[CurrSim - 1][2 - 1] == 0 && IntAllow[CurrSim - 1][3 - 1] == 0 && IntAllow[CurrSim - 1][4 - 1] == 0 && IntAllow[CurrSim - 1][6 - 1] == 0 && IntAllow[CurrSim - 1][7 - 1] == 0) ||
+		(RunIntervention == 6 && IntDefault[CurrSim - 1][6 - 1] == 0 && (IntAllow[CurrSim - 1][6 - 1] == 0 || BaseInt[CurrSim - 1][6 - 1] != 0 || DelayConsider[CurrSim - 1][6 - 1] != 0)) ||
+		(RunIntervention == 6 && IntDefault[CurrSim - 1][6 - 1] == 1 && (IntAllow[CurrSim - 1][6 - 1] == 0 || BaseInt[CurrSim - 1][6 - 1] != 0 || DelayConsider[CurrSim - 1][6 - 1] != 0)) ||
+		(RunIntervention == 6 && IntDefault[CurrSim - 1][6 - 1] == 1 && BaseInt[CurrSim - 1][1 - 1] == 0 && BaseInt[CurrSim - 1][2 - 1] == 0 && BaseInt[CurrSim - 1][3 - 1] == 0 && BaseInt[CurrSim - 1][4 - 1] == 0 && BaseInt[CurrSim - 1][5 - 1] == 0 && BaseInt[CurrSim - 1][7 - 1] == 0) ||
+		(RunIntervention == 6 && IntDefault[CurrSim - 1][6 - 1] == 1 && IntAllow[CurrSim - 1][1 - 1] == 0 && IntAllow[CurrSim - 1][2 - 1] == 0 && IntAllow[CurrSim - 1][3 - 1] == 0 && IntAllow[CurrSim - 1][4 - 1] == 0 && IntAllow[CurrSim - 1][5 - 1] == 0 && IntAllow[CurrSim - 1][7 - 1] == 0) ||
+		(RunIntervention == 7 && IntDefault[CurrSim - 1][7 - 1] == 0 && (IntAllow[CurrSim - 1][7 - 1] == 0 || BaseInt[CurrSim - 1][7 - 1] != 0 || DelayConsider[CurrSim - 1][7 - 1] != 0)) ||
+		(RunIntervention == 7 && IntDefault[CurrSim - 1][7 - 1] == 1 && (IntAllow[CurrSim - 1][7 - 1] == 0 || BaseInt[CurrSim - 1][7 - 1] != 0 || DelayConsider[CurrSim - 1][7 - 1] != 0)) ||
+		(RunIntervention == 7 && IntDefault[CurrSim - 1][7 - 1] == 1 && BaseInt[CurrSim - 1][1 - 1] == 0 && BaseInt[CurrSim - 1][2 - 1] == 0 && BaseInt[CurrSim - 1][3 - 1] == 0 && BaseInt[CurrSim - 1][4 - 1] == 0 && BaseInt[CurrSim - 1][5 - 1] == 0 && BaseInt[CurrSim - 1][6 - 1] == 0) ||
+		(RunIntervention == 7 && IntDefault[CurrSim - 1][7 - 1] == 1 && IntAllow[CurrSim - 1][1 - 1] == 0 && IntAllow[CurrSim - 1][2 - 1] == 0 && IntAllow[CurrSim - 1][3 - 1] == 0 && IntAllow[CurrSim - 1][4 - 1] == 0 && IntAllow[CurrSim - 1][5 - 1] == 0 && IntAllow[CurrSim - 1][6 - 1] == 0) ||
+		(RunIntervention == 8 && IntDefault[CurrSim - 1][8 - 1] == 0 && (IntAllow[CurrSim - 1][8 - 1] == 0 || BaseInt[CurrSim - 1][8 - 1] != 0 || DelayConsider[CurrSim - 1][8 - 1] != 0)) ||
+		(RunIntervention == 8 && IntDefault[CurrSim - 1][8 - 1] == 1 && (IntAllow[CurrSim - 1][8 - 1] == 0 || BaseInt[CurrSim - 1][8 - 1] != 0 || DelayConsider[CurrSim - 1][8 - 1] != 0)) ||
+		(RunIntervention == 8 && IntDefault[CurrSim - 1][8 - 1] == 1 && BaseInt[CurrSim - 1][9 - 1] == 0 && BaseInt[CurrSim - 1][10 - 1] == 0 && BaseInt[CurrSim - 1][11 - 1] == 0 && BaseInt[CurrSim - 1][12 - 1] == 0 && BaseInt[CurrSim - 1][13 - 1] == 0 && BaseInt[CurrSim - 1][14 - 1] == 0) ||
+		(RunIntervention == 8 && IntDefault[CurrSim - 1][8 - 1] == 1 && IntAllow[CurrSim - 1][9 - 1] == 0 && IntAllow[CurrSim - 1][10 - 1] == 0 && IntAllow[CurrSim - 1][11 - 1] == 0 && IntAllow[CurrSim - 1][12 - 1] == 0 && IntAllow[CurrSim - 1][13 - 1] == 0 && IntAllow[CurrSim - 1][14 - 1] == 0) ||
+		(RunIntervention == 9 && IntDefault[CurrSim - 1][9 - 1] == 0 && (IntAllow[CurrSim - 1][9 - 1] == 0 || BaseInt[CurrSim - 1][9 - 1] != 0 || DelayConsider[CurrSim - 1][9 - 1] != 0)) ||
+		(RunIntervention == 9 && IntDefault[CurrSim - 1][9 - 1] == 1 && (IntAllow[CurrSim - 1][9 - 1] == 0 || BaseInt[CurrSim - 1][9 - 1] != 0 || DelayConsider[CurrSim - 1][9 - 1] != 0)) ||
+		(RunIntervention == 9 && IntDefault[CurrSim - 1][9 - 1] == 1 && BaseInt[CurrSim - 1][8 - 1] == 0 && BaseInt[CurrSim - 1][10 - 1] == 0 && BaseInt[CurrSim - 1][11 - 1] == 0 && BaseInt[CurrSim - 1][12 - 1] == 0 && BaseInt[CurrSim - 1][13 - 1] == 0 && BaseInt[CurrSim - 1][14 - 1] == 0) ||
+		(RunIntervention == 9 && IntDefault[CurrSim - 1][9 - 1] == 1 && IntAllow[CurrSim - 1][8 - 1] == 0 && IntAllow[CurrSim - 1][10 - 1] == 0 && IntAllow[CurrSim - 1][11 - 1] == 0 && IntAllow[CurrSim - 1][12 - 1] == 0 && IntAllow[CurrSim - 1][13 - 1] == 0 && IntAllow[CurrSim - 1][14 - 1] == 0) ||
+		(RunIntervention == 10 && IntDefault[CurrSim - 1][10 - 1] == 0 && (IntAllow[CurrSim - 1][10 - 1] == 0 || BaseInt[CurrSim - 1][10 - 1] != 0 || DelayConsider[CurrSim - 1][10 - 1] != 0)) ||
+		(RunIntervention == 10 && IntDefault[CurrSim - 1][10 - 1] == 1 && (IntAllow[CurrSim - 1][10 - 1] == 0 || BaseInt[CurrSim - 1][10 - 1] != 0 || DelayConsider[CurrSim - 1][10 - 1] != 0)) ||
+		(RunIntervention == 10 && IntDefault[CurrSim - 1][10 - 1] == 1 && BaseInt[CurrSim - 1][8 - 1] == 0 && BaseInt[CurrSim - 1][9 - 1] == 0 && BaseInt[CurrSim - 1][11 - 1] == 0 && BaseInt[CurrSim - 1][12 - 1] == 0 && BaseInt[CurrSim - 1][13 - 1] == 0 && BaseInt[CurrSim - 1][14 - 1] == 0) ||
+		(RunIntervention == 10 && IntDefault[CurrSim - 1][10 - 1] == 1 && IntAllow[CurrSim - 1][8 - 1] == 0 && IntAllow[CurrSim - 1][9 - 1] == 0 && IntAllow[CurrSim - 1][11 - 1] == 0 && IntAllow[CurrSim - 1][12 - 1] == 0 && IntAllow[CurrSim - 1][13 - 1] == 0 && IntAllow[CurrSim - 1][14 - 1] == 0) ||
+		(RunIntervention == 11 && IntDefault[CurrSim - 1][11 - 1] == 0 && (IntAllow[CurrSim - 1][11 - 1] == 0 || BaseInt[CurrSim - 1][11 - 1] != 0 || DelayConsider[CurrSim - 1][11 - 1] != 0)) ||
+		(RunIntervention == 11 && IntDefault[CurrSim - 1][11 - 1] == 1 && (IntAllow[CurrSim - 1][11 - 1] == 0 || BaseInt[CurrSim - 1][11 - 1] != 0 || DelayConsider[CurrSim - 1][11 - 1] != 0)) ||
+		(RunIntervention == 11 && IntDefault[CurrSim - 1][11 - 1] == 1 && BaseInt[CurrSim - 1][8 - 1] == 0 && BaseInt[CurrSim - 1][9 - 1] == 0 && BaseInt[CurrSim - 1][10 - 1] == 0 && BaseInt[CurrSim - 1][12 - 1] == 0 && BaseInt[CurrSim - 1][13 - 1] == 0 && BaseInt[CurrSim - 1][14 - 1] == 0) ||
+		(RunIntervention == 11 && IntDefault[CurrSim - 1][11 - 1] == 1 && IntAllow[CurrSim - 1][8 - 1] == 0 && IntAllow[CurrSim - 1][9 - 1] == 0 && IntAllow[CurrSim - 1][10 - 1] == 0 && IntAllow[CurrSim - 1][12 - 1] == 0 && IntAllow[CurrSim - 1][13 - 1] == 0 && IntAllow[CurrSim - 1][14 - 1] == 0) ||
+		(RunIntervention == 12 && IntDefault[CurrSim - 1][12 - 1] == 0 && (IntAllow[CurrSim - 1][12 - 1] == 0 || BaseInt[CurrSim - 1][12 - 1] != 0 || DelayConsider[CurrSim - 1][12 - 1] != 0)) ||
+		(RunIntervention == 12 && IntDefault[CurrSim - 1][12 - 1] == 1 && (IntAllow[CurrSim - 1][12 - 1] == 0 || BaseInt[CurrSim - 1][12 - 1] != 0 || DelayConsider[CurrSim - 1][12 - 1] != 0)) ||
+		(RunIntervention == 12 && IntDefault[CurrSim - 1][12 - 1] == 1 && BaseInt[CurrSim - 1][8 - 1] == 0 && BaseInt[CurrSim - 1][9 - 1] == 0 && BaseInt[CurrSim - 1][10 - 1] == 0 && BaseInt[CurrSim - 1][11 - 1] == 0 && BaseInt[CurrSim - 1][13 - 1] == 0 && BaseInt[CurrSim - 1][14 - 1] == 0) ||
+		(RunIntervention == 12 && IntDefault[CurrSim - 1][12 - 1] == 1 && IntAllow[CurrSim - 1][8 - 1] == 0 && IntAllow[CurrSim - 1][9 - 1] == 0 && IntAllow[CurrSim - 1][10 - 1] == 0 && IntAllow[CurrSim - 1][11 - 1] == 0 && IntAllow[CurrSim - 1][13 - 1] == 0 && IntAllow[CurrSim - 1][14 - 1] == 0) ||
+		(RunIntervention == 13 && IntDefault[CurrSim - 1][13 - 1] == 0 && (IntAllow[CurrSim - 1][13 - 1] == 0 || BaseInt[CurrSim - 1][13 - 1] != 0 || DelayConsider[CurrSim - 1][13 - 1] != 0)) ||
+		(RunIntervention == 13 && IntDefault[CurrSim - 1][13 - 1] == 1 && (IntAllow[CurrSim - 1][13 - 1] == 0 || BaseInt[CurrSim - 1][13 - 1] != 0 || DelayConsider[CurrSim - 1][13 - 1] != 0)) ||
+		(RunIntervention == 13 && IntDefault[CurrSim - 1][13 - 1] == 1 && BaseInt[CurrSim - 1][8 - 1] == 0 && BaseInt[CurrSim - 1][9 - 1] == 0 && BaseInt[CurrSim - 1][10 - 1] == 0 && BaseInt[CurrSim - 1][11 - 1] == 0 && BaseInt[CurrSim - 1][12 - 1] == 0 && BaseInt[CurrSim - 1][14 - 1] == 0) ||
+		(RunIntervention == 13 && IntDefault[CurrSim - 1][13 - 1] == 1 && IntAllow[CurrSim - 1][8 - 1] == 0 && IntAllow[CurrSim - 1][9 - 1] == 0 && IntAllow[CurrSim - 1][10 - 1] == 0 && IntAllow[CurrSim - 1][11 - 1] == 0 && IntAllow[CurrSim - 1][12 - 1] == 0 && IntAllow[CurrSim - 1][14 - 1] == 0) ||
+		(RunIntervention == 14 && IntDefault[CurrSim - 1][14 - 1] == 0 && (IntAllow[CurrSim - 1][14 - 1] == 0 || BaseInt[CurrSim - 1][14 - 1] != 0 || DelayConsider[CurrSim - 1][14 - 1] != 0)) ||
+		(RunIntervention == 14 && IntDefault[CurrSim - 1][14 - 1] == 1 && (IntAllow[CurrSim - 1][14 - 1] == 0 || BaseInt[CurrSim - 1][14 - 1] != 0 || DelayConsider[CurrSim - 1][14 - 1] != 0)) ||
+		(RunIntervention == 14 && IntDefault[CurrSim - 1][14 - 1] == 1 && BaseInt[CurrSim - 1][8 - 1] == 0 && BaseInt[CurrSim - 1][9 - 1] == 0 && BaseInt[CurrSim - 1][10 - 1] == 0 && BaseInt[CurrSim - 1][11 - 1] == 0 && BaseInt[CurrSim - 1][12 - 1] == 0 && BaseInt[CurrSim - 1][13 - 1] == 0) ||
+		(RunIntervention == 14 && IntDefault[CurrSim - 1][14 - 1] == 1 && IntAllow[CurrSim - 1][8 - 1] == 0 && IntAllow[CurrSim - 1][9 - 1] == 0 && IntAllow[CurrSim - 1][10 - 1] == 0 && IntAllow[CurrSim - 1][11 - 1] == 0 && IntAllow[CurrSim - 1][12 - 1] == 0 && IntAllow[CurrSim - 1][13 - 1] == 0) ||
+		(RunIntervention == 15 && IntDefault[CurrSim - 1][15 - 1] == 0 && (IntAllow[CurrSim - 1][15 - 1] == 0 || BaseInt[CurrSim - 1][15 - 1] != 0 || DelayConsider[CurrSim - 1][15 - 1] != 0)) ||
+		(RunIntervention == 15 && IntDefault[CurrSim - 1][15 - 1] == 1 && (IntAllow[CurrSim - 1][15 - 1] == 0 || BaseInt[CurrSim - 1][15 - 1] != 0 || DelayConsider[CurrSim - 1][15 - 1] != 0)) ||
+		(RunIntervention == 15 && IntDefault[CurrSim - 1][15 - 1] == 1 && BaseInt[CurrSim - 1][16 - 1] == 0 && BaseInt[CurrSim - 1][17 - 1] == 0 && BaseInt[CurrSim - 1][18 - 1] == 0 && BaseInt[CurrSim - 1][19 - 1] == 0 && BaseInt[CurrSim - 1][20 - 1] == 0 && BaseInt[CurrSim - 1][21 - 1] == 0) ||
+		(RunIntervention == 15 && IntDefault[CurrSim - 1][15 - 1] == 1 && IntAllow[CurrSim - 1][16 - 1] == 0 && IntAllow[CurrSim - 1][17 - 1] == 0 && IntAllow[CurrSim - 1][18 - 1] == 0 && IntAllow[CurrSim - 1][19 - 1] == 0 && IntAllow[CurrSim - 1][20 - 1] == 0 && IntAllow[CurrSim - 1][21 - 1] == 0) ||
+		(RunIntervention == 16 && IntDefault[CurrSim - 1][16 - 1] == 0 && (IntAllow[CurrSim - 1][16 - 1] == 0 || BaseInt[CurrSim - 1][16 - 1] != 0 || DelayConsider[CurrSim - 1][16 - 1] != 0)) ||
+		(RunIntervention == 16 && IntDefault[CurrSim - 1][16 - 1] == 1 && (IntAllow[CurrSim - 1][16 - 1] == 0 || BaseInt[CurrSim - 1][16 - 1] != 0 || DelayConsider[CurrSim - 1][16 - 1] != 0)) ||
+		(RunIntervention == 16 && IntDefault[CurrSim - 1][16 - 1] == 1 && BaseInt[CurrSim - 1][15 - 1] == 0 && BaseInt[CurrSim - 1][17 - 1] == 0 && BaseInt[CurrSim - 1][18 - 1] == 0 && BaseInt[CurrSim - 1][19 - 1] == 0 && BaseInt[CurrSim - 1][20 - 1] == 0 && BaseInt[CurrSim - 1][21 - 1] == 0) ||
+		(RunIntervention == 16 && IntDefault[CurrSim - 1][16 - 1] == 1 && IntAllow[CurrSim - 1][15 - 1] == 0 && IntAllow[CurrSim - 1][17 - 1] == 0 && IntAllow[CurrSim - 1][18 - 1] == 0 && IntAllow[CurrSim - 1][19 - 1] == 0 && IntAllow[CurrSim - 1][20 - 1] == 0 && IntAllow[CurrSim - 1][21 - 1] == 0) ||
+		(RunIntervention == 17 && IntDefault[CurrSim - 1][17 - 1] == 0 && (IntAllow[CurrSim - 1][17 - 1] == 0 || BaseInt[CurrSim - 1][17 - 1] != 0 || DelayConsider[CurrSim - 1][17 - 1] != 0)) ||
+		(RunIntervention == 17 && IntDefault[CurrSim - 1][17 - 1] == 1 && (IntAllow[CurrSim - 1][17 - 1] == 0 || BaseInt[CurrSim - 1][17 - 1] != 0 || DelayConsider[CurrSim - 1][17 - 1] != 0)) ||
+		(RunIntervention == 17 && IntDefault[CurrSim - 1][17 - 1] == 1 && BaseInt[CurrSim - 1][15 - 1] == 0 && BaseInt[CurrSim - 1][16 - 1] == 0 && BaseInt[CurrSim - 1][18 - 1] == 0 && BaseInt[CurrSim - 1][19 - 1] == 0 && BaseInt[CurrSim - 1][20 - 1] == 0 && BaseInt[CurrSim - 1][21 - 1] == 0) ||
+		(RunIntervention == 17 && IntDefault[CurrSim - 1][17 - 1] == 1 && IntAllow[CurrSim - 1][15 - 1] == 0 && IntAllow[CurrSim - 1][16 - 1] == 0 && IntAllow[CurrSim - 1][18 - 1] == 0 && IntAllow[CurrSim - 1][19 - 1] == 0 && IntAllow[CurrSim - 1][20 - 1] == 0 && IntAllow[CurrSim - 1][21 - 1] == 0) ||
+		(RunIntervention == 18 && IntDefault[CurrSim - 1][18 - 1] == 0 && (IntAllow[CurrSim - 1][18 - 1] == 0 || BaseInt[CurrSim - 1][18 - 1] != 0 || DelayConsider[CurrSim - 1][18 - 1] != 0)) ||
+		(RunIntervention == 18 && IntDefault[CurrSim - 1][18 - 1] == 1 && (IntAllow[CurrSim - 1][18 - 1] == 0 || BaseInt[CurrSim - 1][18 - 1] != 0 || DelayConsider[CurrSim - 1][18 - 1] != 0)) ||
+		(RunIntervention == 18 && IntDefault[CurrSim - 1][18 - 1] == 1 && BaseInt[CurrSim - 1][15 - 1] == 0 && BaseInt[CurrSim - 1][16 - 1] == 0 && BaseInt[CurrSim - 1][17 - 1] == 0 && BaseInt[CurrSim - 1][19 - 1] == 0 && BaseInt[CurrSim - 1][20 - 1] == 0 && BaseInt[CurrSim - 1][21 - 1] == 0) ||
+		(RunIntervention == 18 && IntDefault[CurrSim - 1][18 - 1] == 1 && IntAllow[CurrSim - 1][15 - 1] == 0 && IntAllow[CurrSim - 1][16 - 1] == 0 && IntAllow[CurrSim - 1][17 - 1] == 0 && IntAllow[CurrSim - 1][19 - 1] == 0 && IntAllow[CurrSim - 1][20 - 1] == 0 && IntAllow[CurrSim - 1][21 - 1] == 0) ||
+		(RunIntervention == 19 && IntDefault[CurrSim - 1][19 - 1] == 0 && (IntAllow[CurrSim - 1][19 - 1] == 0 || BaseInt[CurrSim - 1][19 - 1] != 0 || DelayConsider[CurrSim - 1][19 - 1] != 0)) ||
+		(RunIntervention == 19 && IntDefault[CurrSim - 1][19 - 1] == 1 && (IntAllow[CurrSim - 1][19 - 1] == 0 || BaseInt[CurrSim - 1][19 - 1] != 0 || DelayConsider[CurrSim - 1][19 - 1] != 0)) ||
+		(RunIntervention == 19 && IntDefault[CurrSim - 1][19 - 1] == 1 && BaseInt[CurrSim - 1][15 - 1] == 0 && BaseInt[CurrSim - 1][16 - 1] == 0 && BaseInt[CurrSim - 1][17 - 1] == 0 && BaseInt[CurrSim - 1][18 - 1] == 0 && BaseInt[CurrSim - 1][20 - 1] == 0 && BaseInt[CurrSim - 1][21 - 1] == 0) ||
+		(RunIntervention == 19 && IntDefault[CurrSim - 1][19 - 1] == 1 && IntAllow[CurrSim - 1][15 - 1] == 0 && IntAllow[CurrSim - 1][16 - 1] == 0 && IntAllow[CurrSim - 1][17 - 1] == 0 && IntAllow[CurrSim - 1][18 - 1] == 0 && IntAllow[CurrSim - 1][20 - 1] == 0 && IntAllow[CurrSim - 1][21 - 1] == 0) ||
+		(RunIntervention == 20 && IntDefault[CurrSim - 1][20 - 1] == 0 && (IntAllow[CurrSim - 1][20 - 1] == 0 || BaseInt[CurrSim - 1][20 - 1] != 0 || DelayConsider[CurrSim - 1][20 - 1] != 0)) ||
+		(RunIntervention == 20 && IntDefault[CurrSim - 1][20 - 1] == 1 && (IntAllow[CurrSim - 1][20 - 1] == 0 || BaseInt[CurrSim - 1][20 - 1] != 0 || DelayConsider[CurrSim - 1][20 - 1] != 0)) ||
+		(RunIntervention == 20 && IntDefault[CurrSim - 1][20 - 1] == 1 && BaseInt[CurrSim - 1][15 - 1] == 0 && BaseInt[CurrSim - 1][16 - 1] == 0 && BaseInt[CurrSim - 1][17 - 1] == 0 && BaseInt[CurrSim - 1][18 - 1] == 0 && BaseInt[CurrSim - 1][19 - 1] == 0 && BaseInt[CurrSim - 1][21 - 1] == 0) ||
+		(RunIntervention == 20 && IntDefault[CurrSim - 1][20 - 1] == 1 && IntAllow[CurrSim - 1][15 - 1] == 0 && IntAllow[CurrSim - 1][16 - 1] == 0 && IntAllow[CurrSim - 1][17 - 1] == 0 && IntAllow[CurrSim - 1][18 - 1] == 0 && IntAllow[CurrSim - 1][19 - 1] == 0 && IntAllow[CurrSim - 1][21 - 1] == 0) ||
+		(RunIntervention == 21 && IntDefault[CurrSim - 1][21 - 1] == 0 && (IntAllow[CurrSim - 1][21 - 1] == 0 || BaseInt[CurrSim - 1][21 - 1] != 0 || DelayConsider[CurrSim - 1][21 - 1] != 0)) ||
+		(RunIntervention == 21 && IntDefault[CurrSim - 1][21 - 1] == 1 && (IntAllow[CurrSim - 1][21 - 1] == 0 || BaseInt[CurrSim - 1][21 - 1] != 0 || DelayConsider[CurrSim - 1][21 - 1] != 0)) ||
+		(RunIntervention == 21 && IntDefault[CurrSim - 1][21 - 1] == 1 && BaseInt[CurrSim - 1][15 - 1] == 0 && BaseInt[CurrSim - 1][16 - 1] == 0 && BaseInt[CurrSim - 1][17 - 1] == 0 && BaseInt[CurrSim - 1][18 - 1] == 0 && BaseInt[CurrSim - 1][19 - 1] == 0 && BaseInt[CurrSim - 1][20 - 1] == 0) ||
+		(RunIntervention == 21 && IntDefault[CurrSim - 1][21 - 1] == 1 && IntAllow[CurrSim - 1][15 - 1] == 0 && IntAllow[CurrSim - 1][16 - 1] == 0 && IntAllow[CurrSim - 1][17 - 1] == 0 && IntAllow[CurrSim - 1][18 - 1] == 0 && IntAllow[CurrSim - 1][19 - 1] == 0 && IntAllow[CurrSim - 1][20 - 1] == 0) ||
+		(RunIntervention == 22 && IntDefault[CurrSim - 1][22 - 1] == 0 && (IntAllow[CurrSim - 1][22 - 1] == 0 || BaseInt[CurrSim - 1][22 - 1] != 0 || DelayConsider[CurrSim - 1][22 - 1] != 0)) ||
+		(RunIntervention == 22 && IntDefault[CurrSim - 1][22 - 1] == 1 && (IntAllow[CurrSim - 1][22 - 1] == 0 || BaseInt[CurrSim - 1][22 - 1] != 0 || DelayConsider[CurrSim - 1][22 - 1] != 0)) ||
+		(RunIntervention == 22 && IntDefault[CurrSim - 1][22 - 1] == 1 && BaseInt[CurrSim - 1][23 - 1] == 0 && BaseInt[CurrSim - 1][24 - 1] == 0 && BaseInt[CurrSim - 1][25 - 1] == 0 && BaseInt[CurrSim - 1][26 - 1] == 0 && BaseInt[CurrSim - 1][27 - 1] == 0 && BaseInt[CurrSim - 1][28 - 1] == 0) ||
+		(RunIntervention == 22 && IntDefault[CurrSim - 1][22 - 1] == 1 && IntAllow[CurrSim - 1][23 - 1] == 0 && IntAllow[CurrSim - 1][24 - 1] == 0 && IntAllow[CurrSim - 1][25 - 1] == 0 && IntAllow[CurrSim - 1][26 - 1] == 0 && IntAllow[CurrSim - 1][27 - 1] == 0 && IntAllow[CurrSim - 1][28 - 1] == 0) ||
+		(RunIntervention == 23 && IntDefault[CurrSim - 1][23 - 1] == 0 && (IntAllow[CurrSim - 1][23 - 1] == 0 || BaseInt[CurrSim - 1][23 - 1] != 0 || DelayConsider[CurrSim - 1][23 - 1] != 0)) ||
+		(RunIntervention == 23 && IntDefault[CurrSim - 1][23 - 1] == 1 && (IntAllow[CurrSim - 1][23 - 1] == 0 || BaseInt[CurrSim - 1][23 - 1] != 0 || DelayConsider[CurrSim - 1][23 - 1] != 0)) ||
+		(RunIntervention == 23 && IntDefault[CurrSim - 1][23 - 1] == 1 && BaseInt[CurrSim - 1][22 - 1] == 0 && BaseInt[CurrSim - 1][24 - 1] == 0 && BaseInt[CurrSim - 1][25 - 1] == 0 && BaseInt[CurrSim - 1][26 - 1] == 0 && BaseInt[CurrSim - 1][27 - 1] == 0 && BaseInt[CurrSim - 1][28 - 1] == 0) ||
+		(RunIntervention == 23 && IntDefault[CurrSim - 1][23 - 1] == 1 && IntAllow[CurrSim - 1][22 - 1] == 0 && IntAllow[CurrSim - 1][24 - 1] == 0 && IntAllow[CurrSim - 1][25 - 1] == 0 && IntAllow[CurrSim - 1][26 - 1] == 0 && IntAllow[CurrSim - 1][27 - 1] == 0 && IntAllow[CurrSim - 1][28 - 1] == 0) ||
+		(RunIntervention == 24 && IntDefault[CurrSim - 1][24 - 1] == 0 && (IntAllow[CurrSim - 1][24 - 1] == 0 || BaseInt[CurrSim - 1][24 - 1] != 0 || DelayConsider[CurrSim - 1][24 - 1] != 0)) ||
+		(RunIntervention == 24 && IntDefault[CurrSim - 1][24 - 1] == 1 && (IntAllow[CurrSim - 1][24 - 1] == 0 || BaseInt[CurrSim - 1][24 - 1] != 0 || DelayConsider[CurrSim - 1][24 - 1] != 0)) ||
+		(RunIntervention == 24 && IntDefault[CurrSim - 1][24 - 1] == 1 && BaseInt[CurrSim - 1][22 - 1] == 0 && BaseInt[CurrSim - 1][23 - 1] == 0 && BaseInt[CurrSim - 1][25 - 1] == 0 && BaseInt[CurrSim - 1][26 - 1] == 0 && BaseInt[CurrSim - 1][27 - 1] == 0 && BaseInt[CurrSim - 1][28 - 1] == 0) ||
+		(RunIntervention == 24 && IntDefault[CurrSim - 1][24 - 1] == 1 && IntAllow[CurrSim - 1][22 - 1] == 0 && IntAllow[CurrSim - 1][23 - 1] == 0 && IntAllow[CurrSim - 1][25 - 1] == 0 && IntAllow[CurrSim - 1][26 - 1] == 0 && IntAllow[CurrSim - 1][27 - 1] == 0 && IntAllow[CurrSim - 1][28 - 1] == 0) ||
+		(RunIntervention == 25 && IntDefault[CurrSim - 1][25 - 1] == 0 && (IntAllow[CurrSim - 1][25 - 1] == 0 || BaseInt[CurrSim - 1][25 - 1] != 0 || DelayConsider[CurrSim - 1][25 - 1] != 0)) ||
+		(RunIntervention == 25 && IntDefault[CurrSim - 1][25 - 1] == 1 && (IntAllow[CurrSim - 1][25 - 1] == 0 || BaseInt[CurrSim - 1][25 - 1] != 0 || DelayConsider[CurrSim - 1][25 - 1] != 0)) ||
+		(RunIntervention == 25 && IntDefault[CurrSim - 1][25 - 1] == 1 && BaseInt[CurrSim - 1][22 - 1] == 0 && BaseInt[CurrSim - 1][23 - 1] == 0 && BaseInt[CurrSim - 1][24 - 1] == 0 && BaseInt[CurrSim - 1][26 - 1] == 0 && BaseInt[CurrSim - 1][27 - 1] == 0 && BaseInt[CurrSim - 1][28 - 1] == 0) ||
+		(RunIntervention == 25 && IntDefault[CurrSim - 1][25 - 1] == 1 && IntAllow[CurrSim - 1][22 - 1] == 0 && IntAllow[CurrSim - 1][23 - 1] == 0 && IntAllow[CurrSim - 1][24 - 1] == 0 && IntAllow[CurrSim - 1][26 - 1] == 0 && IntAllow[CurrSim - 1][27 - 1] == 0 && IntAllow[CurrSim - 1][28 - 1] == 0) ||
+		(RunIntervention == 26 && IntDefault[CurrSim - 1][26 - 1] == 0 && (IntAllow[CurrSim - 1][26 - 1] == 0 || BaseInt[CurrSim - 1][26 - 1] != 0 || DelayConsider[CurrSim - 1][26 - 1] != 0)) ||
+		(RunIntervention == 26 && IntDefault[CurrSim - 1][26 - 1] == 1 && (IntAllow[CurrSim - 1][26 - 1] == 0 || BaseInt[CurrSim - 1][26 - 1] != 0 || DelayConsider[CurrSim - 1][26 - 1] != 0)) ||
+		(RunIntervention == 26 && IntDefault[CurrSim - 1][26 - 1] == 1 && BaseInt[CurrSim - 1][22 - 1] == 0 && BaseInt[CurrSim - 1][23 - 1] == 0 && BaseInt[CurrSim - 1][24 - 1] == 0 && BaseInt[CurrSim - 1][25 - 1] == 0 && BaseInt[CurrSim - 1][27 - 1] == 0 && BaseInt[CurrSim - 1][28 - 1] == 0) ||
+		(RunIntervention == 26 && IntDefault[CurrSim - 1][26 - 1] == 1 && IntAllow[CurrSim - 1][22 - 1] == 0 && IntAllow[CurrSim - 1][23 - 1] == 0 && IntAllow[CurrSim - 1][24 - 1] == 0 && IntAllow[CurrSim - 1][25 - 1] == 0 && IntAllow[CurrSim - 1][27 - 1] == 0 && IntAllow[CurrSim - 1][28 - 1] == 0) ||
+		(RunIntervention == 27 && IntDefault[CurrSim - 1][27 - 1] == 0 && (IntAllow[CurrSim - 1][27 - 1] == 0 || BaseInt[CurrSim - 1][27 - 1] != 0 || DelayConsider[CurrSim - 1][27 - 1] != 0)) ||
+		(RunIntervention == 27 && IntDefault[CurrSim - 1][27 - 1] == 1 && (IntAllow[CurrSim - 1][27 - 1] == 0 || BaseInt[CurrSim - 1][27 - 1] != 0 || DelayConsider[CurrSim - 1][27 - 1] != 0)) ||
+		(RunIntervention == 27 && IntDefault[CurrSim - 1][27 - 1] == 1 && BaseInt[CurrSim - 1][22 - 1] == 0 && BaseInt[CurrSim - 1][23 - 1] == 0 && BaseInt[CurrSim - 1][24 - 1] == 0 && BaseInt[CurrSim - 1][25 - 1] == 0 && BaseInt[CurrSim - 1][26 - 1] == 0 && BaseInt[CurrSim - 1][28 - 1] == 0) ||
+		(RunIntervention == 27 && IntDefault[CurrSim - 1][27 - 1] == 1 && IntAllow[CurrSim - 1][22 - 1] == 0 && IntAllow[CurrSim - 1][23 - 1] == 0 && IntAllow[CurrSim - 1][24 - 1] == 0 && IntAllow[CurrSim - 1][25 - 1] == 0 && IntAllow[CurrSim - 1][26 - 1] == 0 && IntAllow[CurrSim - 1][28 - 1] == 0) ||
+		(RunIntervention == 28 && IntDefault[CurrSim - 1][28 - 1] == 0 && (IntAllow[CurrSim - 1][28 - 1] == 0 || BaseInt[CurrSim - 1][28 - 1] != 0 || DelayConsider[CurrSim - 1][28 - 1] != 0)) ||
+		(RunIntervention == 28 && IntDefault[CurrSim - 1][28 - 1] == 1 && (IntAllow[CurrSim - 1][28 - 1] == 0 || BaseInt[CurrSim - 1][28 - 1] != 0 || DelayConsider[CurrSim - 1][28 - 1] != 0)) ||
+		(RunIntervention == 28 && IntDefault[CurrSim - 1][28 - 1] == 1 && BaseInt[CurrSim - 1][22 - 1] == 0 && BaseInt[CurrSim - 1][23 - 1] == 0 && BaseInt[CurrSim - 1][24 - 1] == 0 && BaseInt[CurrSim - 1][25 - 1] == 0 && BaseInt[CurrSim - 1][26 - 1] == 0 && BaseInt[CurrSim - 1][27 - 1] == 0) ||
+		(RunIntervention == 28 && IntDefault[CurrSim - 1][28 - 1] == 1 && IntAllow[CurrSim - 1][22 - 1] == 0 && IntAllow[CurrSim - 1][23 - 1] == 0 && IntAllow[CurrSim - 1][24 - 1] == 0 && IntAllow[CurrSim - 1][25 - 1] == 0 && IntAllow[CurrSim - 1][26 - 1] == 0 && IntAllow[CurrSim - 1][27 - 1] == 0) ||
+		(RunIntervention == 29 && IntDefault[CurrSim - 1][29 - 1] == 0 && (IntAllow[CurrSim - 1][29 - 1] == 0 || BaseInt[CurrSim - 1][29 - 1] != 0 || DelayConsider[CurrSim - 1][29 - 1] != 0)) ||
+		(RunIntervention == 29 && IntDefault[CurrSim - 1][29 - 1] == 1 && (IntAllow[CurrSim - 1][29 - 1] == 0 || BaseInt[CurrSim - 1][29 - 1] != 0 || DelayConsider[CurrSim - 1][29 - 1] != 0)) ||
+		(RunIntervention == 29 && IntDefault[CurrSim - 1][29 - 1] == 1 && BaseInt[CurrSim - 1][30 - 1] == 0 && BaseInt[CurrSim - 1][31 - 1] == 0 && BaseInt[CurrSim - 1][32 - 1] == 0 && BaseInt[CurrSim - 1][33 - 1] == 0 && BaseInt[CurrSim - 1][34 - 1] == 0 && BaseInt[CurrSim - 1][35 - 1] == 0) ||
+		(RunIntervention == 29 && IntDefault[CurrSim - 1][29 - 1] == 1 && IntAllow[CurrSim - 1][30 - 1] == 0 && IntAllow[CurrSim - 1][31 - 1] == 0 && IntAllow[CurrSim - 1][32 - 1] == 0 && IntAllow[CurrSim - 1][33 - 1] == 0 && IntAllow[CurrSim - 1][34 - 1] == 0 && IntAllow[CurrSim - 1][35 - 1] == 0) ||
+		(RunIntervention == 30 && IntDefault[CurrSim - 1][30 - 1] == 0 && (IntAllow[CurrSim - 1][30 - 1] == 0 || BaseInt[CurrSim - 1][30 - 1] != 0 || DelayConsider[CurrSim - 1][30 - 1] != 0)) ||
+		(RunIntervention == 30 && IntDefault[CurrSim - 1][30 - 1] == 1 && (IntAllow[CurrSim - 1][30 - 1] == 0 || BaseInt[CurrSim - 1][30 - 1] != 0 || DelayConsider[CurrSim - 1][30 - 1] != 0)) ||
+		(RunIntervention == 30 && IntDefault[CurrSim - 1][30 - 1] == 1 && BaseInt[CurrSim - 1][29 - 1] == 0 && BaseInt[CurrSim - 1][31 - 1] == 0 && BaseInt[CurrSim - 1][32 - 1] == 0 && BaseInt[CurrSim - 1][33 - 1] == 0 && BaseInt[CurrSim - 1][34 - 1] == 0 && BaseInt[CurrSim - 1][35 - 1] == 0) ||
+		(RunIntervention == 30 && IntDefault[CurrSim - 1][30 - 1] == 1 && IntAllow[CurrSim - 1][29 - 1] == 0 && IntAllow[CurrSim - 1][31 - 1] == 0 && IntAllow[CurrSim - 1][32 - 1] == 0 && IntAllow[CurrSim - 1][33 - 1] == 0 && IntAllow[CurrSim - 1][34 - 1] == 0 && IntAllow[CurrSim - 1][35 - 1] == 0) ||
+		(RunIntervention == 31 && IntDefault[CurrSim - 1][31 - 1] == 0 && (IntAllow[CurrSim - 1][31 - 1] == 0 || BaseInt[CurrSim - 1][31 - 1] != 0 || DelayConsider[CurrSim - 1][31 - 1] != 0)) ||
+		(RunIntervention == 31 && IntDefault[CurrSim - 1][31 - 1] == 1 && (IntAllow[CurrSim - 1][31 - 1] == 0 || BaseInt[CurrSim - 1][31 - 1] != 0 || DelayConsider[CurrSim - 1][31 - 1] != 0)) ||
+		(RunIntervention == 31 && IntDefault[CurrSim - 1][31 - 1] == 1 && BaseInt[CurrSim - 1][29 - 1] == 0 && BaseInt[CurrSim - 1][30 - 1] == 0 && BaseInt[CurrSim - 1][32 - 1] == 0 && BaseInt[CurrSim - 1][33 - 1] == 0 && BaseInt[CurrSim - 1][34 - 1] == 0 && BaseInt[CurrSim - 1][35 - 1] == 0) ||
+		(RunIntervention == 31 && IntDefault[CurrSim - 1][31 - 1] == 1 && IntAllow[CurrSim - 1][29 - 1] == 0 && IntAllow[CurrSim - 1][30 - 1] == 0 && IntAllow[CurrSim - 1][32 - 1] == 0 && IntAllow[CurrSim - 1][33 - 1] == 0 && IntAllow[CurrSim - 1][34 - 1] == 0 && IntAllow[CurrSim - 1][35 - 1] == 0) ||
+		(RunIntervention == 32 && IntDefault[CurrSim - 1][32 - 1] == 0 && (IntAllow[CurrSim - 1][32 - 1] == 0 || BaseInt[CurrSim - 1][32 - 1] != 0 || DelayConsider[CurrSim - 1][32 - 1] != 0)) ||
+		(RunIntervention == 32 && IntDefault[CurrSim - 1][32 - 1] == 1 && (IntAllow[CurrSim - 1][32 - 1] == 0 || BaseInt[CurrSim - 1][32 - 1] != 0 || DelayConsider[CurrSim - 1][32 - 1] != 0)) ||
+		(RunIntervention == 32 && IntDefault[CurrSim - 1][32 - 1] == 1 && BaseInt[CurrSim - 1][29 - 1] == 0 && BaseInt[CurrSim - 1][30 - 1] == 0 && BaseInt[CurrSim - 1][31 - 1] == 0 && BaseInt[CurrSim - 1][33 - 1] == 0 && BaseInt[CurrSim - 1][34 - 1] == 0 && BaseInt[CurrSim - 1][35 - 1] == 0) ||
+		(RunIntervention == 32 && IntDefault[CurrSim - 1][32 - 1] == 1 && IntAllow[CurrSim - 1][29 - 1] == 0 && IntAllow[CurrSim - 1][30 - 1] == 0 && IntAllow[CurrSim - 1][31 - 1] == 0 && IntAllow[CurrSim - 1][33 - 1] == 0 && IntAllow[CurrSim - 1][34 - 1] == 0 && IntAllow[CurrSim - 1][35 - 1] == 0) ||
+		(RunIntervention == 33 && IntDefault[CurrSim - 1][33 - 1] == 0 && (IntAllow[CurrSim - 1][33 - 1] == 0 || BaseInt[CurrSim - 1][33 - 1] != 0 || DelayConsider[CurrSim - 1][33 - 1] != 0)) ||
+		(RunIntervention == 33 && IntDefault[CurrSim - 1][33 - 1] == 1 && (IntAllow[CurrSim - 1][33 - 1] == 0 || BaseInt[CurrSim - 1][33 - 1] != 0 || DelayConsider[CurrSim - 1][33 - 1] != 0)) ||
+		(RunIntervention == 33 && IntDefault[CurrSim - 1][33 - 1] == 1 && BaseInt[CurrSim - 1][29 - 1] == 0 && BaseInt[CurrSim - 1][30 - 1] == 0 && BaseInt[CurrSim - 1][31 - 1] == 0 && BaseInt[CurrSim - 1][32 - 1] == 0 && BaseInt[CurrSim - 1][34 - 1] == 0 && BaseInt[CurrSim - 1][35 - 1] == 0) ||
+		(RunIntervention == 33 && IntDefault[CurrSim - 1][33 - 1] == 1 && IntAllow[CurrSim - 1][29 - 1] == 0 && IntAllow[CurrSim - 1][30 - 1] == 0 && IntAllow[CurrSim - 1][31 - 1] == 0 && IntAllow[CurrSim - 1][32 - 1] == 0 && IntAllow[CurrSim - 1][34 - 1] == 0 && IntAllow[CurrSim - 1][35 - 1] == 0) ||
+		(RunIntervention == 34 && IntDefault[CurrSim - 1][34 - 1] == 0 && (IntAllow[CurrSim - 1][34 - 1] == 0 || BaseInt[CurrSim - 1][34 - 1] != 0 || DelayConsider[CurrSim - 1][34 - 1] != 0)) ||
+		(RunIntervention == 34 && IntDefault[CurrSim - 1][34 - 1] == 1 && (IntAllow[CurrSim - 1][34 - 1] == 0 || BaseInt[CurrSim - 1][34 - 1] != 0 || DelayConsider[CurrSim - 1][34 - 1] != 0)) ||
+		(RunIntervention == 34 && IntDefault[CurrSim - 1][34 - 1] == 1 && BaseInt[CurrSim - 1][29 - 1] == 0 && BaseInt[CurrSim - 1][30 - 1] == 0 && BaseInt[CurrSim - 1][31 - 1] == 0 && BaseInt[CurrSim - 1][32 - 1] == 0 && BaseInt[CurrSim - 1][33 - 1] == 0 && BaseInt[CurrSim - 1][35 - 1] == 0) ||
+		(RunIntervention == 34 && IntDefault[CurrSim - 1][34 - 1] == 1 && IntAllow[CurrSim - 1][29 - 1] == 0 && IntAllow[CurrSim - 1][30 - 1] == 0 && IntAllow[CurrSim - 1][31 - 1] == 0 && IntAllow[CurrSim - 1][32 - 1] == 0 && IntAllow[CurrSim - 1][33 - 1] == 0 && IntAllow[CurrSim - 1][35 - 1] == 0) ||
+		(RunIntervention == 35 && IntDefault[CurrSim - 1][35 - 1] == 0 && (IntAllow[CurrSim - 1][35 - 1] == 0 || BaseInt[CurrSim - 1][35 - 1] != 0 || DelayConsider[CurrSim - 1][35 - 1] != 0)) ||
+		(RunIntervention == 35 && IntDefault[CurrSim - 1][35 - 1] == 1 && (IntAllow[CurrSim - 1][35 - 1] == 0 || BaseInt[CurrSim - 1][35 - 1] != 0 || DelayConsider[CurrSim - 1][35 - 1] != 0)) ||
+		(RunIntervention == 35 && IntDefault[CurrSim - 1][35 - 1] == 1 && BaseInt[CurrSim - 1][29 - 1] == 0 && BaseInt[CurrSim - 1][30 - 1] == 0 && BaseInt[CurrSim - 1][31 - 1] == 0 && BaseInt[CurrSim - 1][32 - 1] == 0 && BaseInt[CurrSim - 1][33 - 1] == 0 && BaseInt[CurrSim - 1][34 - 1] == 0) ||
+		(RunIntervention == 35 && IntDefault[CurrSim - 1][35 - 1] == 1 && IntAllow[CurrSim - 1][29 - 1] == 0 && IntAllow[CurrSim - 1][30 - 1] == 0 && IntAllow[CurrSim - 1][31 - 1] == 0 && IntAllow[CurrSim - 1][32 - 1] == 0 && IntAllow[CurrSim - 1][33 - 1] == 0 && IntAllow[CurrSim - 1][34 - 1] == 0) ||
+		(RunIntervention == 36 && IntDefault[CurrSim - 1][36 - 1] == 0 && (IntAllow[CurrSim - 1][36 - 1] == 0 || BaseInt[CurrSim - 1][36 - 1] != 0 || DelayConsider[CurrSim - 1][36 - 1] != 0)) ||
+		(RunIntervention == 36 && IntDefault[CurrSim - 1][36 - 1] == 1 && (IntAllow[CurrSim - 1][36 - 1] == 0 || BaseInt[CurrSim - 1][36 - 1] != 0 || DelayConsider[CurrSim - 1][36 - 1] != 0)) ||
+		(RunIntervention == 36 && IntDefault[CurrSim - 1][36 - 1] == 1 && BaseInt[CurrSim - 1][37 - 1] == 0 && BaseInt[CurrSim - 1][38 - 1] == 0) ||
+		(RunIntervention == 36 && IntDefault[CurrSim - 1][36 - 1] == 1 && IntAllow[CurrSim - 1][37 - 1] == 0 && IntAllow[CurrSim - 1][38 - 1] == 0) ||
+		(RunIntervention == 37 && IntDefault[CurrSim - 1][37 - 1] == 0 && (IntAllow[CurrSim - 1][37 - 1] == 0 || BaseInt[CurrSim - 1][37 - 1] != 0 || DelayConsider[CurrSim - 1][37 - 1] != 0)) ||
+		(RunIntervention == 37 && IntDefault[CurrSim - 1][37 - 1] == 1 && (IntAllow[CurrSim - 1][37 - 1] == 0 || BaseInt[CurrSim - 1][37 - 1] != 0 || DelayConsider[CurrSim - 1][37 - 1] != 0)) ||
+		(RunIntervention == 37 && IntDefault[CurrSim - 1][37 - 1] == 1 && BaseInt[CurrSim - 1][36 - 1] == 0 && BaseInt[CurrSim - 1][38 - 1] == 0) ||
+		(RunIntervention == 37 && IntDefault[CurrSim - 1][37 - 1] == 1 && IntAllow[CurrSim - 1][36 - 1] == 0 && IntAllow[CurrSim - 1][38 - 1] == 0) ||
+		(RunIntervention == 38 && IntDefault[CurrSim - 1][38 - 1] == 0 && (IntAllow[CurrSim - 1][38 - 1] == 0 || BaseInt[CurrSim - 1][38 - 1] != 0 || DelayConsider[CurrSim - 1][38 - 1] != 0)) ||
+		(RunIntervention == 38 && IntDefault[CurrSim - 1][38 - 1] == 1 && (IntAllow[CurrSim - 1][38 - 1] == 0 || BaseInt[CurrSim - 1][38 - 1] != 0 || DelayConsider[CurrSim - 1][38 - 1] != 0)) ||
+		(RunIntervention == 38 && IntDefault[CurrSim - 1][38 - 1] == 1 && BaseInt[CurrSim - 1][36 - 1] == 0 && BaseInt[CurrSim - 1][37 - 1] == 0) ||
+		(RunIntervention == 38 && IntDefault[CurrSim - 1][38 - 1] == 1 && IntAllow[CurrSim - 1][36 - 1] == 0 && IntAllow[CurrSim - 1][37 - 1] == 0) ||
+		(RunIntervention == 39 && IntDefault[CurrSim - 1][39 - 1] == 0 && (IntAllow[CurrSim - 1][39 - 1] == 0 || BaseInt[CurrSim - 1][39 - 1] != 0 || DelayConsider[CurrSim - 1][39 - 1] != 0)) ||
+		(RunIntervention == 39 && IntDefault[CurrSim - 1][39 - 1] == 1 && (IntAllow[CurrSim - 1][39 - 1] == 0 || BaseInt[CurrSim - 1][39 - 1] != 0 || DelayConsider[CurrSim - 1][39 - 1] != 0)) ||
+		(RunIntervention == 39 && IntDefault[CurrSim - 1][39 - 1] == 1 && BaseInt[CurrSim - 1][40 - 1] == 0 && BaseInt[CurrSim - 1][41 - 1] == 0 && BaseInt[CurrSim - 1][42 - 1] == 0 && BaseInt[CurrSim - 1][43 - 1] == 0) ||
+		(RunIntervention == 39 && IntDefault[CurrSim - 1][39 - 1] == 1 && IntAllow[CurrSim - 1][40 - 1] == 0 && IntAllow[CurrSim - 1][41 - 1] == 0 && IntAllow[CurrSim - 1][42 - 1] == 0 && IntAllow[CurrSim - 1][43 - 1] == 0) ||
+		(RunIntervention == 40 && IntDefault[CurrSim - 1][40 - 1] == 0 && (IntAllow[CurrSim - 1][40 - 1] == 0 || BaseInt[CurrSim - 1][40 - 1] != 0 || DelayConsider[CurrSim - 1][40 - 1] != 0)) ||
+		(RunIntervention == 40 && IntDefault[CurrSim - 1][40 - 1] == 1 && (IntAllow[CurrSim - 1][40 - 1] == 0 || BaseInt[CurrSim - 1][40 - 1] != 0 || DelayConsider[CurrSim - 1][40 - 1] != 0)) ||
+		(RunIntervention == 40 && IntDefault[CurrSim - 1][40 - 1] == 1 && BaseInt[CurrSim - 1][39 - 1] == 0 && BaseInt[CurrSim - 1][41 - 1] == 0 && BaseInt[CurrSim - 1][42 - 1] == 0 && BaseInt[CurrSim - 1][43 - 1] == 0) ||
+		(RunIntervention == 40 && IntDefault[CurrSim - 1][40 - 1] == 1 && IntAllow[CurrSim - 1][39 - 1] == 0 && IntAllow[CurrSim - 1][41 - 1] == 0 && IntAllow[CurrSim - 1][42 - 1] == 0 && IntAllow[CurrSim - 1][43 - 1] == 0) ||
+		(RunIntervention == 41 && IntDefault[CurrSim - 1][41 - 1] == 0 && (IntAllow[CurrSim - 1][41 - 1] == 0 || BaseInt[CurrSim - 1][41 - 1] != 0 || DelayConsider[CurrSim - 1][41 - 1] != 0)) ||
+		(RunIntervention == 41 && IntDefault[CurrSim - 1][41 - 1] == 1 && (IntAllow[CurrSim - 1][41 - 1] == 0 || BaseInt[CurrSim - 1][41 - 1] != 0 || DelayConsider[CurrSim - 1][41 - 1] != 0)) ||
+		(RunIntervention == 41 && IntDefault[CurrSim - 1][41 - 1] == 1 && BaseInt[CurrSim - 1][39 - 1] == 0 && BaseInt[CurrSim - 1][40 - 1] == 0 && BaseInt[CurrSim - 1][42 - 1] == 0 && BaseInt[CurrSim - 1][43 - 1] == 0) ||
+		(RunIntervention == 41 && IntDefault[CurrSim - 1][41 - 1] == 1 && IntAllow[CurrSim - 1][39 - 1] == 0 && IntAllow[CurrSim - 1][40 - 1] == 0 && IntAllow[CurrSim - 1][42 - 1] == 0 && IntAllow[CurrSim - 1][43 - 1] == 0) ||
+		(RunIntervention == 42 && IntDefault[CurrSim - 1][42 - 1] == 0 && (IntAllow[CurrSim - 1][42 - 1] == 0 || BaseInt[CurrSim - 1][42 - 1] != 0 || DelayConsider[CurrSim - 1][42 - 1] != 0)) ||
+		(RunIntervention == 42 && IntDefault[CurrSim - 1][42 - 1] == 1 && (IntAllow[CurrSim - 1][42 - 1] == 0 || BaseInt[CurrSim - 1][42 - 1] != 0 || DelayConsider[CurrSim - 1][42 - 1] != 0)) ||
+		(RunIntervention == 42 && IntDefault[CurrSim - 1][42 - 1] == 1 && BaseInt[CurrSim - 1][39 - 1] == 0 && BaseInt[CurrSim - 1][40 - 1] == 0 && BaseInt[CurrSim - 1][41 - 1] == 0 && BaseInt[CurrSim - 1][43 - 1] == 0) ||
+		(RunIntervention == 42 && IntDefault[CurrSim - 1][42 - 1] == 1 && IntAllow[CurrSim - 1][39 - 1] == 0 && IntAllow[CurrSim - 1][40 - 1] == 0 && IntAllow[CurrSim - 1][41 - 1] == 0 && IntAllow[CurrSim - 1][43 - 1] == 0) ||
+		(RunIntervention == 43 && IntDefault[CurrSim - 1][43 - 1] == 0 && (IntAllow[CurrSim - 1][43 - 1] == 0 || BaseInt[CurrSim - 1][43 - 1] != 0 || DelayConsider[CurrSim - 1][43 - 1] != 0)) ||
+		(RunIntervention == 43 && IntDefault[CurrSim - 1][43 - 1] == 1 && (IntAllow[CurrSim - 1][43 - 1] == 0 || BaseInt[CurrSim - 1][43 - 1] != 0 || DelayConsider[CurrSim - 1][43 - 1] != 0)) ||
+		(RunIntervention == 43 && IntDefault[CurrSim - 1][43 - 1] == 1 && BaseInt[CurrSim - 1][39 - 1] == 0 && BaseInt[CurrSim - 1][40 - 1] == 0 && BaseInt[CurrSim - 1][41 - 1] == 0 && BaseInt[CurrSim - 1][42 - 1] == 0) ||
+		(RunIntervention == 43 && IntDefault[CurrSim - 1][43 - 1] == 1 && IntAllow[CurrSim - 1][39 - 1] == 0 && IntAllow[CurrSim - 1][40 - 1] == 0 && IntAllow[CurrSim - 1][41 - 1] == 0 && IntAllow[CurrSim - 1][42 - 1] == 0) ||
+		(RunIntervention == 44 && IntDefault[CurrSim - 1][44 - 1] == 0 && (IntAllow[CurrSim - 1][44 - 1] == 0 || BaseInt[CurrSim - 1][44 - 1] != 0 || DelayConsider[CurrSim - 1][44 - 1] != 0)) ||
+		(RunIntervention == 44 && IntDefault[CurrSim - 1][44 - 1] == 1 && (IntAllow[CurrSim - 1][44 - 1] == 0 || BaseInt[CurrSim - 1][44 - 1] != 0 || DelayConsider[CurrSim - 1][44 - 1] != 0)) ||
+		(RunIntervention == 44 && IntDefault[CurrSim - 1][44 - 1] == 1 && BaseInt[CurrSim - 1][45 - 1] == 0 && BaseInt[CurrSim - 1][46 - 1] == 0 && BaseInt[CurrSim - 1][47 - 1] == 0 && BaseInt[CurrSim - 1][48 - 1] == 0) ||
+		(RunIntervention == 44 && IntDefault[CurrSim - 1][44 - 1] == 1 && IntAllow[CurrSim - 1][45 - 1] == 0 && IntAllow[CurrSim - 1][46 - 1] == 0 && IntAllow[CurrSim - 1][47 - 1] == 0 && IntAllow[CurrSim - 1][48 - 1] == 0) ||
+		(RunIntervention == 45 && IntDefault[CurrSim - 1][45 - 1] == 0 && (IntAllow[CurrSim - 1][45 - 1] == 0 || BaseInt[CurrSim - 1][45 - 1] != 0 || DelayConsider[CurrSim - 1][45 - 1] != 0)) ||
+		(RunIntervention == 45 && IntDefault[CurrSim - 1][45 - 1] == 1 && (IntAllow[CurrSim - 1][45 - 1] == 0 || BaseInt[CurrSim - 1][45 - 1] != 0 || DelayConsider[CurrSim - 1][45 - 1] != 0)) ||
+		(RunIntervention == 45 && IntDefault[CurrSim - 1][45 - 1] == 1 && BaseInt[CurrSim - 1][44 - 1] == 0 && BaseInt[CurrSim - 1][46 - 1] == 0 && BaseInt[CurrSim - 1][47 - 1] == 0 && BaseInt[CurrSim - 1][48 - 1] == 0) ||
+		(RunIntervention == 45 && IntDefault[CurrSim - 1][45 - 1] == 1 && IntAllow[CurrSim - 1][44 - 1] == 0 && IntAllow[CurrSim - 1][46 - 1] == 0 && IntAllow[CurrSim - 1][47 - 1] == 0 && IntAllow[CurrSim - 1][48 - 1] == 0) ||
+		(RunIntervention == 46 && IntDefault[CurrSim - 1][46 - 1] == 0 && (IntAllow[CurrSim - 1][46 - 1] == 0 || BaseInt[CurrSim - 1][46 - 1] != 0 || DelayConsider[CurrSim - 1][46 - 1] != 0)) ||
+		(RunIntervention == 46 && IntDefault[CurrSim - 1][46 - 1] == 1 && (IntAllow[CurrSim - 1][46 - 1] == 0 || BaseInt[CurrSim - 1][46 - 1] != 0 || DelayConsider[CurrSim - 1][46 - 1] != 0)) ||
+		(RunIntervention == 46 && IntDefault[CurrSim - 1][46 - 1] == 1 && BaseInt[CurrSim - 1][44 - 1] == 0 && BaseInt[CurrSim - 1][45 - 1] == 0 && BaseInt[CurrSim - 1][47 - 1] == 0 && BaseInt[CurrSim - 1][48 - 1] == 0) ||
+		(RunIntervention == 46 && IntDefault[CurrSim - 1][46 - 1] == 1 && IntAllow[CurrSim - 1][44 - 1] == 0 && IntAllow[CurrSim - 1][45 - 1] == 0 && IntAllow[CurrSim - 1][47 - 1] == 0 && IntAllow[CurrSim - 1][48 - 1] == 0) ||
+		(RunIntervention == 47 && IntDefault[CurrSim - 1][47 - 1] == 0 && (IntAllow[CurrSim - 1][47 - 1] == 0 || BaseInt[CurrSim - 1][47 - 1] != 0 || DelayConsider[CurrSim - 1][47 - 1] != 0)) ||
+		(RunIntervention == 47 && IntDefault[CurrSim - 1][47 - 1] == 1 && (IntAllow[CurrSim - 1][47 - 1] == 0 || BaseInt[CurrSim - 1][47 - 1] != 0 || DelayConsider[CurrSim - 1][47 - 1] != 0)) ||
+		(RunIntervention == 47 && IntDefault[CurrSim - 1][47 - 1] == 1 && BaseInt[CurrSim - 1][44 - 1] == 0 && BaseInt[CurrSim - 1][45 - 1] == 0 && BaseInt[CurrSim - 1][46 - 1] == 0 && BaseInt[CurrSim - 1][48 - 1] == 0) ||
+		(RunIntervention == 47 && IntDefault[CurrSim - 1][47 - 1] == 1 && IntAllow[CurrSim - 1][44 - 1] == 0 && IntAllow[CurrSim - 1][45 - 1] == 0 && IntAllow[CurrSim - 1][46 - 1] == 0 && IntAllow[CurrSim - 1][48 - 1] == 0) ||
+		(RunIntervention == 48 && IntDefault[CurrSim - 1][48 - 1] == 0 && (IntAllow[CurrSim - 1][48 - 1] == 0 || BaseInt[CurrSim - 1][48 - 1] != 0 || DelayConsider[CurrSim - 1][48 - 1] != 0)) ||
+		(RunIntervention == 48 && IntDefault[CurrSim - 1][48 - 1] == 1 && (IntAllow[CurrSim - 1][48 - 1] == 0 || BaseInt[CurrSim - 1][48 - 1] != 0 || DelayConsider[CurrSim - 1][48 - 1] != 0)) ||
+		(RunIntervention == 48 && IntDefault[CurrSim - 1][48 - 1] == 1 && BaseInt[CurrSim - 1][44 - 1] == 0 && BaseInt[CurrSim - 1][45 - 1] == 0 && BaseInt[CurrSim - 1][46 - 1] == 0 && BaseInt[CurrSim - 1][47 - 1] == 0) ||
+		(RunIntervention == 48 && IntDefault[CurrSim - 1][48 - 1] == 1 && IntAllow[CurrSim - 1][44 - 1] == 0 && IntAllow[CurrSim - 1][45 - 1] == 0 && IntAllow[CurrSim - 1][46 - 1] == 0 && IntAllow[CurrSim - 1][47 - 1] == 0) ||
+		(RunIntervention == 49 && IntDefault[CurrSim - 1][49 - 1] == 0 && (IntAllow[CurrSim - 1][49 - 1] == 0 || BaseInt[CurrSim - 1][49 - 1] != 0 || DelayConsider[CurrSim - 1][49 - 1] != 0)) ||
+		(RunIntervention == 49 && IntDefault[CurrSim - 1][49 - 1] == 1 && (IntAllow[CurrSim - 1][49 - 1] == 0 || BaseInt[CurrSim - 1][49 - 1] != 0 || DelayConsider[CurrSim - 1][49 - 1] != 0)) ||
+		(RunIntervention == 49 && IntDefault[CurrSim - 1][49 - 1] == 1 && BaseInt[CurrSim - 1][50 - 1] == 0 && BaseInt[CurrSim - 1][51 - 1] == 0 && BaseInt[CurrSim - 1][52 - 1] == 0 && BaseInt[CurrSim - 1][53 - 1] == 0 && BaseInt[CurrSim - 1][54 - 1] == 0) ||
+		(RunIntervention == 49 && IntDefault[CurrSim - 1][49 - 1] == 1 && IntAllow[CurrSim - 1][50 - 1] == 0 && IntAllow[CurrSim - 1][51 - 1] == 0 && IntAllow[CurrSim - 1][52 - 1] == 0 && IntAllow[CurrSim - 1][53 - 1] == 0 && IntAllow[CurrSim - 1][54 - 1] == 0) ||
+		(RunIntervention == 50 && IntDefault[CurrSim - 1][50 - 1] == 0 && (IntAllow[CurrSim - 1][50 - 1] == 0 || BaseInt[CurrSim - 1][50 - 1] != 0 || DelayConsider[CurrSim - 1][50 - 1] != 0)) ||
+		(RunIntervention == 50 && IntDefault[CurrSim - 1][50 - 1] == 1 && (IntAllow[CurrSim - 1][50 - 1] == 0 || BaseInt[CurrSim - 1][50 - 1] != 0 || DelayConsider[CurrSim - 1][50 - 1] != 0)) ||
+		(RunIntervention == 50 && IntDefault[CurrSim - 1][50 - 1] == 1 && BaseInt[CurrSim - 1][49 - 1] == 0 && BaseInt[CurrSim - 1][51 - 1] == 0 && BaseInt[CurrSim - 1][52 - 1] == 0 && BaseInt[CurrSim - 1][53 - 1] == 0 && BaseInt[CurrSim - 1][54 - 1] == 0) ||
+		(RunIntervention == 50 && IntDefault[CurrSim - 1][50 - 1] == 1 && IntAllow[CurrSim - 1][49 - 1] == 0 && IntAllow[CurrSim - 1][51 - 1] == 0 && IntAllow[CurrSim - 1][52 - 1] == 0 && IntAllow[CurrSim - 1][53 - 1] == 0 && IntAllow[CurrSim - 1][54 - 1] == 0) ||
+		(RunIntervention == 51 && IntDefault[CurrSim - 1][51 - 1] == 0 && (IntAllow[CurrSim - 1][51 - 1] == 0 || BaseInt[CurrSim - 1][51 - 1] != 0 || DelayConsider[CurrSim - 1][51 - 1] != 0)) ||
+		(RunIntervention == 51 && IntDefault[CurrSim - 1][51 - 1] == 1 && (IntAllow[CurrSim - 1][51 - 1] == 0 || BaseInt[CurrSim - 1][51 - 1] != 0 || DelayConsider[CurrSim - 1][51 - 1] != 0)) ||
+		(RunIntervention == 51 && IntDefault[CurrSim - 1][51 - 1] == 1 && BaseInt[CurrSim - 1][49 - 1] == 0 && BaseInt[CurrSim - 1][50 - 1] == 0 && BaseInt[CurrSim - 1][52 - 1] == 0 && BaseInt[CurrSim - 1][53 - 1] == 0 && BaseInt[CurrSim - 1][54 - 1] == 0) ||
+		(RunIntervention == 51 && IntDefault[CurrSim - 1][51 - 1] == 1 && IntAllow[CurrSim - 1][49 - 1] == 0 && IntAllow[CurrSim - 1][50 - 1] == 0 && IntAllow[CurrSim - 1][52 - 1] == 0 && IntAllow[CurrSim - 1][53 - 1] == 0 && IntAllow[CurrSim - 1][54 - 1] == 0) ||
+		(RunIntervention == 52 && IntDefault[CurrSim - 1][52 - 1] == 0 && (IntAllow[CurrSim - 1][52 - 1] == 0 || BaseInt[CurrSim - 1][52 - 1] != 0 || DelayConsider[CurrSim - 1][52 - 1] != 0)) ||
+		(RunIntervention == 52 && IntDefault[CurrSim - 1][52 - 1] == 1 && (IntAllow[CurrSim - 1][52 - 1] == 0 || BaseInt[CurrSim - 1][52 - 1] != 0 || DelayConsider[CurrSim - 1][52 - 1] != 0)) ||
+		(RunIntervention == 52 && IntDefault[CurrSim - 1][52 - 1] == 1 && BaseInt[CurrSim - 1][49 - 1] == 0 && BaseInt[CurrSim - 1][50 - 1] == 0 && BaseInt[CurrSim - 1][51 - 1] == 0 && BaseInt[CurrSim - 1][53 - 1] == 0 && BaseInt[CurrSim - 1][54 - 1] == 0) ||
+		(RunIntervention == 52 && IntDefault[CurrSim - 1][52 - 1] == 1 && IntAllow[CurrSim - 1][49 - 1] == 0 && IntAllow[CurrSim - 1][50 - 1] == 0 && IntAllow[CurrSim - 1][51 - 1] == 0 && IntAllow[CurrSim - 1][53 - 1] == 0 && IntAllow[CurrSim - 1][54 - 1] == 0) ||
+		(RunIntervention == 53 && IntDefault[CurrSim - 1][53 - 1] == 0 && (IntAllow[CurrSim - 1][53 - 1] == 0 || BaseInt[CurrSim - 1][53 - 1] != 0 || DelayConsider[CurrSim - 1][53 - 1] != 0)) ||
+		(RunIntervention == 53 && IntDefault[CurrSim - 1][53 - 1] == 1 && (IntAllow[CurrSim - 1][53 - 1] == 0 || BaseInt[CurrSim - 1][53 - 1] != 0 || DelayConsider[CurrSim - 1][53 - 1] != 0)) ||
+		(RunIntervention == 53 && IntDefault[CurrSim - 1][53 - 1] == 1 && BaseInt[CurrSim - 1][49 - 1] == 0 && BaseInt[CurrSim - 1][50 - 1] == 0 && BaseInt[CurrSim - 1][51 - 1] == 0 && BaseInt[CurrSim - 1][52 - 1] == 0 && BaseInt[CurrSim - 1][54 - 1] == 0) ||
+		(RunIntervention == 53 && IntDefault[CurrSim - 1][53 - 1] == 1 && IntAllow[CurrSim - 1][49 - 1] == 0 && IntAllow[CurrSim - 1][50 - 1] == 0 && IntAllow[CurrSim - 1][51 - 1] == 0 && IntAllow[CurrSim - 1][52 - 1] == 0 && IntAllow[CurrSim - 1][54 - 1] == 0) ||
+		(RunIntervention == 54 && IntDefault[CurrSim - 1][54 - 1] == 0 && (IntAllow[CurrSim - 1][54 - 1] == 0 || BaseInt[CurrSim - 1][54 - 1] != 0 || DelayConsider[CurrSim - 1][54 - 1] != 0)) ||
+		(RunIntervention == 54 && IntDefault[CurrSim - 1][54 - 1] == 1 && (IntAllow[CurrSim - 1][54 - 1] == 0 || BaseInt[CurrSim - 1][54 - 1] != 0 || DelayConsider[CurrSim - 1][54 - 1] != 0)) ||
+		(RunIntervention == 54 && IntDefault[CurrSim - 1][54 - 1] == 1 && BaseInt[CurrSim - 1][49 - 1] == 0 && BaseInt[CurrSim - 1][50 - 1] == 0 && BaseInt[CurrSim - 1][51 - 1] == 0 && BaseInt[CurrSim - 1][52 - 1] == 0 && BaseInt[CurrSim - 1][53 - 1] == 0) ||
+		(RunIntervention == 54 && IntDefault[CurrSim - 1][54 - 1] == 1 && IntAllow[CurrSim - 1][49 - 1] == 0 && IntAllow[CurrSim - 1][50 - 1] == 0 && IntAllow[CurrSim - 1][51 - 1] == 0 && IntAllow[CurrSim - 1][52 - 1] == 0 && IntAllow[CurrSim - 1][53 - 1] == 0) ||
+		(RunIntervention == 55 && IntDefault[CurrSim - 1][55 - 1] == 0 && (IntAllow[CurrSim - 1][55 - 1] == 0 || BaseInt[CurrSim - 1][55 - 1] != 0 || DelayConsider[CurrSim - 1][55 - 1] != 0)) ||
+		(RunIntervention == 55 && IntDefault[CurrSim - 1][55 - 1] == 1 && (IntAllow[CurrSim - 1][55 - 1] == 0 || BaseInt[CurrSim - 1][55 - 1] != 0 || DelayConsider[CurrSim - 1][55 - 1] != 0)) ||
+		(RunIntervention == 55 && IntDefault[CurrSim - 1][55 - 1] == 1 && BaseInt[CurrSim - 1][56 - 1] == 0 && BaseInt[CurrSim - 1][57 - 1] == 0 && BaseInt[CurrSim - 1][58 - 1] == 0 && BaseInt[CurrSim - 1][59 - 1] == 0) ||
+		(RunIntervention == 55 && IntDefault[CurrSim - 1][55 - 1] == 1 && IntAllow[CurrSim - 1][56 - 1] == 0 && IntAllow[CurrSim - 1][57 - 1] == 0 && IntAllow[CurrSim - 1][58 - 1] == 0 && IntAllow[CurrSim - 1][59 - 1] == 0) ||
+		(RunIntervention == 56 && IntDefault[CurrSim - 1][56 - 1] == 0 && (IntAllow[CurrSim - 1][56 - 1] == 0 || BaseInt[CurrSim - 1][56 - 1] != 0 || DelayConsider[CurrSim - 1][56 - 1] != 0)) ||
+		(RunIntervention == 56 && IntDefault[CurrSim - 1][56 - 1] == 1 && (IntAllow[CurrSim - 1][56 - 1] == 0 || BaseInt[CurrSim - 1][56 - 1] != 0 || DelayConsider[CurrSim - 1][56 - 1] != 0)) ||
+		(RunIntervention == 56 && IntDefault[CurrSim - 1][56 - 1] == 1 && BaseInt[CurrSim - 1][55 - 1] == 0 && BaseInt[CurrSim - 1][57 - 1] == 0 && BaseInt[CurrSim - 1][58 - 1] == 0 && BaseInt[CurrSim - 1][59 - 1] == 0) ||
+		(RunIntervention == 56 && IntDefault[CurrSim - 1][56 - 1] == 1 && IntAllow[CurrSim - 1][55 - 1] == 0 && IntAllow[CurrSim - 1][57 - 1] == 0 && IntAllow[CurrSim - 1][58 - 1] == 0 && IntAllow[CurrSim - 1][59 - 1] == 0) ||
+		(RunIntervention == 57 && IntDefault[CurrSim - 1][57 - 1] == 0 && (IntAllow[CurrSim - 1][57 - 1] == 0 || BaseInt[CurrSim - 1][57 - 1] != 0 || DelayConsider[CurrSim - 1][57 - 1] != 0)) ||
+		(RunIntervention == 57 && IntDefault[CurrSim - 1][57 - 1] == 1 && (IntAllow[CurrSim - 1][57 - 1] == 0 || BaseInt[CurrSim - 1][57 - 1] != 0 || DelayConsider[CurrSim - 1][57 - 1] != 0)) ||
+		(RunIntervention == 57 && IntDefault[CurrSim - 1][57 - 1] == 1 && BaseInt[CurrSim - 1][55 - 1] == 0 && BaseInt[CurrSim - 1][56 - 1] == 0 && BaseInt[CurrSim - 1][58 - 1] == 0 && BaseInt[CurrSim - 1][59 - 1] == 0) ||
+		(RunIntervention == 57 && IntDefault[CurrSim - 1][57 - 1] == 1 && IntAllow[CurrSim - 1][55 - 1] == 0 && IntAllow[CurrSim - 1][56 - 1] == 0 && IntAllow[CurrSim - 1][58 - 1] == 0 && IntAllow[CurrSim - 1][59 - 1] == 0) ||
+		(RunIntervention == 58 && IntDefault[CurrSim - 1][58 - 1] == 0 && (IntAllow[CurrSim - 1][58 - 1] == 0 || BaseInt[CurrSim - 1][58 - 1] != 0 || DelayConsider[CurrSim - 1][58 - 1] != 0)) ||
+		(RunIntervention == 58 && IntDefault[CurrSim - 1][58 - 1] == 1 && (IntAllow[CurrSim - 1][58 - 1] == 0 || BaseInt[CurrSim - 1][58 - 1] != 0 || DelayConsider[CurrSim - 1][58 - 1] != 0)) ||
+		(RunIntervention == 58 && IntDefault[CurrSim - 1][58 - 1] == 1 && BaseInt[CurrSim - 1][55 - 1] == 0 && BaseInt[CurrSim - 1][56 - 1] == 0 && BaseInt[CurrSim - 1][57 - 1] == 0 && BaseInt[CurrSim - 1][59 - 1] == 0) ||
+		(RunIntervention == 58 && IntDefault[CurrSim - 1][58 - 1] == 1 && IntAllow[CurrSim - 1][55 - 1] == 0 && IntAllow[CurrSim - 1][56 - 1] == 0 && IntAllow[CurrSim - 1][57 - 1] == 0 && IntAllow[CurrSim - 1][59 - 1] == 0) ||
+		(RunIntervention == 59 && IntDefault[CurrSim - 1][59 - 1] == 0 && (IntAllow[CurrSim - 1][59 - 1] == 0 || BaseInt[CurrSim - 1][59 - 1] != 0 || DelayConsider[CurrSim - 1][59 - 1] != 0)) ||
+		(RunIntervention == 59 && IntDefault[CurrSim - 1][59 - 1] == 1 && (IntAllow[CurrSim - 1][59 - 1] == 0 || BaseInt[CurrSim - 1][59 - 1] != 0 || DelayConsider[CurrSim - 1][59 - 1] != 0)) ||
+		(RunIntervention == 59 && IntDefault[CurrSim - 1][59 - 1] == 1 && BaseInt[CurrSim - 1][55 - 1] == 0 && BaseInt[CurrSim - 1][56 - 1] == 0 && BaseInt[CurrSim - 1][57 - 1] == 0 && BaseInt[CurrSim - 1][58 - 1] == 0) ||
+		(RunIntervention == 59 && IntDefault[CurrSim - 1][59 - 1] == 1 && IntAllow[CurrSim - 1][55 - 1] == 0 && IntAllow[CurrSim - 1][56 - 1] == 0 && IntAllow[CurrSim - 1][57 - 1] == 0 && IntAllow[CurrSim - 1][58 - 1] == 0) ||
+		(RunIntervention == 60 && IntDefault[CurrSim - 1][60 - 1] == 0 && (IntAllow[CurrSim - 1][60 - 1] == 0 || BaseInt[CurrSim - 1][60 - 1] != 0 || DelayConsider[CurrSim - 1][60 - 1] != 0)) ||
+		(RunIntervention == 60 && IntDefault[CurrSim - 1][60 - 1] == 1 && (IntAllow[CurrSim - 1][60 - 1] == 0 || BaseInt[CurrSim - 1][60 - 1] != 0 || DelayConsider[CurrSim - 1][60 - 1] != 0)) ||
+		(RunIntervention == 60 && IntDefault[CurrSim - 1][60 - 1] == 1 && BaseInt[CurrSim - 1][61 - 1] == 0 && BaseInt[CurrSim - 1][62 - 1] == 0 && BaseInt[CurrSim - 1][63 - 1] == 0 && BaseInt[CurrSim - 1][64 - 1] == 0 && BaseInt[CurrSim - 1][65 - 1] == 0 && BaseInt[CurrSim - 1][66 - 1] == 0) ||
+		(RunIntervention == 60 && IntDefault[CurrSim - 1][60 - 1] == 1 && IntAllow[CurrSim - 1][61 - 1] == 0 && IntAllow[CurrSim - 1][62 - 1] == 0 && IntAllow[CurrSim - 1][63 - 1] == 0 && IntAllow[CurrSim - 1][64 - 1] == 0 && IntAllow[CurrSim - 1][65 - 1] == 0 && IntAllow[CurrSim - 1][66 - 1] == 0) ||
+		(RunIntervention == 61 && IntDefault[CurrSim - 1][61 - 1] == 0 && (IntAllow[CurrSim - 1][61 - 1] == 0 || BaseInt[CurrSim - 1][61 - 1] != 0 || DelayConsider[CurrSim - 1][61 - 1] != 0)) ||
+		(RunIntervention == 61 && IntDefault[CurrSim - 1][61 - 1] == 1 && (IntAllow[CurrSim - 1][61 - 1] == 0 || BaseInt[CurrSim - 1][61 - 1] != 0 || DelayConsider[CurrSim - 1][61 - 1] != 0)) ||
+		(RunIntervention == 61 && IntDefault[CurrSim - 1][61 - 1] == 1 && BaseInt[CurrSim - 1][60 - 1] == 0 && BaseInt[CurrSim - 1][62 - 1] == 0 && BaseInt[CurrSim - 1][63 - 1] == 0 && BaseInt[CurrSim - 1][64 - 1] == 0 && BaseInt[CurrSim - 1][65 - 1] == 0 && BaseInt[CurrSim - 1][66 - 1] == 0) ||
+		(RunIntervention == 61 && IntDefault[CurrSim - 1][61 - 1] == 1 && IntAllow[CurrSim - 1][60 - 1] == 0 && IntAllow[CurrSim - 1][62 - 1] == 0 && IntAllow[CurrSim - 1][63 - 1] == 0 && IntAllow[CurrSim - 1][64 - 1] == 0 && IntAllow[CurrSim - 1][65 - 1] == 0 && IntAllow[CurrSim - 1][66 - 1] == 0) ||
+		(RunIntervention == 62 && IntDefault[CurrSim - 1][62 - 1] == 0 && (IntAllow[CurrSim - 1][62 - 1] == 0 || BaseInt[CurrSim - 1][62 - 1] != 0 || DelayConsider[CurrSim - 1][62 - 1] != 0)) ||
+		(RunIntervention == 62 && IntDefault[CurrSim - 1][62 - 1] == 1 && (IntAllow[CurrSim - 1][62 - 1] == 0 || BaseInt[CurrSim - 1][62 - 1] != 0 || DelayConsider[CurrSim - 1][62 - 1] != 0)) ||
+		(RunIntervention == 62 && IntDefault[CurrSim - 1][62 - 1] == 1 && BaseInt[CurrSim - 1][60 - 1] == 0 && BaseInt[CurrSim - 1][61 - 1] == 0 && BaseInt[CurrSim - 1][63 - 1] == 0 && BaseInt[CurrSim - 1][64 - 1] == 0 && BaseInt[CurrSim - 1][65 - 1] == 0 && BaseInt[CurrSim - 1][66 - 1] == 0) ||
+		(RunIntervention == 62 && IntDefault[CurrSim - 1][62 - 1] == 1 && IntAllow[CurrSim - 1][60 - 1] == 0 && IntAllow[CurrSim - 1][61 - 1] == 0 && IntAllow[CurrSim - 1][63 - 1] == 0 && IntAllow[CurrSim - 1][64 - 1] == 0 && IntAllow[CurrSim - 1][65 - 1] == 0 && IntAllow[CurrSim - 1][66 - 1] == 0) ||
+		(RunIntervention == 63 && IntDefault[CurrSim - 1][63 - 1] == 0 && (IntAllow[CurrSim - 1][63 - 1] == 0 || BaseInt[CurrSim - 1][63 - 1] != 0 || DelayConsider[CurrSim - 1][63 - 1] != 0)) ||
+		(RunIntervention == 63 && IntDefault[CurrSim - 1][63 - 1] == 1 && (IntAllow[CurrSim - 1][63 - 1] == 0 || BaseInt[CurrSim - 1][63 - 1] != 0 || DelayConsider[CurrSim - 1][63 - 1] != 0)) ||
+		(RunIntervention == 63 && IntDefault[CurrSim - 1][63 - 1] == 1 && BaseInt[CurrSim - 1][60 - 1] == 0 && BaseInt[CurrSim - 1][61 - 1] == 0 && BaseInt[CurrSim - 1][62 - 1] == 0 && BaseInt[CurrSim - 1][64 - 1] == 0 && BaseInt[CurrSim - 1][65 - 1] == 0 && BaseInt[CurrSim - 1][66 - 1] == 0) ||
+		(RunIntervention == 63 && IntDefault[CurrSim - 1][63 - 1] == 1 && IntAllow[CurrSim - 1][60 - 1] == 0 && IntAllow[CurrSim - 1][61 - 1] == 0 && IntAllow[CurrSim - 1][62 - 1] == 0 && IntAllow[CurrSim - 1][64 - 1] == 0 && IntAllow[CurrSim - 1][65 - 1] == 0 && IntAllow[CurrSim - 1][66 - 1] == 0) ||
+		(RunIntervention == 64 && IntDefault[CurrSim - 1][64 - 1] == 0 && (IntAllow[CurrSim - 1][64 - 1] == 0 || BaseInt[CurrSim - 1][64 - 1] != 0 || DelayConsider[CurrSim - 1][64 - 1] != 0)) ||
+		(RunIntervention == 64 && IntDefault[CurrSim - 1][64 - 1] == 1 && (IntAllow[CurrSim - 1][64 - 1] == 0 || BaseInt[CurrSim - 1][64 - 1] != 0 || DelayConsider[CurrSim - 1][64 - 1] != 0)) ||
+		(RunIntervention == 64 && IntDefault[CurrSim - 1][64 - 1] == 1 && BaseInt[CurrSim - 1][60 - 1] == 0 && BaseInt[CurrSim - 1][61 - 1] == 0 && BaseInt[CurrSim - 1][62 - 1] == 0 && BaseInt[CurrSim - 1][63 - 1] == 0 && BaseInt[CurrSim - 1][65 - 1] == 0 && BaseInt[CurrSim - 1][66 - 1] == 0) ||
+		(RunIntervention == 64 && IntDefault[CurrSim - 1][64 - 1] == 1 && IntAllow[CurrSim - 1][60 - 1] == 0 && IntAllow[CurrSim - 1][61 - 1] == 0 && IntAllow[CurrSim - 1][62 - 1] == 0 && IntAllow[CurrSim - 1][63 - 1] == 0 && IntAllow[CurrSim - 1][65 - 1] == 0 && IntAllow[CurrSim - 1][66 - 1] == 0) ||
+		(RunIntervention == 65 && IntDefault[CurrSim - 1][65 - 1] == 0 && (IntAllow[CurrSim - 1][65 - 1] == 0 || BaseInt[CurrSim - 1][65 - 1] != 0 || DelayConsider[CurrSim - 1][65 - 1] != 0)) ||
+		(RunIntervention == 65 && IntDefault[CurrSim - 1][65 - 1] == 1 && (IntAllow[CurrSim - 1][65 - 1] == 0 || BaseInt[CurrSim - 1][65 - 1] != 0 || DelayConsider[CurrSim - 1][65 - 1] != 0)) ||
+		(RunIntervention == 65 && IntDefault[CurrSim - 1][65 - 1] == 1 && BaseInt[CurrSim - 1][60 - 1] == 0 && BaseInt[CurrSim - 1][61 - 1] == 0 && BaseInt[CurrSim - 1][62 - 1] == 0 && BaseInt[CurrSim - 1][63 - 1] == 0 && BaseInt[CurrSim - 1][64 - 1] == 0 && BaseInt[CurrSim - 1][66 - 1] == 0) ||
+		(RunIntervention == 65 && IntDefault[CurrSim - 1][65 - 1] == 1 && IntAllow[CurrSim - 1][60 - 1] == 0 && IntAllow[CurrSim - 1][61 - 1] == 0 && IntAllow[CurrSim - 1][62 - 1] == 0 && IntAllow[CurrSim - 1][63 - 1] == 0 && IntAllow[CurrSim - 1][64 - 1] == 0 && IntAllow[CurrSim - 1][66 - 1] == 0) ||
+		(RunIntervention == 66 && IntDefault[CurrSim - 1][66 - 1] == 0 && (IntAllow[CurrSim - 1][66 - 1] == 0 || BaseInt[CurrSim - 1][66 - 1] != 0 || DelayConsider[CurrSim - 1][66 - 1] != 0)) ||
+		(RunIntervention == 66 && IntDefault[CurrSim - 1][66 - 1] == 1 && (IntAllow[CurrSim - 1][66 - 1] == 0 || BaseInt[CurrSim - 1][66 - 1] != 0 || DelayConsider[CurrSim - 1][66 - 1] != 0)) ||
+		(RunIntervention == 66 && IntDefault[CurrSim - 1][66 - 1] == 1 && BaseInt[CurrSim - 1][60 - 1] == 0 && BaseInt[CurrSim - 1][61 - 1] == 0 && BaseInt[CurrSim - 1][62 - 1] == 0 && BaseInt[CurrSim - 1][63 - 1] == 0 && BaseInt[CurrSim - 1][64 - 1] == 0 && BaseInt[CurrSim - 1][65 - 1] == 0) ||
+		(RunIntervention == 66 && IntDefault[CurrSim - 1][66 - 1] == 1 && IntAllow[CurrSim - 1][60 - 1] == 0 && IntAllow[CurrSim - 1][61 - 1] == 0 && IntAllow[CurrSim - 1][62 - 1] == 0 && IntAllow[CurrSim - 1][63 - 1] == 0 && IntAllow[CurrSim - 1][64 - 1] == 0 && IntAllow[CurrSim - 1][65 - 1] == 0) ||
+		(RunIntervention == 67 && IntDefault[CurrSim - 1][67 - 1] == 0 && (IntAllow[CurrSim - 1][67 - 1] == 0 || BaseInt[CurrSim - 1][67 - 1] != 0 || DelayConsider[CurrSim - 1][67 - 1] != 0)) ||
+		(RunIntervention == 67 && IntDefault[CurrSim - 1][67 - 1] == 1 && (IntAllow[CurrSim - 1][67 - 1] == 0 || BaseInt[CurrSim - 1][67 - 1] != 0 || DelayConsider[CurrSim - 1][67 - 1] != 0)) ||
+		(RunIntervention == 67 && IntDefault[CurrSim - 1][67 - 1] == 1 && BaseInt[CurrSim - 1][68 - 1] == 0 && BaseInt[CurrSim - 1][69 - 1] == 0 && BaseInt[CurrSim - 1][70 - 1] == 0 && BaseInt[CurrSim - 1][71 - 1] == 0 && BaseInt[CurrSim - 1][72 - 1] == 0 && BaseInt[CurrSim - 1][73 - 1] == 0 && BaseInt[CurrSim - 1][74 - 1] == 0 && BaseInt[CurrSim - 1][75 - 1] == 0 && BaseInt[CurrSim - 1][76 - 1] == 0) ||
+		(RunIntervention == 67 && IntDefault[CurrSim - 1][67 - 1] == 1 && IntAllow[CurrSim - 1][68 - 1] == 0 && IntAllow[CurrSim - 1][69 - 1] == 0 && IntAllow[CurrSim - 1][70 - 1] == 0 && IntAllow[CurrSim - 1][71 - 1] == 0 && IntAllow[CurrSim - 1][72 - 1] == 0 && IntAllow[CurrSim - 1][73 - 1] == 0) ||
+		(RunIntervention == 68 && IntDefault[CurrSim - 1][68 - 1] == 0 && (IntAllow[CurrSim - 1][68 - 1] == 0 || BaseInt[CurrSim - 1][68 - 1] != 0 || DelayConsider[CurrSim - 1][68 - 1] != 0)) ||
+		(RunIntervention == 68 && IntDefault[CurrSim - 1][68 - 1] == 1 && (IntAllow[CurrSim - 1][68 - 1] == 0 || BaseInt[CurrSim - 1][68 - 1] != 0 || DelayConsider[CurrSim - 1][68 - 1] != 0)) ||
+		(RunIntervention == 68 && IntDefault[CurrSim - 1][68 - 1] == 1 && BaseInt[CurrSim - 1][67 - 1] == 0 && BaseInt[CurrSim - 1][69 - 1] == 0 && BaseInt[CurrSim - 1][70 - 1] == 0 && BaseInt[CurrSim - 1][71 - 1] == 0 && BaseInt[CurrSim - 1][72 - 1] == 0 && BaseInt[CurrSim - 1][73 - 1] == 0 && BaseInt[CurrSim - 1][74 - 1] == 0 && BaseInt[CurrSim - 1][75 - 1] == 0 && BaseInt[CurrSim - 1][76 - 1] == 0) ||
+		(RunIntervention == 68 && IntDefault[CurrSim - 1][68 - 1] == 1 && IntAllow[CurrSim - 1][67 - 1] == 0 && IntAllow[CurrSim - 1][69 - 1] == 0 && IntAllow[CurrSim - 1][70 - 1] == 0 && IntAllow[CurrSim - 1][71 - 1] == 0 && IntAllow[CurrSim - 1][72 - 1] == 0 && IntAllow[CurrSim - 1][73 - 1] == 0) ||
+		(RunIntervention == 69 && IntDefault[CurrSim - 1][69 - 1] == 0 && (IntAllow[CurrSim - 1][69 - 1] == 0 || BaseInt[CurrSim - 1][69 - 1] != 0 || DelayConsider[CurrSim - 1][69 - 1] != 0)) ||
+		(RunIntervention == 69 && IntDefault[CurrSim - 1][69 - 1] == 1 && (IntAllow[CurrSim - 1][69 - 1] == 0 || BaseInt[CurrSim - 1][69 - 1] != 0 || DelayConsider[CurrSim - 1][69 - 1] != 0)) ||
+		(RunIntervention == 69 && IntDefault[CurrSim - 1][69 - 1] == 1 && BaseInt[CurrSim - 1][67 - 1] == 0 && BaseInt[CurrSim - 1][68 - 1] == 0 && BaseInt[CurrSim - 1][70 - 1] == 0 && BaseInt[CurrSim - 1][71 - 1] == 0 && BaseInt[CurrSim - 1][72 - 1] == 0 && BaseInt[CurrSim - 1][73 - 1] == 0 && BaseInt[CurrSim - 1][74 - 1] == 0 && BaseInt[CurrSim - 1][75 - 1] == 0 && BaseInt[CurrSim - 1][76 - 1] == 0) ||
+		(RunIntervention == 69 && IntDefault[CurrSim - 1][69 - 1] == 1 && IntAllow[CurrSim - 1][67 - 1] == 0 && IntAllow[CurrSim - 1][68 - 1] == 0 && IntAllow[CurrSim - 1][70 - 1] == 0 && IntAllow[CurrSim - 1][71 - 1] == 0 && IntAllow[CurrSim - 1][72 - 1] == 0 && IntAllow[CurrSim - 1][73 - 1] == 0) ||
+		(RunIntervention == 70 && IntDefault[CurrSim - 1][70 - 1] == 0 && (IntAllow[CurrSim - 1][70 - 1] == 0 || BaseInt[CurrSim - 1][70 - 1] != 0 || DelayConsider[CurrSim - 1][70 - 1] != 0)) ||
+		(RunIntervention == 70 && IntDefault[CurrSim - 1][70 - 1] == 1 && (IntAllow[CurrSim - 1][70 - 1] == 0 || BaseInt[CurrSim - 1][70 - 1] != 0 || DelayConsider[CurrSim - 1][70 - 1] != 0)) ||
+		(RunIntervention == 70 && IntDefault[CurrSim - 1][70 - 1] == 1 && BaseInt[CurrSim - 1][67 - 1] == 0 && BaseInt[CurrSim - 1][68 - 1] == 0 && BaseInt[CurrSim - 1][69 - 1] == 0 && BaseInt[CurrSim - 1][71 - 1] == 0 && BaseInt[CurrSim - 1][72 - 1] == 0 && BaseInt[CurrSim - 1][73 - 1] == 0 && BaseInt[CurrSim - 1][74 - 1] == 0 && BaseInt[CurrSim - 1][75 - 1] == 0 && BaseInt[CurrSim - 1][76 - 1] == 0) ||
+		(RunIntervention == 70 && IntDefault[CurrSim - 1][70 - 1] == 1 && IntAllow[CurrSim - 1][67 - 1] == 0 && IntAllow[CurrSim - 1][68 - 1] == 0 && IntAllow[CurrSim - 1][69 - 1] == 0 && IntAllow[CurrSim - 1][71 - 1] == 0 && IntAllow[CurrSim - 1][72 - 1] == 0 && IntAllow[CurrSim - 1][73 - 1] == 0) ||
+		(RunIntervention == 71 && IntDefault[CurrSim - 1][71 - 1] == 0 && (IntAllow[CurrSim - 1][71 - 1] == 0 || BaseInt[CurrSim - 1][71 - 1] != 0 || DelayConsider[CurrSim - 1][71 - 1] != 0)) ||
+		(RunIntervention == 71 && IntDefault[CurrSim - 1][71 - 1] == 1 && (IntAllow[CurrSim - 1][71 - 1] == 0 || BaseInt[CurrSim - 1][71 - 1] != 0 || DelayConsider[CurrSim - 1][71 - 1] != 0)) ||
+		(RunIntervention == 71 && IntDefault[CurrSim - 1][71 - 1] == 1 && BaseInt[CurrSim - 1][67 - 1] == 0 && BaseInt[CurrSim - 1][68 - 1] == 0 && BaseInt[CurrSim - 1][69 - 1] == 0 && BaseInt[CurrSim - 1][70 - 1] == 0 && BaseInt[CurrSim - 1][72 - 1] == 0 && BaseInt[CurrSim - 1][73 - 1] == 0 && BaseInt[CurrSim - 1][74 - 1] == 0 && BaseInt[CurrSim - 1][75 - 1] == 0 && BaseInt[CurrSim - 1][76 - 1] == 0) ||
+		(RunIntervention == 71 && IntDefault[CurrSim - 1][71 - 1] == 1 && IntAllow[CurrSim - 1][67 - 1] == 0 && IntAllow[CurrSim - 1][68 - 1] == 0 && IntAllow[CurrSim - 1][69 - 1] == 0 && IntAllow[CurrSim - 1][70 - 1] == 0 && IntAllow[CurrSim - 1][72 - 1] == 0 && IntAllow[CurrSim - 1][73 - 1] == 0) ||
+		(RunIntervention == 72 && IntDefault[CurrSim - 1][72 - 1] == 0 && (IntAllow[CurrSim - 1][72 - 1] == 0 || BaseInt[CurrSim - 1][72 - 1] != 0 || DelayConsider[CurrSim - 1][72 - 1] != 0)) ||
+		(RunIntervention == 72 && IntDefault[CurrSim - 1][72 - 1] == 1 && (IntAllow[CurrSim - 1][72 - 1] == 0 || BaseInt[CurrSim - 1][72 - 1] != 0 || DelayConsider[CurrSim - 1][72 - 1] != 0)) ||
+		(RunIntervention == 72 && IntDefault[CurrSim - 1][72 - 1] == 1 && BaseInt[CurrSim - 1][67 - 1] == 0 && BaseInt[CurrSim - 1][68 - 1] == 0 && BaseInt[CurrSim - 1][69 - 1] == 0 && BaseInt[CurrSim - 1][70 - 1] == 0 && BaseInt[CurrSim - 1][71 - 1] == 0 && BaseInt[CurrSim - 1][73 - 1] == 0 && BaseInt[CurrSim - 1][74 - 1] == 0 && BaseInt[CurrSim - 1][75 - 1] == 0 && BaseInt[CurrSim - 1][76 - 1] == 0) ||
+		(RunIntervention == 72 && IntDefault[CurrSim - 1][72 - 1] == 1 && IntAllow[CurrSim - 1][67 - 1] == 0 && IntAllow[CurrSim - 1][68 - 1] == 0 && IntAllow[CurrSim - 1][69 - 1] == 0 && IntAllow[CurrSim - 1][70 - 1] == 0 && IntAllow[CurrSim - 1][71 - 1] == 0 && IntAllow[CurrSim - 1][73 - 1] == 0) ||
+		(RunIntervention == 73 && IntDefault[CurrSim - 1][73 - 1] == 0 && (IntAllow[CurrSim - 1][73 - 1] == 0 || BaseInt[CurrSim - 1][73 - 1] != 0 || DelayConsider[CurrSim - 1][73 - 1] != 0)) ||
+		(RunIntervention == 73 && IntDefault[CurrSim - 1][73 - 1] == 1 && (IntAllow[CurrSim - 1][73 - 1] == 0 || BaseInt[CurrSim - 1][73 - 1] != 0 || DelayConsider[CurrSim - 1][73 - 1] != 0)) ||
+		(RunIntervention == 73 && IntDefault[CurrSim - 1][73 - 1] == 1 && BaseInt[CurrSim - 1][67 - 1] == 0 && BaseInt[CurrSim - 1][68 - 1] == 0 && BaseInt[CurrSim - 1][70 - 1] == 0 && BaseInt[CurrSim - 1][71 - 1] == 0 && BaseInt[CurrSim - 1][72 - 1] == 0 && BaseInt[CurrSim - 1][74 - 1] == 0 && BaseInt[CurrSim - 1][75 - 1] == 0 && BaseInt[CurrSim - 1][76 - 1] == 0 && BaseInt[CurrSim - 1][77 - 1] == 0) ||
+		(RunIntervention == 73 && IntDefault[CurrSim - 1][73 - 1] == 1 && IntAllow[CurrSim - 1][67 - 1] == 0 && IntAllow[CurrSim - 1][68 - 1] == 0 && IntAllow[CurrSim - 1][70 - 1] == 0 && IntAllow[CurrSim - 1][71 - 1] == 0 && IntAllow[CurrSim - 1][72 - 1] == 0 && IntAllow[CurrSim - 1][74 - 1] == 0) ||
+		(RunIntervention == 74 && IntDefault[CurrSim - 1][74 - 1] == 0 && (IntAllow[CurrSim - 1][74 - 1] == 0 || BaseInt[CurrSim - 1][74 - 1] != 0 || DelayConsider[CurrSim - 1][74 - 1] != 0)) ||
+		(RunIntervention == 74 && IntDefault[CurrSim - 1][74 - 1] == 1 && (IntAllow[CurrSim - 1][74 - 1] == 0 || BaseInt[CurrSim - 1][74 - 1] != 0 || DelayConsider[CurrSim - 1][74 - 1] != 0)) ||
+		(RunIntervention == 74 && IntDefault[CurrSim - 1][74 - 1] == 1 && BaseInt[CurrSim - 1][67 - 1] == 0 && BaseInt[CurrSim - 1][68 - 1] == 0 && BaseInt[CurrSim - 1][71 - 1] == 0 && BaseInt[CurrSim - 1][72 - 1] == 0 && BaseInt[CurrSim - 1][73 - 1] == 0 && BaseInt[CurrSim - 1][75 - 1] == 0 && BaseInt[CurrSim - 1][76 - 1] == 0 && BaseInt[CurrSim - 1][77 - 1] == 0 && BaseInt[CurrSim - 1][78 - 1] == 0) ||
+		(RunIntervention == 74 && IntDefault[CurrSim - 1][74 - 1] == 1 && IntAllow[CurrSim - 1][67 - 1] == 0 && IntAllow[CurrSim - 1][68 - 1] == 0 && IntAllow[CurrSim - 1][71 - 1] == 0 && IntAllow[CurrSim - 1][72 - 1] == 0 && IntAllow[CurrSim - 1][73 - 1] == 0 && IntAllow[CurrSim - 1][75 - 1] == 0) ||
+		(RunIntervention == 75 && IntDefault[CurrSim - 1][75 - 1] == 0 && (IntAllow[CurrSim - 1][75 - 1] == 0 || BaseInt[CurrSim - 1][75 - 1] != 0 || DelayConsider[CurrSim - 1][75 - 1] != 0)) ||
+		(RunIntervention == 75 && IntDefault[CurrSim - 1][75 - 1] == 1 && (IntAllow[CurrSim - 1][75 - 1] == 0 || BaseInt[CurrSim - 1][75 - 1] != 0 || DelayConsider[CurrSim - 1][75 - 1] != 0)) ||
+		(RunIntervention == 75 && IntDefault[CurrSim - 1][75 - 1] == 1 && BaseInt[CurrSim - 1][67 - 1] == 0 && BaseInt[CurrSim - 1][68 - 1] == 0 && BaseInt[CurrSim - 1][72 - 1] == 0 && BaseInt[CurrSim - 1][73 - 1] == 0 && BaseInt[CurrSim - 1][74 - 1] == 0 && BaseInt[CurrSim - 1][76 - 1] == 0 && BaseInt[CurrSim - 1][77 - 1] == 0 && BaseInt[CurrSim - 1][78 - 1] == 0 && BaseInt[CurrSim - 1][79 - 1] == 0) ||
+		(RunIntervention == 75 && IntDefault[CurrSim - 1][75 - 1] == 1 && IntAllow[CurrSim - 1][67 - 1] == 0 && IntAllow[CurrSim - 1][68 - 1] == 0 && IntAllow[CurrSim - 1][72 - 1] == 0 && IntAllow[CurrSim - 1][73 - 1] == 0 && IntAllow[CurrSim - 1][74 - 1] == 0 && IntAllow[CurrSim - 1][76 - 1] == 0) ||
+		(RunIntervention == 76 && IntDefault[CurrSim - 1][76 - 1] == 0 && (IntAllow[CurrSim - 1][76 - 1] == 0 || BaseInt[CurrSim - 1][76 - 1] != 0 || DelayConsider[CurrSim - 1][76 - 1] != 0)) ||
+		(RunIntervention == 76 && IntDefault[CurrSim - 1][76 - 1] == 1 && (IntAllow[CurrSim - 1][76 - 1] == 0 || BaseInt[CurrSim - 1][76 - 1] != 0 || DelayConsider[CurrSim - 1][76 - 1] != 0)) ||
+		(RunIntervention == 76 && IntDefault[CurrSim - 1][76 - 1] == 1 && BaseInt[CurrSim - 1][67 - 1] == 0 && BaseInt[CurrSim - 1][68 - 1] == 0 && BaseInt[CurrSim - 1][69 - 1] == 0 && BaseInt[CurrSim - 1][70 - 1] == 0 && BaseInt[CurrSim - 1][71 - 1] == 0 && BaseInt[CurrSim - 1][72 - 1] == 0 && BaseInt[CurrSim - 1][73 - 1] == 0 && BaseInt[CurrSim - 1][74 - 1] == 0 && BaseInt[CurrSim - 1][75 - 1] == 0) ||
+		(RunIntervention == 76 && IntDefault[CurrSim - 1][76 - 1] == 1 && IntAllow[CurrSim - 1][67 - 1] == 0 && IntAllow[CurrSim - 1][68 - 1] == 0 && IntAllow[CurrSim - 1][69 - 1] == 0 && IntAllow[CurrSim - 1][70 - 1] == 0 && IntAllow[CurrSim - 1][71 - 1] == 0 && IntAllow[CurrSim - 1][72 - 1] == 0) ||
+		(RunIntervention == 77 && IntDefault[CurrSim - 1][77 - 1] == 0 && (IntAllow[CurrSim - 1][77 - 1] == 0 || BaseInt[CurrSim - 1][77 - 1] != 0 || DelayConsider[CurrSim - 1][77 - 1] != 0)) ||
+		(RunIntervention == 77 && IntDefault[CurrSim - 1][77 - 1] == 1 && (IntAllow[CurrSim - 1][77 - 1] == 0 || BaseInt[CurrSim - 1][77 - 1] != 0 || DelayConsider[CurrSim - 1][77 - 1] != 0)) ||
+		(RunIntervention == 77 && IntDefault[CurrSim - 1][77 - 1] == 1 && BaseInt[CurrSim - 1][78 - 1] == 0 && BaseInt[CurrSim - 1][79 - 1] == 0 && BaseInt[CurrSim - 1][80 - 1] == 0 && BaseInt[CurrSim - 1][81 - 1] == 0) ||
+		(RunIntervention == 77 && IntDefault[CurrSim - 1][77 - 1] == 1 && IntAllow[CurrSim - 1][78 - 1] == 0 && IntAllow[CurrSim - 1][79 - 1] == 0 && IntAllow[CurrSim - 1][80 - 1] == 0 && IntAllow[CurrSim - 1][81 - 1] == 0) ||
+		(RunIntervention == 78 && IntDefault[CurrSim - 1][78 - 1] == 0 && (IntAllow[CurrSim - 1][78 - 1] == 0 || BaseInt[CurrSim - 1][78 - 1] != 0 || DelayConsider[CurrSim - 1][78 - 1] != 0)) ||
+		(RunIntervention == 78 && IntDefault[CurrSim - 1][78 - 1] == 1 && (IntAllow[CurrSim - 1][78 - 1] == 0 || BaseInt[CurrSim - 1][78 - 1] != 0 || DelayConsider[CurrSim - 1][78 - 1] != 0)) ||
+		(RunIntervention == 78 && IntDefault[CurrSim - 1][78 - 1] == 1 && BaseInt[CurrSim - 1][77 - 1] == 0 && BaseInt[CurrSim - 1][79 - 1] == 0 && BaseInt[CurrSim - 1][80 - 1] == 0 && BaseInt[CurrSim - 1][81 - 1] == 0) ||
+		(RunIntervention == 78 && IntDefault[CurrSim - 1][78 - 1] == 1 && IntAllow[CurrSim - 1][77 - 1] == 0 && IntAllow[CurrSim - 1][79 - 1] == 0 && IntAllow[CurrSim - 1][80 - 1] == 0 && IntAllow[CurrSim - 1][81 - 1] == 0) ||
+		(RunIntervention == 79 && IntDefault[CurrSim - 1][79 - 1] == 0 && (IntAllow[CurrSim - 1][79 - 1] == 0 || BaseInt[CurrSim - 1][79 - 1] != 0 || DelayConsider[CurrSim - 1][79 - 1] != 0)) ||
+		(RunIntervention == 79 && IntDefault[CurrSim - 1][79 - 1] == 1 && (IntAllow[CurrSim - 1][79 - 1] == 0 || BaseInt[CurrSim - 1][79 - 1] != 0 || DelayConsider[CurrSim - 1][79 - 1] != 0)) ||
+		(RunIntervention == 79 && IntDefault[CurrSim - 1][79 - 1] == 1 && BaseInt[CurrSim - 1][77 - 1] == 0 && BaseInt[CurrSim - 1][78 - 1] == 0 && BaseInt[CurrSim - 1][80 - 1] == 0 && BaseInt[CurrSim - 1][81 - 1] == 0) ||
+		(RunIntervention == 79 && IntDefault[CurrSim - 1][79 - 1] == 1 && IntAllow[CurrSim - 1][77 - 1] == 0 && IntAllow[CurrSim - 1][78 - 1] == 0 && IntAllow[CurrSim - 1][80 - 1] == 0 && IntAllow[CurrSim - 1][81 - 1] == 0) ||
+		(RunIntervention == 80 && IntDefault[CurrSim - 1][80 - 1] == 0 && (IntAllow[CurrSim - 1][80 - 1] == 0 || BaseInt[CurrSim - 1][80 - 1] != 0 || DelayConsider[CurrSim - 1][80 - 1] != 0)) ||
+		(RunIntervention == 80 && IntDefault[CurrSim - 1][80 - 1] == 1 && (IntAllow[CurrSim - 1][80 - 1] == 0 || BaseInt[CurrSim - 1][80 - 1] != 0 || DelayConsider[CurrSim - 1][80 - 1] != 0)) ||
+		(RunIntervention == 80 && IntDefault[CurrSim - 1][80 - 1] == 1 && BaseInt[CurrSim - 1][77 - 1] == 0 && BaseInt[CurrSim - 1][78 - 1] == 0 && BaseInt[CurrSim - 1][79 - 1] == 0 && BaseInt[CurrSim - 1][81 - 1] == 0) ||
+		(RunIntervention == 80 && IntDefault[CurrSim - 1][80 - 1] == 1 && IntAllow[CurrSim - 1][77 - 1] == 0 && IntAllow[CurrSim - 1][78 - 1] == 0 && IntAllow[CurrSim - 1][79 - 1] == 0 && IntAllow[CurrSim - 1][81 - 1] == 0) ||
+		(RunIntervention == 81 && IntDefault[CurrSim - 1][81 - 1] == 0 && (IntAllow[CurrSim - 1][81 - 1] == 0 || BaseInt[CurrSim - 1][81 - 1] != 0 || DelayConsider[CurrSim - 1][81 - 1] != 0)) ||
+		(RunIntervention == 81 && IntDefault[CurrSim - 1][81 - 1] == 1 && (IntAllow[CurrSim - 1][81 - 1] == 0 || BaseInt[CurrSim - 1][81 - 1] != 0 || DelayConsider[CurrSim - 1][81 - 1] != 0)) ||
+		(RunIntervention == 81 && IntDefault[CurrSim - 1][81 - 1] == 1 && BaseInt[CurrSim - 1][77 - 1] == 0 && BaseInt[CurrSim - 1][78 - 1] == 0 && BaseInt[CurrSim - 1][79 - 1] == 0 && BaseInt[CurrSim - 1][80 - 1] == 0) ||
+		(RunIntervention == 81 && IntDefault[CurrSim - 1][81 - 1] == 1 && IntAllow[CurrSim - 1][77 - 1] == 0 && IntAllow[CurrSim - 1][78 - 1] == 0 && IntAllow[CurrSim - 1][79 - 1] == 0 && IntAllow[CurrSim - 1][80 - 1] == 0) ||
+		(RunIntervention == 82 && IntDefault[CurrSim - 1][82 - 1] == 0 && (IntAllow[CurrSim - 1][82 - 1] == 0 || BaseInt[CurrSim - 1][82 - 1] != 0 || DelayConsider[CurrSim - 1][82 - 1] != 0)) ||
+		(RunIntervention == 82 && IntDefault[CurrSim - 1][82 - 1] == 1 && (IntAllow[CurrSim - 1][82 - 1] == 0 || BaseInt[CurrSim - 1][82 - 1] != 0 || DelayConsider[CurrSim - 1][82 - 1] != 0)) ||
+		(RunIntervention == 82 && IntDefault[CurrSim - 1][82 - 1] == 1 && BaseInt[CurrSim - 1][83 - 1] == 0 && BaseInt[CurrSim - 1][84 - 1] == 0 && BaseInt[CurrSim - 1][85 - 1] == 0 && BaseInt[CurrSim - 1][86 - 1] == 0 && BaseInt[CurrSim - 1][87 - 1] == 0 && BaseInt[CurrSim - 1][88 - 1] == 0) ||
+		(RunIntervention == 82 && IntDefault[CurrSim - 1][82 - 1] == 1 && IntAllow[CurrSim - 1][83 - 1] == 0 && IntAllow[CurrSim - 1][84 - 1] == 0 && IntAllow[CurrSim - 1][85 - 1] == 0 && IntAllow[CurrSim - 1][86 - 1] == 0 && IntAllow[CurrSim - 1][87 - 1] == 0 && IntAllow[CurrSim - 1][88 - 1] == 0) ||
+		(RunIntervention == 83 && IntDefault[CurrSim - 1][83 - 1] == 0 && (IntAllow[CurrSim - 1][83 - 1] == 0 || BaseInt[CurrSim - 1][83 - 1] != 0 || DelayConsider[CurrSim - 1][83 - 1] != 0)) ||
+		(RunIntervention == 83 && IntDefault[CurrSim - 1][83 - 1] == 1 && (IntAllow[CurrSim - 1][83 - 1] == 0 || BaseInt[CurrSim - 1][83 - 1] != 0 || DelayConsider[CurrSim - 1][83 - 1] != 0)) ||
+		(RunIntervention == 83 && IntDefault[CurrSim - 1][83 - 1] == 1 && BaseInt[CurrSim - 1][82 - 1] == 0 && BaseInt[CurrSim - 1][84 - 1] == 0 && BaseInt[CurrSim - 1][85 - 1] == 0 && BaseInt[CurrSim - 1][86 - 1] == 0 && BaseInt[CurrSim - 1][87 - 1] == 0 && BaseInt[CurrSim - 1][88 - 1] == 0) ||
+		(RunIntervention == 83 && IntDefault[CurrSim - 1][83 - 1] == 1 && IntAllow[CurrSim - 1][82 - 1] == 0 && IntAllow[CurrSim - 1][84 - 1] == 0 && IntAllow[CurrSim - 1][85 - 1] == 0 && IntAllow[CurrSim - 1][86 - 1] == 0 && IntAllow[CurrSim - 1][87 - 1] == 0 && IntAllow[CurrSim - 1][88 - 1] == 0) ||
+		(RunIntervention == 84 && IntDefault[CurrSim - 1][84 - 1] == 0 && (IntAllow[CurrSim - 1][84 - 1] == 0 || BaseInt[CurrSim - 1][84 - 1] != 0 || DelayConsider[CurrSim - 1][84 - 1] != 0)) ||
+		(RunIntervention == 84 && IntDefault[CurrSim - 1][84 - 1] == 1 && (IntAllow[CurrSim - 1][84 - 1] == 0 || BaseInt[CurrSim - 1][84 - 1] != 0 || DelayConsider[CurrSim - 1][84 - 1] != 0)) ||
+		(RunIntervention == 84 && IntDefault[CurrSim - 1][84 - 1] == 1 && BaseInt[CurrSim - 1][82 - 1] == 0 && BaseInt[CurrSim - 1][83 - 1] == 0 && BaseInt[CurrSim - 1][85 - 1] == 0 && BaseInt[CurrSim - 1][86 - 1] == 0 && BaseInt[CurrSim - 1][87 - 1] == 0 && BaseInt[CurrSim - 1][88 - 1] == 0) ||
+		(RunIntervention == 84 && IntDefault[CurrSim - 1][84 - 1] == 1 && IntAllow[CurrSim - 1][82 - 1] == 0 && IntAllow[CurrSim - 1][83 - 1] == 0 && IntAllow[CurrSim - 1][85 - 1] == 0 && IntAllow[CurrSim - 1][86 - 1] == 0 && IntAllow[CurrSim - 1][87 - 1] == 0 && IntAllow[CurrSim - 1][88 - 1] == 0) ||
+		(RunIntervention == 85 && IntDefault[CurrSim - 1][85 - 1] == 0 && (IntAllow[CurrSim - 1][85 - 1] == 0 || BaseInt[CurrSim - 1][85 - 1] != 0 || DelayConsider[CurrSim - 1][85 - 1] != 0)) ||
+		(RunIntervention == 85 && IntDefault[CurrSim - 1][85 - 1] == 1 && (IntAllow[CurrSim - 1][85 - 1] == 0 || BaseInt[CurrSim - 1][85 - 1] != 0 || DelayConsider[CurrSim - 1][85 - 1] != 0)) ||
+		(RunIntervention == 85 && IntDefault[CurrSim - 1][85 - 1] == 1 && BaseInt[CurrSim - 1][82 - 1] == 0 && BaseInt[CurrSim - 1][83 - 1] == 0 && BaseInt[CurrSim - 1][84 - 1] == 0 && BaseInt[CurrSim - 1][86 - 1] == 0 && BaseInt[CurrSim - 1][87 - 1] == 0 && BaseInt[CurrSim - 1][88 - 1] == 0) ||
+		(RunIntervention == 85 && IntDefault[CurrSim - 1][85 - 1] == 1 && IntAllow[CurrSim - 1][82 - 1] == 0 && IntAllow[CurrSim - 1][83 - 1] == 0 && IntAllow[CurrSim - 1][84 - 1] == 0 && IntAllow[CurrSim - 1][86 - 1] == 0 && IntAllow[CurrSim - 1][87 - 1] == 0 && IntAllow[CurrSim - 1][88 - 1] == 0) ||
+		(RunIntervention == 86 && IntDefault[CurrSim - 1][86 - 1] == 0 && (IntAllow[CurrSim - 1][86 - 1] == 0 || BaseInt[CurrSim - 1][86 - 1] != 0 || DelayConsider[CurrSim - 1][86 - 1] != 0)) ||
+		(RunIntervention == 86 && IntDefault[CurrSim - 1][86 - 1] == 1 && (IntAllow[CurrSim - 1][86 - 1] == 0 || BaseInt[CurrSim - 1][86 - 1] != 0 || DelayConsider[CurrSim - 1][86 - 1] != 0)) ||
+		(RunIntervention == 86 && IntDefault[CurrSim - 1][86 - 1] == 1 && BaseInt[CurrSim - 1][82 - 1] == 0 && BaseInt[CurrSim - 1][83 - 1] == 0 && BaseInt[CurrSim - 1][84 - 1] == 0 && BaseInt[CurrSim - 1][85 - 1] == 0 && BaseInt[CurrSim - 1][87 - 1] == 0 && BaseInt[CurrSim - 1][88 - 1] == 0) ||
+		(RunIntervention == 86 && IntDefault[CurrSim - 1][86 - 1] == 1 && IntAllow[CurrSim - 1][82 - 1] == 0 && IntAllow[CurrSim - 1][83 - 1] == 0 && IntAllow[CurrSim - 1][84 - 1] == 0 && IntAllow[CurrSim - 1][85 - 1] == 0 && IntAllow[CurrSim - 1][87 - 1] == 0 && IntAllow[CurrSim - 1][88 - 1] == 0) ||
+		(RunIntervention == 87 && IntDefault[CurrSim - 1][87 - 1] == 0 && (IntAllow[CurrSim - 1][87 - 1] == 0 || BaseInt[CurrSim - 1][87 - 1] != 0 || DelayConsider[CurrSim - 1][87 - 1] != 0)) ||
+		(RunIntervention == 87 && IntDefault[CurrSim - 1][87 - 1] == 1 && (IntAllow[CurrSim - 1][87 - 1] == 0 || BaseInt[CurrSim - 1][87 - 1] != 0 || DelayConsider[CurrSim - 1][87 - 1] != 0)) ||
+		(RunIntervention == 87 && IntDefault[CurrSim - 1][87 - 1] == 1 && BaseInt[CurrSim - 1][82 - 1] == 0 && BaseInt[CurrSim - 1][83 - 1] == 0 && BaseInt[CurrSim - 1][84 - 1] == 0 && BaseInt[CurrSim - 1][85 - 1] == 0 && BaseInt[CurrSim - 1][86 - 1] == 0 && BaseInt[CurrSim - 1][88 - 1] == 0) ||
+		(RunIntervention == 87 && IntDefault[CurrSim - 1][87 - 1] == 1 && IntAllow[CurrSim - 1][82 - 1] == 0 && IntAllow[CurrSim - 1][83 - 1] == 0 && IntAllow[CurrSim - 1][84 - 1] == 0 && IntAllow[CurrSim - 1][85 - 1] == 0 && IntAllow[CurrSim - 1][86 - 1] == 0 && IntAllow[CurrSim - 1][88 - 1] == 0) ||
+		(RunIntervention == 88 && IntDefault[CurrSim - 1][88 - 1] == 0 && (IntAllow[CurrSim - 1][88 - 1] == 0 || BaseInt[CurrSim - 1][88 - 1] != 0 || DelayConsider[CurrSim - 1][88 - 1] != 0)) ||
+		(RunIntervention == 88 && IntDefault[CurrSim - 1][88 - 1] == 1 && (IntAllow[CurrSim - 1][88 - 1] == 0 || BaseInt[CurrSim - 1][88 - 1] != 0 || DelayConsider[CurrSim - 1][88 - 1] != 0)) ||
+		(RunIntervention == 88 && IntDefault[CurrSim - 1][88 - 1] == 1 && BaseInt[CurrSim - 1][82 - 1] == 0 && BaseInt[CurrSim - 1][83 - 1] == 0 && BaseInt[CurrSim - 1][84 - 1] == 0 && BaseInt[CurrSim - 1][85 - 1] == 0 && BaseInt[CurrSim - 1][86 - 1] == 0 && BaseInt[CurrSim - 1][87 - 1] == 0) ||
+		(RunIntervention == 88 && IntDefault[CurrSim - 1][88 - 1] == 1 && IntAllow[CurrSim - 1][82 - 1] == 0 && IntAllow[CurrSim - 1][83 - 1] == 0 && IntAllow[CurrSim - 1][84 - 1] == 0 && IntAllow[CurrSim - 1][85 - 1] == 0 && IntAllow[CurrSim - 1][86 - 1] == 0 && IntAllow[CurrSim - 1][87 - 1] == 0) ||
+		(RunIntervention == 89 && IntDefault[CurrSim - 1][89 - 1] == 0 && (IntAllow[CurrSim - 1][89 - 1] == 0 || BaseInt[CurrSim - 1][89 - 1] != 0 || DelayConsider[CurrSim - 1][89 - 1] != 0)) ||
+		(RunIntervention == 89 && IntDefault[CurrSim - 1][89 - 1] == 1 && (IntAllow[CurrSim - 1][89 - 1] == 0 || BaseInt[CurrSim - 1][89 - 1] != 0 || DelayConsider[CurrSim - 1][89 - 1] != 0)) ||
+		(RunIntervention == 89 && IntDefault[CurrSim - 1][89 - 1] == 1 && BaseInt[CurrSim - 1][90 - 1] == 0) ||
+		(RunIntervention == 89 && IntDefault[CurrSim - 1][89 - 1] == 1 && IntAllow[CurrSim - 1][90 - 1] == 0) ||
+		(RunIntervention == 90 && IntDefault[CurrSim - 1][90 - 1] == 0 && (IntAllow[CurrSim - 1][90 - 1] == 0 || BaseInt[CurrSim - 1][90 - 1] != 0 || DelayConsider[CurrSim - 1][90 - 1] != 0)) ||
+		(RunIntervention == 90 && IntDefault[CurrSim - 1][90 - 1] == 1 && (IntAllow[CurrSim - 1][90 - 1] == 0 || BaseInt[CurrSim - 1][90 - 1] != 0 || DelayConsider[CurrSim - 1][90 - 1] != 0)) ||
+		(RunIntervention == 90 && IntDefault[CurrSim - 1][90 - 1] == 1 && BaseInt[CurrSim - 1][89 - 1] == 0) ||
+		(RunIntervention == 90 && IntDefault[CurrSim - 1][90 - 1] == 1 && IntAllow[CurrSim - 1][89 - 1] == 0) ||
+		(RunIntervention == 91 && IntDefault[CurrSim - 1][91 - 1] == 0 && (IntAllow[CurrSim - 1][91 - 1] == 0 || BaseInt[CurrSim - 1][91 - 1] != 0 || DelayConsider[CurrSim - 1][91 - 1] != 0)) ||
+		(RunIntervention == 91 && IntDefault[CurrSim - 1][91 - 1] == 1 && (IntAllow[CurrSim - 1][91 - 1] == 0 || BaseInt[CurrSim - 1][91 - 1] != 0 || DelayConsider[CurrSim - 1][91 - 1] != 0)) ||
+		(RunIntervention == 91 && IntDefault[CurrSim - 1][91 - 1] == 1 && BaseInt[CurrSim - 1][92 - 1] == 0) ||
+		(RunIntervention == 91 && IntDefault[CurrSim - 1][91 - 1] == 1 && IntAllow[CurrSim - 1][92 - 1] == 0) ||
+		(RunIntervention == 92 && IntDefault[CurrSim - 1][92 - 1] == 0 && (IntAllow[CurrSim - 1][92 - 1] == 0 || BaseInt[CurrSim - 1][92 - 1] != 0 || DelayConsider[CurrSim - 1][92 - 1] != 0)) ||
+		(RunIntervention == 92 && IntDefault[CurrSim - 1][92 - 1] == 1 && (IntAllow[CurrSim - 1][92 - 1] == 0 || BaseInt[CurrSim - 1][92 - 1] != 0 || DelayConsider[CurrSim - 1][92 - 1] != 0)) ||
+		(RunIntervention == 92 && IntDefault[CurrSim - 1][92 - 1] == 1 && BaseInt[CurrSim - 1][91 - 1] == 0) ||
+		(RunIntervention == 92 && IntDefault[CurrSim - 1][92 - 1] == 1 && IntAllow[CurrSim - 1][91 - 1] == 0) ||
+		(RunIntervention == 93 && IntDefault[CurrSim - 1][93 - 1] == 0 && (IntAllow[CurrSim - 1][93 - 1] == 0 || BaseInt[CurrSim - 1][93 - 1] != 0 || DelayConsider[CurrSim - 1][93 - 1] != 0)) ||
+		(RunIntervention == 93 && IntDefault[CurrSim - 1][93 - 1] == 1 && (IntAllow[CurrSim - 1][93 - 1] == 0 || BaseInt[CurrSim - 1][93 - 1] != 0 || DelayConsider[CurrSim - 1][93 - 1] != 0)) ||
+		(RunIntervention == 93 && IntDefault[CurrSim - 1][93 - 1] == 1 && BaseInt[CurrSim - 1][94 - 1] == 0) ||
+		(RunIntervention == 93 && IntDefault[CurrSim - 1][93 - 1] == 1 && IntAllow[CurrSim - 1][94 - 1] == 0) ||
+		(RunIntervention == 94 && IntDefault[CurrSim - 1][94 - 1] == 0 && (IntAllow[CurrSim - 1][94 - 1] == 0 || BaseInt[CurrSim - 1][94 - 1] != 0 || DelayConsider[CurrSim - 1][94 - 1] != 0)) ||
+		(RunIntervention == 94 && IntDefault[CurrSim - 1][94 - 1] == 1 && (IntAllow[CurrSim - 1][94 - 1] == 0 || BaseInt[CurrSim - 1][94 - 1] != 0 || DelayConsider[CurrSim - 1][94 - 1] != 0)) ||
+		(RunIntervention == 94 && IntDefault[CurrSim - 1][94 - 1] == 1 && BaseInt[CurrSim - 1][93 - 1] == 0) ||
+		(RunIntervention == 94 && IntDefault[CurrSim - 1][94 - 1] == 1 && IntAllow[CurrSim - 1][93 - 1] == 0) ||
+		(RunIntervention == 95 && IntDefault[CurrSim - 1][95 - 1] == 0 && (IntAllow[CurrSim - 1][95 - 1] == 0 || BaseInt[CurrSim - 1][95 - 1] != 0 || DelayConsider[CurrSim - 1][95 - 1] != 0)) ||
+		(RunIntervention == 95 && IntDefault[CurrSim - 1][95 - 1] == 1 && (IntAllow[CurrSim - 1][95 - 1] == 0 || BaseInt[CurrSim - 1][95 - 1] != 0 || DelayConsider[CurrSim - 1][95 - 1] != 0)) ||
+		(RunIntervention == 95 && IntDefault[CurrSim - 1][95 - 1] == 1 && BaseInt[CurrSim - 1][96 - 1] == 0) ||
+		(RunIntervention == 95 && IntDefault[CurrSim - 1][95 - 1] == 1 && IntAllow[CurrSim - 1][96 - 1] == 0) ||
+		(RunIntervention == 96 && IntDefault[CurrSim - 1][96 - 1] == 0 && (IntAllow[CurrSim - 1][96 - 1] == 0 || BaseInt[CurrSim - 1][96 - 1] != 0 || DelayConsider[CurrSim - 1][96 - 1] != 0)) ||
+		(RunIntervention == 96 && IntDefault[CurrSim - 1][96 - 1] == 1 && (IntAllow[CurrSim - 1][96 - 1] == 0 || BaseInt[CurrSim - 1][96 - 1] != 0 || DelayConsider[CurrSim - 1][96 - 1] != 0)) ||
+		(RunIntervention == 96 && IntDefault[CurrSim - 1][96 - 1] == 1 && BaseInt[CurrSim - 1][95 - 1] == 0) ||
+		(RunIntervention == 96 && IntDefault[CurrSim - 1][96 - 1] == 1 && IntAllow[CurrSim - 1][95 - 1] == 0) 
+		));
+}
+
+int IsLowerNotDefault(int arrint, int iy) {
+	return (
+		
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 2 && (arrint == 1 - 1 && IntDefault[iy][1 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 3 && (arrint == 1 - 1 && IntDefault[iy][1 - 1] == 0 || arrint == 2 - 1 && IntDefault[iy][2 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 4 && (arrint == 1 - 1 && IntDefault[iy][1 - 1] == 0 || arrint == 2 - 1 && IntDefault[iy][2 - 1] == 0 || arrint == 3 - 1 && IntDefault[iy][3 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 5 && (arrint == 1 - 1 && IntDefault[iy][1 - 1] == 0 || arrint == 2 - 1 && IntDefault[iy][2 - 1] == 0 || arrint == 3 - 1 && IntDefault[iy][3 - 1] == 0 || arrint == 4 - 1 && IntDefault[iy][4 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 6 && (arrint == 1 - 1 && IntDefault[iy][1 - 1] == 0 || arrint == 2 - 1 && IntDefault[iy][2 - 1] == 0 || arrint == 3 - 1 && IntDefault[iy][3 - 1] == 0 || arrint == 4 - 1 && IntDefault[iy][4 - 1] == 0 || arrint == 5 - 1 && IntDefault[iy][5 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 7 && (arrint == 1 - 1 && IntDefault[iy][1 - 1] == 0 || arrint == 2 - 1 && IntDefault[iy][2 - 1] == 0 || arrint == 3 - 1 && IntDefault[iy][3 - 1] == 0 || arrint == 4 - 1 && IntDefault[iy][4 - 1] == 0 || arrint == 5 - 1 && IntDefault[iy][5 - 1] == 0 || arrint == 6 - 1 && IntDefault[iy][6 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 9 && (arrint == 8 - 1 && IntDefault[iy][8 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 10 && (arrint == 8 - 1 && IntDefault[iy][8 - 1] == 0 || arrint == 9 - 1 && IntDefault[iy][9 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 11 && (arrint == 8 - 1 && IntDefault[iy][8 - 1] == 0 || arrint == 9 - 1 && IntDefault[iy][9 - 1] == 0 || arrint == 10 - 1 && IntDefault[iy][10 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 12 && (arrint == 8 - 1 && IntDefault[iy][8 - 1] == 0 || arrint == 9 - 1 && IntDefault[iy][9 - 1] == 0 || arrint == 10 - 1 && IntDefault[iy][10 - 1] == 0 || arrint == 11 - 1 && IntDefault[iy][11 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 13 && (arrint == 8 - 1 && IntDefault[iy][8 - 1] == 0 || arrint == 9 - 1 && IntDefault[iy][9 - 1] == 0 || arrint == 10 - 1 && IntDefault[iy][10 - 1] == 0 || arrint == 11 - 1 && IntDefault[iy][11 - 1] == 0 || arrint == 12 - 1 && IntDefault[iy][12 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 14 && (arrint == 8 - 1 && IntDefault[iy][8 - 1] == 0 || arrint == 9 - 1 && IntDefault[iy][9 - 1] == 0 || arrint == 10 - 1 && IntDefault[iy][10 - 1] == 0 || arrint == 11 - 1 && IntDefault[iy][11 - 1] == 0 || arrint == 12 - 1 && IntDefault[iy][12 - 1] == 0 || arrint == 13 - 1 && IntDefault[iy][13 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 16 && (arrint == 15 - 1 && IntDefault[iy][15 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 17 && (arrint == 15 - 1 && IntDefault[iy][15 - 1] == 0 || arrint == 16 - 1 && IntDefault[iy][16 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 18 && (arrint == 15 - 1 && IntDefault[iy][15 - 1] == 0 || arrint == 16 - 1 && IntDefault[iy][16 - 1] == 0 || arrint == 17 - 1 && IntDefault[iy][17 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 19 && (arrint == 15 - 1 && IntDefault[iy][15 - 1] == 0 || arrint == 16 - 1 && IntDefault[iy][16 - 1] == 0 || arrint == 17 - 1 && IntDefault[iy][17 - 1] == 0 || arrint == 18 - 1 && IntDefault[iy][18 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 20 && (arrint == 15 - 1 && IntDefault[iy][15 - 1] == 0 || arrint == 16 - 1 && IntDefault[iy][16 - 1] == 0 || arrint == 17 - 1 && IntDefault[iy][17 - 1] == 0 || arrint == 18 - 1 && IntDefault[iy][18 - 1] == 0 || arrint == 19 - 1 && IntDefault[iy][19 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 21 && (arrint == 15 - 1 && IntDefault[iy][15 - 1] == 0 || arrint == 16 - 1 && IntDefault[iy][16 - 1] == 0 || arrint == 17 - 1 && IntDefault[iy][17 - 1] == 0 || arrint == 18 - 1 && IntDefault[iy][18 - 1] == 0 || arrint == 19 - 1 && IntDefault[iy][19 - 1] == 0 || arrint == 20 - 1 && IntDefault[iy][20 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 23 && (arrint == 22 - 1 && IntDefault[iy][22 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 24 && (arrint == 22 - 1 && IntDefault[iy][22 - 1] == 0 || arrint == 23 - 1 && IntDefault[iy][23 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 25 && (arrint == 22 - 1 && IntDefault[iy][22 - 1] == 0 || arrint == 23 - 1 && IntDefault[iy][23 - 1] == 0 || arrint == 24 - 1 && IntDefault[iy][24 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 26 && (arrint == 22 - 1 && IntDefault[iy][22 - 1] == 0 || arrint == 23 - 1 && IntDefault[iy][23 - 1] == 0 || arrint == 24 - 1 && IntDefault[iy][24 - 1] == 0 || arrint == 25 - 1 && IntDefault[iy][25 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 27 && (arrint == 22 - 1 && IntDefault[iy][22 - 1] == 0 || arrint == 23 - 1 && IntDefault[iy][23 - 1] == 0 || arrint == 24 - 1 && IntDefault[iy][24 - 1] == 0 || arrint == 25 - 1 && IntDefault[iy][25 - 1] == 0 || arrint == 26 - 1 && IntDefault[iy][26 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 28 && (arrint == 22 - 1 && IntDefault[iy][22 - 1] == 0 || arrint == 23 - 1 && IntDefault[iy][23 - 1] == 0 || arrint == 24 - 1 && IntDefault[iy][24 - 1] == 0 || arrint == 25 - 1 && IntDefault[iy][25 - 1] == 0 || arrint == 26 - 1 && IntDefault[iy][26 - 1] == 0 || arrint == 27 - 1 && IntDefault[iy][27 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 30 && (arrint == 29 - 1 && IntDefault[iy][29 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 31 && (arrint == 29 - 1 && IntDefault[iy][29 - 1] == 0 || arrint == 30 - 1 && IntDefault[iy][30 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 32 && (arrint == 29 - 1 && IntDefault[iy][29 - 1] == 0 || arrint == 30 - 1 && IntDefault[iy][30 - 1] == 0 || arrint == 31 - 1 && IntDefault[iy][31 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 33 && (arrint == 29 - 1 && IntDefault[iy][29 - 1] == 0 || arrint == 30 - 1 && IntDefault[iy][30 - 1] == 0 || arrint == 31 - 1 && IntDefault[iy][31 - 1] == 0 || arrint == 32 - 1 && IntDefault[iy][32 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 34 && (arrint == 29 - 1 && IntDefault[iy][29 - 1] == 0 || arrint == 30 - 1 && IntDefault[iy][30 - 1] == 0 || arrint == 31 - 1 && IntDefault[iy][31 - 1] == 0 || arrint == 32 - 1 && IntDefault[iy][32 - 1] == 0 || arrint == 33 - 1 && IntDefault[iy][33 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 35 && (arrint == 29 - 1 && IntDefault[iy][29 - 1] == 0 || arrint == 30 - 1 && IntDefault[iy][30 - 1] == 0 || arrint == 31 - 1 && IntDefault[iy][31 - 1] == 0 || arrint == 32 - 1 && IntDefault[iy][32 - 1] == 0 || arrint == 33 - 1 && IntDefault[iy][33 - 1] == 0 || arrint == 34 - 1 && IntDefault[iy][34 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 37 && (arrint == 36 - 1 && IntDefault[iy][36 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 38 && (arrint == 36 - 1 && IntDefault[iy][36 - 1] == 0 || arrint == 37 - 1 && IntDefault[iy][37 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 40 && (arrint == 39 - 1 && IntDefault[iy][39 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 41 && (arrint == 39 - 1 && IntDefault[iy][39 - 1] == 0 || arrint == 40 - 1 && IntDefault[iy][40 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 42 && (arrint == 39 - 1 && IntDefault[iy][39 - 1] == 0 || arrint == 40 - 1 && IntDefault[iy][40 - 1] == 0 || arrint == 41 - 1 && IntDefault[iy][41 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 43 && (arrint == 39 - 1 && IntDefault[iy][39 - 1] == 0 || arrint == 40 - 1 && IntDefault[iy][40 - 1] == 0 || arrint == 41 - 1 && IntDefault[iy][41 - 1] == 0 || arrint == 42 - 1 && IntDefault[iy][42 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 45 && (arrint == 44 - 1 && IntDefault[iy][44 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 46 && (arrint == 44 - 1 && IntDefault[iy][44 - 1] == 0 || arrint == 45 - 1 && IntDefault[iy][45 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 47 && (arrint == 44 - 1 && IntDefault[iy][44 - 1] == 0 || arrint == 45 - 1 && IntDefault[iy][45 - 1] == 0 || arrint == 46 - 1 && IntDefault[iy][46 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 48 && (arrint == 44 - 1 && IntDefault[iy][44 - 1] == 0 || arrint == 45 - 1 && IntDefault[iy][45 - 1] == 0 || arrint == 46 - 1 && IntDefault[iy][46 - 1] == 0 || arrint == 47 - 1 && IntDefault[iy][47 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 50 && (arrint == 49 - 1 && IntDefault[iy][49 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 51 && (arrint == 49 - 1 && IntDefault[iy][49 - 1] == 0 || arrint == 50 - 1 && IntDefault[iy][50 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 52 && (arrint == 49 - 1 && IntDefault[iy][49 - 1] == 0 || arrint == 50 - 1 && IntDefault[iy][50 - 1] == 0 || arrint == 51 - 1 && IntDefault[iy][51 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 53 && (arrint == 49 - 1 && IntDefault[iy][49 - 1] == 0 || arrint == 50 - 1 && IntDefault[iy][50 - 1] == 0 || arrint == 51 - 1 && IntDefault[iy][51 - 1] == 0 || arrint == 52 - 1 && IntDefault[iy][52 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 54 && (arrint == 49 - 1 && IntDefault[iy][49 - 1] == 0 || arrint == 50 - 1 && IntDefault[iy][50 - 1] == 0 || arrint == 51 - 1 && IntDefault[iy][51 - 1] == 0 || arrint == 52 - 1 && IntDefault[iy][52 - 1] == 0 || arrint == 53 - 1 && IntDefault[iy][53 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 56 && (arrint == 55 - 1 && IntDefault[iy][55 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 57 && (arrint == 55 - 1 && IntDefault[iy][55 - 1] == 0 || arrint == 56 - 1 && IntDefault[iy][56 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 58 && (arrint == 55 - 1 && IntDefault[iy][55 - 1] == 0 || arrint == 56 - 1 && IntDefault[iy][56 - 1] == 0 || arrint == 57 - 1 && IntDefault[iy][57 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 59 && (arrint == 55 - 1 && IntDefault[iy][55 - 1] == 0 || arrint == 56 - 1 && IntDefault[iy][56 - 1] == 0 || arrint == 57 - 1 && IntDefault[iy][57 - 1] == 0 || arrint == 58 - 1 && IntDefault[iy][58 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 61 && (arrint == 60 - 1 && IntDefault[iy][60 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 62 && (arrint == 60 - 1 && IntDefault[iy][60 - 1] == 0 || arrint == 61 - 1 && IntDefault[iy][61 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 63 && (arrint == 60 - 1 && IntDefault[iy][60 - 1] == 0 || arrint == 61 - 1 && IntDefault[iy][61 - 1] == 0 || arrint == 62 - 1 && IntDefault[iy][62 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 64 && (arrint == 60 - 1 && IntDefault[iy][60 - 1] == 0 || arrint == 61 - 1 && IntDefault[iy][61 - 1] == 0 || arrint == 62 - 1 && IntDefault[iy][62 - 1] == 0 || arrint == 63 - 1 && IntDefault[iy][63 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 65 && (arrint == 60 - 1 && IntDefault[iy][60 - 1] == 0 || arrint == 61 - 1 && IntDefault[iy][61 - 1] == 0 || arrint == 62 - 1 && IntDefault[iy][62 - 1] == 0 || arrint == 63 - 1 && IntDefault[iy][63 - 1] == 0 || arrint == 64 - 1 && IntDefault[iy][64 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 66 && (arrint == 60 - 1 && IntDefault[iy][60 - 1] == 0 || arrint == 61 - 1 && IntDefault[iy][61 - 1] == 0 || arrint == 62 - 1 && IntDefault[iy][62 - 1] == 0 || arrint == 63 - 1 && IntDefault[iy][63 - 1] == 0 || arrint == 64 - 1 && IntDefault[iy][64 - 1] == 0 || arrint == 65 - 1 && IntDefault[iy][65 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 68 && (arrint == 67 - 1 && IntDefault[iy][67 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 69 && (arrint == 67 - 1 && IntDefault[iy][67 - 1] == 0 || arrint == 68 - 1 && IntDefault[iy][68 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 70 && (arrint == 67 - 1 && IntDefault[iy][67 - 1] == 0 || arrint == 68 - 1 && IntDefault[iy][68 - 1] == 0 || arrint == 69 - 1 && IntDefault[iy][69 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 71 && (arrint == 67 - 1 && IntDefault[iy][67 - 1] == 0 || arrint == 68 - 1 && IntDefault[iy][68 - 1] == 0 || arrint == 69 - 1 && IntDefault[iy][69 - 1] == 0 || arrint == 70 - 1 && IntDefault[iy][70 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 72 && (arrint == 67 - 1 && IntDefault[iy][67 - 1] == 0 || arrint == 68 - 1 && IntDefault[iy][68 - 1] == 0 || arrint == 69 - 1 && IntDefault[iy][69 - 1] == 0 || arrint == 70 - 1 && IntDefault[iy][70 - 1] == 0 || arrint == 71 - 1 && IntDefault[iy][71 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 73 && (arrint == 67 - 1 && IntDefault[iy][67 - 1] == 0 || arrint == 68 - 1 && IntDefault[iy][68 - 1] == 0 || arrint == 69 - 1 && IntDefault[iy][69 - 1] == 0 || arrint == 70 - 1 && IntDefault[iy][70 - 1] == 0 || arrint == 71 - 1 && IntDefault[iy][71 - 1] == 0 || arrint == 72 - 1 && IntDefault[iy][72 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 74 && (arrint == 67 - 1 && IntDefault[iy][67 - 1] == 0 || arrint == 68 - 1 && IntDefault[iy][68 - 1] == 0 || arrint == 69 - 1 && IntDefault[iy][69 - 1] == 0 || arrint == 70 - 1 && IntDefault[iy][70 - 1] == 0 || arrint == 71 - 1 && IntDefault[iy][71 - 1] == 0 || arrint == 72 - 1 && IntDefault[iy][72 - 1] == 0 || arrint == 73 - 1 && IntDefault[iy][73 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 75 && (arrint == 67 - 1 && IntDefault[iy][67 - 1] == 0 || arrint == 68 - 1 && IntDefault[iy][68 - 1] == 0 || arrint == 69 - 1 && IntDefault[iy][69 - 1] == 0 || arrint == 70 - 1 && IntDefault[iy][70 - 1] == 0 || arrint == 71 - 1 && IntDefault[iy][71 - 1] == 0 || arrint == 72 - 1 && IntDefault[iy][72 - 1] == 0 || arrint == 73 - 1 && IntDefault[iy][73 - 1] == 0 || arrint == 74 - 1 && IntDefault[iy][74 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 76 && (arrint == 67 - 1 && IntDefault[iy][67 - 1] == 0 || arrint == 68 - 1 && IntDefault[iy][68 - 1] == 0 || arrint == 69 - 1 && IntDefault[iy][69 - 1] == 0 || arrint == 70 - 1 && IntDefault[iy][70 - 1] == 0 || arrint == 71 - 1 && IntDefault[iy][71 - 1] == 0 || arrint == 72 - 1 && IntDefault[iy][72 - 1] == 0 || arrint == 73 - 1 && IntDefault[iy][73 - 1] == 0 || arrint == 74 - 1 && IntDefault[iy][74 - 1] == 0 || arrint == 75 - 1 && IntDefault[iy][75 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 78 && (arrint == 77 - 1 && IntDefault[iy][77 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 79 && (arrint == 77 - 1 && IntDefault[iy][77 - 1] == 0 || arrint == 78 - 1 && IntDefault[iy][78 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 80 && (arrint == 77 - 1 && IntDefault[iy][77 - 1] == 0 || arrint == 78 - 1 && IntDefault[iy][78 - 1] == 0 || arrint == 79 - 1 && IntDefault[iy][79 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 81 && (arrint == 77 - 1 && IntDefault[iy][77 - 1] == 0 || arrint == 78 - 1 && IntDefault[iy][78 - 1] == 0 || arrint == 79 - 1 && IntDefault[iy][79 - 1] == 0 || arrint == 80 - 1 && IntDefault[iy][80 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 83 && (arrint == 82 - 1 && IntDefault[iy][82 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 84 && (arrint == 82 - 1 && IntDefault[iy][82 - 1] == 0 || arrint == 83 - 1 && IntDefault[iy][83 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 85 && (arrint == 82 - 1 && IntDefault[iy][82 - 1] == 0 || arrint == 83 - 1 && IntDefault[iy][83 - 1] == 0 || arrint == 84 - 1 && IntDefault[iy][84 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 86 && (arrint == 82 - 1 && IntDefault[iy][82 - 1] == 0 || arrint == 83 - 1 && IntDefault[iy][83 - 1] == 0 || arrint == 84 - 1 && IntDefault[iy][84 - 1] == 0 || arrint == 85 - 1 && IntDefault[iy][85 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 87 && (arrint == 82 - 1 && IntDefault[iy][82 - 1] == 0 || arrint == 83 - 1 && IntDefault[iy][83 - 1] == 0 || arrint == 84 - 1 && IntDefault[iy][84 - 1] == 0 || arrint == 85 - 1 && IntDefault[iy][85 - 1] == 0 || arrint == 86 - 1 && IntDefault[iy][86 - 1] == 0)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 88 && (arrint == 82 - 1 && IntDefault[iy][82 - 1] == 0 || arrint == 83 - 1 && IntDefault[iy][83 - 1] == 0 || arrint == 84 - 1 && IntDefault[iy][84 - 1] == 0 || arrint == 85 - 1 && IntDefault[iy][85 - 1] == 0 || arrint == 86 - 1 && IntDefault[iy][86 - 1] == 0 || arrint == 87 - 1 && IntDefault[iy][87 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 90 && (arrint == 89 - 1 && IntDefault[iy][89 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 92 && (arrint == 91 - 1 && IntDefault[iy][91 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 94 && (arrint == 93 - 1 && IntDefault[iy][93 - 1] == 0)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 96 && (arrint == 95 - 1 && IntDefault[iy][95 - 1] == 0)) 
+
+		);
+
+}
+
+int IsNextLowerCov(int chosen, int iy) {
+	return (
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 2 && (chosen == 1 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 3 && (chosen == 1 - 1 || chosen == 2 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 4 && (chosen == 1 - 1 || chosen == 2 - 1 || chosen == 3 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 5 && (chosen == 1 - 1 || chosen == 2 - 1 || chosen == 3 - 1 || chosen == 4 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 6 && (chosen == 1 - 1 || chosen == 2 - 1 || chosen == 3 - 1 || chosen == 4 - 1 || chosen == 5 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 7 && (chosen == 1 - 1 || chosen == 2 - 1 || chosen == 3 - 1 || chosen == 4 - 1 || chosen == 5 - 1 || chosen == 6 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 9 && (chosen == 8 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 10 && (chosen == 8 - 1 || chosen == 9 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 11 && (chosen == 8 - 1 || chosen == 9 - 1 || chosen == 10 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 12 && (chosen == 8 - 1 || chosen == 9 - 1 || chosen == 10 - 1 || chosen == 11 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 13 && (chosen == 8 - 1 || chosen == 9 - 1 || chosen == 10 - 1 || chosen == 11 - 1 || chosen == 12 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 14 && (chosen == 8 - 1 || chosen == 9 - 1 || chosen == 10 - 1 || chosen == 11 - 1 || chosen == 12 - 1 || chosen == 13 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 16 && (chosen == 15 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 17 && (chosen == 15 - 1 || chosen == 16 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 18 && (chosen == 15 - 1 || chosen == 16 - 1 || chosen == 17 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 19 && (chosen == 15 - 1 || chosen == 16 - 1 || chosen == 17 - 1 || chosen == 18 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 20 && (chosen == 15 - 1 || chosen == 16 - 1 || chosen == 17 - 1 || chosen == 18 - 1 || chosen == 19 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 21 && (chosen == 15 - 1 || chosen == 16 - 1 || chosen == 17 - 1 || chosen == 18 - 1 || chosen == 19 - 1 || chosen == 20 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 23 && (chosen == 22 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 24 && (chosen == 22 - 1 || chosen == 23 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 25 && (chosen == 22 - 1 || chosen == 23 - 1 || chosen == 24 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 26 && (chosen == 22 - 1 || chosen == 23 - 1 || chosen == 24 - 1 || chosen == 25 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 27 && (chosen == 22 - 1 || chosen == 23 - 1 || chosen == 24 - 1 || chosen == 25 - 1 || chosen == 26 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 28 && (chosen == 22 - 1 || chosen == 23 - 1 || chosen == 24 - 1 || chosen == 25 - 1 || chosen == 26 - 1 || chosen == 27 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 30 && (chosen == 29 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 31 && (chosen == 29 - 1 || chosen == 30 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 32 && (chosen == 29 - 1 || chosen == 30 - 1 || chosen == 31 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 33 && (chosen == 29 - 1 || chosen == 30 - 1 || chosen == 31 - 1 || chosen == 32 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 34 && (chosen == 29 - 1 || chosen == 30 - 1 || chosen == 31 - 1 || chosen == 32 - 1 || chosen == 33 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 35 && (chosen == 29 - 1 || chosen == 30 - 1 || chosen == 31 - 1 || chosen == 32 - 1 || chosen == 33 - 1 || chosen == 34 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 37 && (chosen == 36 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 38 && (chosen == 36 - 1 || chosen == 37 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 40 && (chosen == 39 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 41 && (chosen == 39 - 1 || chosen == 40 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 42 && (chosen == 39 - 1 || chosen == 40 - 1 || chosen == 41 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 43 && (chosen == 39 - 1 || chosen == 40 - 1 || chosen == 41 - 1 || chosen == 42 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 45 && (chosen == 44 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 46 && (chosen == 44 - 1 || chosen == 45 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 47 && (chosen == 44 - 1 || chosen == 45 - 1 || chosen == 46 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 48 && (chosen == 44 - 1 || chosen == 45 - 1 || chosen == 46 - 1 || chosen == 47 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 50 && (chosen == 49 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 51 && (chosen == 49 - 1 || chosen == 50 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 52 && (chosen == 49 - 1 || chosen == 50 - 1 || chosen == 51 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 53 && (chosen == 49 - 1 || chosen == 50 - 1 || chosen == 51 - 1 || chosen == 52 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 54 && (chosen == 49 - 1 || chosen == 50 - 1 || chosen == 51 - 1 || chosen == 52 - 1 || chosen == 53 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 56 && (chosen == 55 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 57 && (chosen == 55 - 1 || chosen == 56 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 58 && (chosen == 55 - 1 || chosen == 56 - 1 || chosen == 57 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 59 && (chosen == 55 - 1 || chosen == 56 - 1 || chosen == 57 - 1 || chosen == 58 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 61 && (chosen == 60 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 62 && (chosen == 60 - 1 || chosen == 61 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 63 && (chosen == 60 - 1 || chosen == 61 - 1 || chosen == 62 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 64 && (chosen == 60 - 1 || chosen == 61 - 1 || chosen == 62 - 1 || chosen == 63 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 65 && (chosen == 60 - 1 || chosen == 61 - 1 || chosen == 62 - 1 || chosen == 63 - 1 || chosen == 64 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 66 && (chosen == 60 - 1 || chosen == 61 - 1 || chosen == 62 - 1 || chosen == 63 - 1 || chosen == 64 - 1 || chosen == 65 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 68 && (chosen == 67 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 69 && (chosen == 67 - 1 || chosen == 68 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 70 && (chosen == 67 - 1 || chosen == 68 - 1 || chosen == 69 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 71 && (chosen == 67 - 1 || chosen == 68 - 1 || chosen == 69 - 1 || chosen == 70 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 72 && (chosen == 67 - 1 || chosen == 68 - 1 || chosen == 69 - 1 || chosen == 70 - 1 || chosen == 71 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 73 && (chosen == 67 - 1 || chosen == 68 - 1 || chosen == 69 - 1 || chosen == 70 - 1 || chosen == 71 - 1 || chosen == 72 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 74 && (chosen == 67 - 1 || chosen == 68 - 1 || chosen == 69 - 1 || chosen == 70 - 1 || chosen == 71 - 1 || chosen == 72 - 1 || chosen == 73 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 75 && (chosen == 67 - 1 || chosen == 68 - 1 || chosen == 69 - 1 || chosen == 70 - 1 || chosen == 71 - 1 || chosen == 72 - 1 || chosen == 73 - 1 || chosen == 74 - 1 || chosen == -1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 76 && (chosen == 67 - 1 || chosen == 68 - 1 || chosen == 69 - 1 || chosen == 70 - 1 || chosen == 71 - 1 || chosen == 72 - 1 || chosen == 73 - 1 || chosen == 74 - 1 || chosen == 75 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 78 && (chosen == 77 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 79 && (chosen == 77 - 1 || chosen == 78 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 80 && (chosen == 77 - 1 || chosen == 78 - 1 || chosen == 79 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 81 && (chosen == 77 - 1 || chosen == 78 - 1 || chosen == 79 - 1 || chosen == 80 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 83 && (chosen == 82 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 84 && (chosen == 82 - 1 || chosen == 83 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 85 && (chosen == 82 - 1 || chosen == 83 - 1 || chosen == 84 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 86 && (chosen == 82 - 1 || chosen == 83 - 1 || chosen == 84 - 1 || chosen == 85 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 87 && (chosen == 82 - 1 || chosen == 83 - 1 || chosen == 84 - 1 || chosen == 85 - 1 || chosen == 86 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 88 && (chosen == 82 - 1 || chosen == 83 - 1 || chosen == 84 - 1 || chosen == 85 - 1 || chosen == 86 - 1 || chosen == 87 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 90 && (chosen == 89 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 92 && (chosen == 91 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 94 && (chosen == 93 - 1)) ||
+
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 96 && (chosen == 95 - 1)) 
+		);
+
+
+}
+
+int IsNextNotLowerCov(int chosen, int iy) {
+	return (
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 1) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 2 && (chosen != 1 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 3 && (chosen != 1 - 1 && chosen != 2 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 4 && (chosen != 1 - 1 && chosen != 2 - 1 && chosen != 3 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 5 && (chosen != 1 - 1 && chosen != 2 - 1 && chosen != 3 - 1 && chosen != 4 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 6 && (chosen != 1 - 1 && chosen != 2 - 1 && chosen != 3 - 1 && chosen != 4 - 1 && chosen != 5 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 7 && (chosen != 1 - 1 && chosen != 2 - 1 && chosen != 3 - 1 && chosen != 4 - 1 && chosen != 5 - 1 && chosen != 6 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 8) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 9 && (chosen != 8 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 10 && (chosen != 8 - 1 && chosen != 9 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 11 && (chosen != 8 - 1 && chosen != 9 - 1 && chosen != 10 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 12 && (chosen != 8 - 1 && chosen != 9 - 1 && chosen != 10 - 1 && chosen != 11 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 13 && (chosen != 8 - 1 && chosen != 9 - 1 && chosen != 10 - 1 && chosen != 11 - 1 && chosen != 12 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 14 && (chosen != 8 - 1 && chosen != 9 - 1 && chosen != 10 - 1 && chosen != 11 - 1 && chosen != 12 - 1 && chosen != 13 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 15) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 16 && (chosen != 15 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 17 && (chosen != 15 - 1 && chosen != 16 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 18 && (chosen != 15 - 1 && chosen != 16 - 1 && chosen != 17 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 19 && (chosen != 15 - 1 && chosen != 16 - 1 && chosen != 17 - 1 && chosen != 18 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 20 && (chosen != 15 - 1 && chosen != 16 - 1 && chosen != 17 - 1 && chosen != 18 - 1 && chosen != 19 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 21 && (chosen != 15 - 1 && chosen != 16 - 1 && chosen != 17 - 1 && chosen != 18 - 1 && chosen != 19 - 1 && chosen != 20 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 22) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 23 && (chosen != 22 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 24 && (chosen != 22 - 1 && chosen != 23 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 25 && (chosen != 22 - 1 && chosen != 23 - 1 && chosen != 24 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 26 && (chosen != 22 - 1 && chosen != 23 - 1 && chosen != 24 - 1 && chosen != 25 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 27 && (chosen != 22 - 1 && chosen != 23 - 1 && chosen != 24 - 1 && chosen != 25 - 1 && chosen != 26 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 28 && (chosen != 22 - 1 && chosen != 23 - 1 && chosen != 24 - 1 && chosen != 25 - 1 && chosen != 26 - 1 && chosen != 27 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 29) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 30 && (chosen != 29 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 31 && (chosen != 29 - 1 && chosen != 30 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 32 && (chosen != 29 - 1 && chosen != 30 - 1 && chosen != 31 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 33 && (chosen != 29 - 1 && chosen != 30 - 1 && chosen != 31 - 1 && chosen != 32 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 34 && (chosen != 29 - 1 && chosen != 30 - 1 && chosen != 31 - 1 && chosen != 32 - 1 && chosen != 33 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 35 && (chosen != 29 - 1 && chosen != 30 - 1 && chosen != 31 - 1 && chosen != 32 - 1 && chosen != 33 - 1 && chosen != 34 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 36) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 37 && (chosen != 36 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 38 && (chosen != 36 - 1 && chosen != 37 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 39) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 40 && (chosen != 39 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 41 && (chosen != 39 - 1 && chosen != 40 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 42 && (chosen != 39 - 1 && chosen != 40 - 1 && chosen != 41 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 43 && (chosen != 39 - 1 && chosen != 40 - 1 && chosen != 41 - 1 && chosen != 42 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 44) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 45 && (chosen != 44 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 46 && (chosen != 44 - 1 && chosen != 45 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 47 && (chosen != 44 - 1 && chosen != 45 - 1 && chosen != 46 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 48 && (chosen != 44 - 1 && chosen != 45 - 1 && chosen != 46 - 1 && chosen != 47 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 49) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 50 && (chosen != 49 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 51 && (chosen != 49 - 1 && chosen != 50 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 52 && (chosen != 49 - 1 && chosen != 50 - 1 && chosen != 51 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 53 && (chosen != 49 - 1 && chosen != 50 - 1 && chosen != 51 - 1 && chosen != 52 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 54 && (chosen != 49 - 1 && chosen != 50 - 1 && chosen != 51 - 1 && chosen != 52 - 1 && chosen != 53 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 55) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 56 && (chosen != 55 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 57 && (chosen != 55 - 1 && chosen != 56 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 58 && (chosen != 55 - 1 && chosen != 56 - 1 && chosen != 57 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 59 && (chosen != 55 - 1 && chosen != 56 - 1 && chosen != 57 - 1 && chosen != 58 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 60) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 61 && (chosen != 60 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 62 && (chosen != 60 - 1 && chosen != 61 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 63 && (chosen != 60 - 1 && chosen != 61 - 1 && chosen != 62 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 64 && (chosen != 60 - 1 && chosen != 61 - 1 && chosen != 62 - 1 && chosen != 63 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 65 && (chosen != 60 - 1 && chosen != 61 - 1 && chosen != 62 - 1 && chosen != 63 - 1 && chosen != 64 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 66 && (chosen != 60 - 1 && chosen != 61 - 1 && chosen != 62 - 1 && chosen != 63 - 1 && chosen != 64 - 1 && chosen != 65 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 67) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 68 && (chosen != 67 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 69 && (chosen != 67 - 1 && chosen != 68 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 70 && (chosen != 67 - 1 && chosen != 68 - 1 && chosen != 69 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 71 && (chosen != 67 - 1 && chosen != 68 - 1 && chosen != 69 - 1 && chosen != 70 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 72 && (chosen != 67 - 1 && chosen != 68 - 1 && chosen != 69 - 1 && chosen != 70 - 1 && chosen != 71 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 73 && (chosen != 67 - 1 && chosen != 68 - 1 && chosen != 69 - 1 && chosen != 70 - 1 && chosen != 71 - 1 && chosen != 72 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 74 && (chosen != 67 - 1 && chosen != 68 - 1 && chosen != 69 - 1 && chosen != 70 - 1 && chosen != 71 - 1 && chosen != 72 - 1 && chosen != 73 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 75 && (chosen != 67 - 1 && chosen != 68 - 1 && chosen != 69 - 1 && chosen != 70 - 1 && chosen != 71 - 1 && chosen != 72 - 1 && chosen != 73 - 1 && chosen != 74 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 76 && (chosen != 67 - 1 && chosen != 68 - 1 && chosen != 69 - 1 && chosen != 70 - 1 && chosen != 71 - 1 && chosen != 72 - 1 && chosen != 73 - 1 && chosen != 74 - 1 && chosen != 75 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 77) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 78 && (chosen != 77 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 79 && (chosen != 77 - 1 && chosen != 78 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 80 && (chosen != 77 - 1 && chosen != 78 - 1 && chosen != 79 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 81 && (chosen != 77 - 1 && chosen != 78 - 1 && chosen != 79 - 1 && chosen != 80 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 82) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 83 && (chosen != 82 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 84 && (chosen != 82 - 1 && chosen != 83 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 85 && (chosen != 82 - 1 && chosen != 83 - 1 && chosen != 84 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 86 && (chosen != 82 - 1 && chosen != 83 - 1 && chosen != 84 - 1 && chosen != 85 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 87 && (chosen != 82 - 1 && chosen != 83 - 1 && chosen != 84 - 1 && chosen != 85 - 1 && chosen != 86 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 88 && (chosen != 82 - 1 && chosen != 83 - 1 && chosen != 84 - 1 && chosen != 85 - 1 && chosen != 86 - 1 && chosen != 87 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 89) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 90 && (chosen != 89 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 91) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 92 && (chosen != 91 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 93) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 94 && (chosen != 93 - 1)) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 95) ||
+		(BaseIntToggle[iy][CountInt[iy] - 1] == 96 && (chosen != 95 - 1)) 
+
+		);
+}
+
+int IsNextNotDefault(int chosen, int iy) {
+	return (
+
+		(IntDefault[iy][1 - 1] == 1 && chosen != 1 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 6 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) ||
+		(IntDefault[iy][2 - 1] == 1 && chosen != 2 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 6 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) ||
+		(IntDefault[iy][3 - 1] == 1 && chosen != 3 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 6 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) ||
+		(IntDefault[iy][4 - 1] == 1 && chosen != 4 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 6 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) ||
+		(IntDefault[iy][5 - 1] == 1 && chosen != 5 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 6 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) ||
+		(IntDefault[iy][6 - 1] == 1 && chosen != 6 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) ||
+		(IntDefault[iy][7 - 1] == 1 && chosen != 7 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 6)) ||
+		(IntDefault[iy][8 - 1] == 1 && chosen != 8 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 13 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) ||
+		(IntDefault[iy][9 - 1] == 1 && chosen != 9 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 13 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) ||
+		(IntDefault[iy][10 - 1] == 1 && chosen != 10 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 13 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) ||
+		(IntDefault[iy][11 - 1] == 1 && chosen != 11 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 13 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) ||
+		(IntDefault[iy][12 - 1] == 1 && chosen != 12 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 13 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) ||
+		(IntDefault[iy][13 - 1] == 1 && chosen != 13 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) ||
+		(IntDefault[iy][14 - 1] == 1 && chosen != 14 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 13)) ||
+		(IntDefault[iy][15 - 1] == 1 && chosen != 15 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 20 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) ||
+		(IntDefault[iy][16 - 1] == 1 && chosen != 16 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 20 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) ||
+		(IntDefault[iy][17 - 1] == 1 && chosen != 17 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 20 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) ||
+		(IntDefault[iy][18 - 1] == 1 && chosen != 18 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 20 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) ||
+		(IntDefault[iy][19 - 1] == 1 && chosen != 19 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 20 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) ||
+		(IntDefault[iy][20 - 1] == 1 && chosen != 20 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) ||
+		(IntDefault[iy][21 - 1] == 1 && chosen != 21 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 20)) ||
+		(IntDefault[iy][22 - 1] == 1 && chosen != 22 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 27 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) ||
+		(IntDefault[iy][23 - 1] == 1 && chosen != 23 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 27 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) ||
+		(IntDefault[iy][24 - 1] == 1 && chosen != 24 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 27 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) ||
+		(IntDefault[iy][25 - 1] == 1 && chosen != 25 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 27 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) ||
+		(IntDefault[iy][26 - 1] == 1 && chosen != 26 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 27 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) ||
+		(IntDefault[iy][27 - 1] == 1 && chosen != 27 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) ||
+		(IntDefault[iy][28 - 1] == 1 && chosen != 28 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 27)) ||
+		(IntDefault[iy][29 - 1] == 1 && chosen != 29 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 34 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) ||
+		(IntDefault[iy][30 - 1] == 1 && chosen != 30 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 34 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) ||
+		(IntDefault[iy][31 - 1] == 1 && chosen != 31 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 34 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) ||
+		(IntDefault[iy][32 - 1] == 1 && chosen != 32 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 34 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) ||
+		(IntDefault[iy][33 - 1] == 1 && chosen != 33 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 34 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) ||
+		(IntDefault[iy][34 - 1] == 1 && chosen != 34 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) ||
+		(IntDefault[iy][35 - 1] == 1 && chosen != 35 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 34)) ||
+		(IntDefault[iy][36 - 1] == 1 && chosen != 36 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 37 || BaseIntToggle[iy][CountInt[iy] - 1] == 38)) ||
+		(IntDefault[iy][37 - 1] == 1 && chosen != 37 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 36 || BaseIntToggle[iy][CountInt[iy] - 1] == 38)) ||
+		(IntDefault[iy][38 - 1] == 1 && chosen != 38 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 36 || BaseIntToggle[iy][CountInt[iy] - 1] == 37)) ||
+		(IntDefault[iy][39 - 1] == 1 && chosen != 39 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 40 || BaseIntToggle[iy][CountInt[iy] - 1] == 41 || BaseIntToggle[iy][CountInt[iy] - 1] == 42 || BaseIntToggle[iy][CountInt[iy] - 1] == 43)) ||
+		(IntDefault[iy][40 - 1] == 1 && chosen != 40 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 39 || BaseIntToggle[iy][CountInt[iy] - 1] == 41 || BaseIntToggle[iy][CountInt[iy] - 1] == 42 || BaseIntToggle[iy][CountInt[iy] - 1] == 43)) ||
+		(IntDefault[iy][41 - 1] == 1 && chosen != 41 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 39 || BaseIntToggle[iy][CountInt[iy] - 1] == 40 || BaseIntToggle[iy][CountInt[iy] - 1] == 42 || BaseIntToggle[iy][CountInt[iy] - 1] == 43)) ||
+		(IntDefault[iy][42 - 1] == 1 && chosen != 42 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 39 || BaseIntToggle[iy][CountInt[iy] - 1] == 40 || BaseIntToggle[iy][CountInt[iy] - 1] == 41 || BaseIntToggle[iy][CountInt[iy] - 1] == 43)) ||
+		(IntDefault[iy][43 - 1] == 1 && chosen != 43 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 39 || BaseIntToggle[iy][CountInt[iy] - 1] == 40 || BaseIntToggle[iy][CountInt[iy] - 1] == 41 || BaseIntToggle[iy][CountInt[iy] - 1] == 42)) ||
+		(IntDefault[iy][44 - 1] == 1 && chosen != 44 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 45 || BaseIntToggle[iy][CountInt[iy] - 1] == 46 || BaseIntToggle[iy][CountInt[iy] - 1] == 47 || BaseIntToggle[iy][CountInt[iy] - 1] == 48)) ||
+		(IntDefault[iy][45 - 1] == 1 && chosen != 45 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 44 || BaseIntToggle[iy][CountInt[iy] - 1] == 46 || BaseIntToggle[iy][CountInt[iy] - 1] == 47 || BaseIntToggle[iy][CountInt[iy] - 1] == 48)) ||
+		(IntDefault[iy][46 - 1] == 1 && chosen != 46 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 44 || BaseIntToggle[iy][CountInt[iy] - 1] == 45 || BaseIntToggle[iy][CountInt[iy] - 1] == 47 || BaseIntToggle[iy][CountInt[iy] - 1] == 48)) ||
+		(IntDefault[iy][47 - 1] == 1 && chosen != 47 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 44 || BaseIntToggle[iy][CountInt[iy] - 1] == 45 || BaseIntToggle[iy][CountInt[iy] - 1] == 46 || BaseIntToggle[iy][CountInt[iy] - 1] == 48)) ||
+		(IntDefault[iy][48 - 1] == 1 && chosen != 48 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 44 || BaseIntToggle[iy][CountInt[iy] - 1] == 45 || BaseIntToggle[iy][CountInt[iy] - 1] == 46 || BaseIntToggle[iy][CountInt[iy] - 1] == 47)) ||
+		(IntDefault[iy][49 - 1] == 1 && chosen != 49 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 50 || BaseIntToggle[iy][CountInt[iy] - 1] == 51 || BaseIntToggle[iy][CountInt[iy] - 1] == 52 || BaseIntToggle[iy][CountInt[iy] - 1] == 53 || BaseIntToggle[iy][CountInt[iy] - 1] == 54)) ||
+		(IntDefault[iy][50 - 1] == 1 && chosen != 50 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 49 || BaseIntToggle[iy][CountInt[iy] - 1] == 51 || BaseIntToggle[iy][CountInt[iy] - 1] == 52 || BaseIntToggle[iy][CountInt[iy] - 1] == 53 || BaseIntToggle[iy][CountInt[iy] - 1] == 54)) ||
+		(IntDefault[iy][51 - 1] == 1 && chosen != 51 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 49 || BaseIntToggle[iy][CountInt[iy] - 1] == 50 || BaseIntToggle[iy][CountInt[iy] - 1] == 52 || BaseIntToggle[iy][CountInt[iy] - 1] == 53 || BaseIntToggle[iy][CountInt[iy] - 1] == 54)) ||
+		(IntDefault[iy][52 - 1] == 1 && chosen != 52 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 49 || BaseIntToggle[iy][CountInt[iy] - 1] == 50 || BaseIntToggle[iy][CountInt[iy] - 1] == 51 || BaseIntToggle[iy][CountInt[iy] - 1] == 53 || BaseIntToggle[iy][CountInt[iy] - 1] == 54)) ||
+		(IntDefault[iy][53 - 1] == 1 && chosen != 53 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 49 || BaseIntToggle[iy][CountInt[iy] - 1] == 50 || BaseIntToggle[iy][CountInt[iy] - 1] == 51 || BaseIntToggle[iy][CountInt[iy] - 1] == 52 || BaseIntToggle[iy][CountInt[iy] - 1] == 54)) ||
+		(IntDefault[iy][54 - 1] == 1 && chosen != 54 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 49 || BaseIntToggle[iy][CountInt[iy] - 1] == 50 || BaseIntToggle[iy][CountInt[iy] - 1] == 51 || BaseIntToggle[iy][CountInt[iy] - 1] == 52 || BaseIntToggle[iy][CountInt[iy] - 1] == 53)) ||
+		(IntDefault[iy][55 - 1] == 1 && chosen != 55 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 56 || BaseIntToggle[iy][CountInt[iy] - 1] == 57 || BaseIntToggle[iy][CountInt[iy] - 1] == 58 || BaseIntToggle[iy][CountInt[iy] - 1] == 59)) ||
+		(IntDefault[iy][56 - 1] == 1 && chosen != 56 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 55 || BaseIntToggle[iy][CountInt[iy] - 1] == 57 || BaseIntToggle[iy][CountInt[iy] - 1] == 58 || BaseIntToggle[iy][CountInt[iy] - 1] == 59)) ||
+		(IntDefault[iy][57 - 1] == 1 && chosen != 57 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 55 || BaseIntToggle[iy][CountInt[iy] - 1] == 56 || BaseIntToggle[iy][CountInt[iy] - 1] == 58 || BaseIntToggle[iy][CountInt[iy] - 1] == 59)) ||
+		(IntDefault[iy][58 - 1] == 1 && chosen != 58 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 55 || BaseIntToggle[iy][CountInt[iy] - 1] == 56 || BaseIntToggle[iy][CountInt[iy] - 1] == 57 || BaseIntToggle[iy][CountInt[iy] - 1] == 59)) ||
+		(IntDefault[iy][59 - 1] == 1 && chosen != 59 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 55 || BaseIntToggle[iy][CountInt[iy] - 1] == 56 || BaseIntToggle[iy][CountInt[iy] - 1] == 57 || BaseIntToggle[iy][CountInt[iy] - 1] == 58)) ||
+		(IntDefault[iy][60 - 1] == 1 && chosen != 60 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 65 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) ||
+		(IntDefault[iy][61 - 1] == 1 && chosen != 61 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 65 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) ||
+		(IntDefault[iy][62 - 1] == 1 && chosen != 62 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 65 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) ||
+		(IntDefault[iy][63 - 1] == 1 && chosen != 63 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 65 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) ||
+		(IntDefault[iy][64 - 1] == 1 && chosen != 64 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 65 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) ||
+		(IntDefault[iy][65 - 1] == 1 && chosen != 65 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) ||
+		(IntDefault[iy][66 - 1] == 1 && chosen != 66 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 65)) ||
+		(IntDefault[iy][67 - 1] == 1 && chosen != 67 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) ||
+		(IntDefault[iy][68 - 1] == 1 && chosen != 68 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) ||
+		(IntDefault[iy][69 - 1] == 1 && chosen != 69 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) ||
+		(IntDefault[iy][70 - 1] == 1 && chosen != 70 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) ||
+		(IntDefault[iy][71 - 1] == 1 && chosen != 71 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) ||
+		(IntDefault[iy][72 - 1] == 1 && chosen != 72 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) ||
+		(IntDefault[iy][73 - 1] == 1 && chosen != 73 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76 || BaseIntToggle[iy][CountInt[iy] - 1] == 77)) ||
+		(IntDefault[iy][74 - 1] == 1 && chosen != 74 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76 || BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 78)) ||
+		(IntDefault[iy][75 - 1] == 1 && chosen != 75 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 76 || BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 78 || BaseIntToggle[iy][CountInt[iy] - 1] == 79)) ||
+		(IntDefault[iy][76 - 1] == 1 && chosen != 76 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75)) ||
+		(IntDefault[iy][77 - 1] == 1 && chosen != 77 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 78 || BaseIntToggle[iy][CountInt[iy] - 1] == 79 || BaseIntToggle[iy][CountInt[iy] - 1] == 80 || BaseIntToggle[iy][CountInt[iy] - 1] == 81)) ||
+		(IntDefault[iy][78 - 1] == 1 && chosen != 78 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 79 || BaseIntToggle[iy][CountInt[iy] - 1] == 80 || BaseIntToggle[iy][CountInt[iy] - 1] == 81)) ||
+		(IntDefault[iy][79 - 1] == 1 && chosen != 79 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 78 || BaseIntToggle[iy][CountInt[iy] - 1] == 80 || BaseIntToggle[iy][CountInt[iy] - 1] == 81)) ||
+		(IntDefault[iy][80 - 1] == 1 && chosen != 80 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 78 || BaseIntToggle[iy][CountInt[iy] - 1] == 79 || BaseIntToggle[iy][CountInt[iy] - 1] == 81)) ||
+		(IntDefault[iy][81 - 1] == 1 && chosen != 81 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 78 || BaseIntToggle[iy][CountInt[iy] - 1] == 79 || BaseIntToggle[iy][CountInt[iy] - 1] == 80)) ||
+		(IntDefault[iy][82 - 1] == 1 && chosen != 82 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 87 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) ||
+		(IntDefault[iy][83 - 1] == 1 && chosen != 83 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 87 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) ||
+		(IntDefault[iy][84 - 1] == 1 && chosen != 84 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 87 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) ||
+		(IntDefault[iy][85 - 1] == 1 && chosen != 85 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 87 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) ||
+		(IntDefault[iy][86 - 1] == 1 && chosen != 86 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 87 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) ||
+		(IntDefault[iy][87 - 1] == 1 && chosen != 87 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) ||
+		(IntDefault[iy][88 - 1] == 1 && chosen != 88 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 87)) ||
+		(IntDefault[iy][89 - 1] == 1 && chosen != 89 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 90) ||
+		(IntDefault[iy][90 - 1] == 1 && chosen != 90 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 89) ||
+		(IntDefault[iy][91 - 1] == 1 && chosen != 91 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 92) ||
+		(IntDefault[iy][92 - 1] == 1 && chosen != 92 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 91) ||
+		(IntDefault[iy][93 - 1] == 1 && chosen != 93 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 94) ||
+		(IntDefault[iy][94 - 1] == 1 && chosen != 94 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 93) ||
+		(IntDefault[iy][95 - 1] == 1 && chosen != 95 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 96) ||
+		(IntDefault[iy][96 - 1] == 1 && chosen != 96 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 95) 
+
+		);
+}
+
+int IsNextDefault(int chosen, int iy) {
+	return (
+		(IntDefault[iy][1 - 1] == 1 && chosen == 1 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 6 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) ||
+		(IntDefault[iy][2 - 1] == 1 && chosen == 2 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 6 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) ||
+		(IntDefault[iy][3 - 1] == 1 && chosen == 3 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 6 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) ||
+		(IntDefault[iy][4 - 1] == 1 && chosen == 4 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 6 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) ||
+		(IntDefault[iy][5 - 1] == 1 && chosen == 5 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 6 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) ||
+		(IntDefault[iy][6 - 1] == 1 && chosen == 6 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) ||
+		(IntDefault[iy][7 - 1] == 1 && chosen == 7 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 6)) ||
+		(IntDefault[iy][8 - 1] == 1 && chosen == 8 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 13 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) ||
+		(IntDefault[iy][9 - 1] == 1 && chosen == 9 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 13 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) ||
+		(IntDefault[iy][10 - 1] == 1 && chosen == 10 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 13 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) ||
+		(IntDefault[iy][11 - 1] == 1 && chosen == 11 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 13 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) ||
+		(IntDefault[iy][12 - 1] == 1 && chosen == 12 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 13 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) ||
+		(IntDefault[iy][13 - 1] == 1 && chosen == 13 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) ||
+		(IntDefault[iy][14 - 1] == 1 && chosen == 14 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 13)) ||
+		(IntDefault[iy][15 - 1] == 1 && chosen == 15 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 20 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) ||
+		(IntDefault[iy][16 - 1] == 1 && chosen == 16 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 20 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) ||
+		(IntDefault[iy][17 - 1] == 1 && chosen == 17 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 20 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) ||
+		(IntDefault[iy][18 - 1] == 1 && chosen == 18 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 20 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) ||
+		(IntDefault[iy][19 - 1] == 1 && chosen == 19 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 20 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) ||
+		(IntDefault[iy][20 - 1] == 1 && chosen == 20 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) ||
+		(IntDefault[iy][21 - 1] == 1 && chosen == 21 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 20)) ||
+		(IntDefault[iy][22 - 1] == 1 && chosen == 22 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 27 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) ||
+		(IntDefault[iy][23 - 1] == 1 && chosen == 23 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 27 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) ||
+		(IntDefault[iy][24 - 1] == 1 && chosen == 24 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 27 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) ||
+		(IntDefault[iy][25 - 1] == 1 && chosen == 25 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 27 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) ||
+		(IntDefault[iy][26 - 1] == 1 && chosen == 26 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 27 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) ||
+		(IntDefault[iy][27 - 1] == 1 && chosen == 27 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) ||
+		(IntDefault[iy][28 - 1] == 1 && chosen == 28 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 27)) ||
+		(IntDefault[iy][29 - 1] == 1 && chosen == 29 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 34 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) ||
+		(IntDefault[iy][30 - 1] == 1 && chosen == 30 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 34 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) ||
+		(IntDefault[iy][31 - 1] == 1 && chosen == 31 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 34 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) ||
+		(IntDefault[iy][32 - 1] == 1 && chosen == 32 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 34 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) ||
+		(IntDefault[iy][33 - 1] == 1 && chosen == 33 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 34 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) ||
+		(IntDefault[iy][34 - 1] == 1 && chosen == 34 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) ||
+		(IntDefault[iy][35 - 1] == 1 && chosen == 35 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 34)) ||
+		(IntDefault[iy][36 - 1] == 1 && chosen == 36 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 37 || BaseIntToggle[iy][CountInt[iy] - 1] == 38)) ||
+		(IntDefault[iy][37 - 1] == 1 && chosen == 37 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 36 || BaseIntToggle[iy][CountInt[iy] - 1] == 38)) ||
+		(IntDefault[iy][38 - 1] == 1 && chosen == 38 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 36 || BaseIntToggle[iy][CountInt[iy] - 1] == 37)) ||
+		(IntDefault[iy][39 - 1] == 1 && chosen == 39 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 40 || BaseIntToggle[iy][CountInt[iy] - 1] == 41 || BaseIntToggle[iy][CountInt[iy] - 1] == 42 || BaseIntToggle[iy][CountInt[iy] - 1] == 43)) ||
+		(IntDefault[iy][40 - 1] == 1 && chosen == 40 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 39 || BaseIntToggle[iy][CountInt[iy] - 1] == 41 || BaseIntToggle[iy][CountInt[iy] - 1] == 42 || BaseIntToggle[iy][CountInt[iy] - 1] == 43)) ||
+		(IntDefault[iy][41 - 1] == 1 && chosen == 41 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 39 || BaseIntToggle[iy][CountInt[iy] - 1] == 40 || BaseIntToggle[iy][CountInt[iy] - 1] == 42 || BaseIntToggle[iy][CountInt[iy] - 1] == 43)) ||
+		(IntDefault[iy][42 - 1] == 1 && chosen == 42 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 39 || BaseIntToggle[iy][CountInt[iy] - 1] == 40 || BaseIntToggle[iy][CountInt[iy] - 1] == 41 || BaseIntToggle[iy][CountInt[iy] - 1] == 43)) ||
+		(IntDefault[iy][43 - 1] == 1 && chosen == 43 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 39 || BaseIntToggle[iy][CountInt[iy] - 1] == 40 || BaseIntToggle[iy][CountInt[iy] - 1] == 41 || BaseIntToggle[iy][CountInt[iy] - 1] == 42)) ||
+		(IntDefault[iy][44 - 1] == 1 && chosen == 44 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 45 || BaseIntToggle[iy][CountInt[iy] - 1] == 46 || BaseIntToggle[iy][CountInt[iy] - 1] == 47 || BaseIntToggle[iy][CountInt[iy] - 1] == 48)) ||
+		(IntDefault[iy][45 - 1] == 1 && chosen == 45 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 44 || BaseIntToggle[iy][CountInt[iy] - 1] == 46 || BaseIntToggle[iy][CountInt[iy] - 1] == 47 || BaseIntToggle[iy][CountInt[iy] - 1] == 48)) ||
+		(IntDefault[iy][46 - 1] == 1 && chosen == 46 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 44 || BaseIntToggle[iy][CountInt[iy] - 1] == 45 || BaseIntToggle[iy][CountInt[iy] - 1] == 47 || BaseIntToggle[iy][CountInt[iy] - 1] == 48)) ||
+		(IntDefault[iy][47 - 1] == 1 && chosen == 47 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 44 || BaseIntToggle[iy][CountInt[iy] - 1] == 45 || BaseIntToggle[iy][CountInt[iy] - 1] == 46 || BaseIntToggle[iy][CountInt[iy] - 1] == 48)) ||
+		(IntDefault[iy][48 - 1] == 1 && chosen == 48 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 44 || BaseIntToggle[iy][CountInt[iy] - 1] == 45 || BaseIntToggle[iy][CountInt[iy] - 1] == 46 || BaseIntToggle[iy][CountInt[iy] - 1] == 47)) ||
+		(IntDefault[iy][49 - 1] == 1 && chosen == 49 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 50 || BaseIntToggle[iy][CountInt[iy] - 1] == 51 || BaseIntToggle[iy][CountInt[iy] - 1] == 52 || BaseIntToggle[iy][CountInt[iy] - 1] == 53 || BaseIntToggle[iy][CountInt[iy] - 1] == 54)) ||
+		(IntDefault[iy][50 - 1] == 1 && chosen == 50 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 49 || BaseIntToggle[iy][CountInt[iy] - 1] == 51 || BaseIntToggle[iy][CountInt[iy] - 1] == 52 || BaseIntToggle[iy][CountInt[iy] - 1] == 53 || BaseIntToggle[iy][CountInt[iy] - 1] == 54)) ||
+		(IntDefault[iy][51 - 1] == 1 && chosen == 51 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 49 || BaseIntToggle[iy][CountInt[iy] - 1] == 50 || BaseIntToggle[iy][CountInt[iy] - 1] == 52 || BaseIntToggle[iy][CountInt[iy] - 1] == 53 || BaseIntToggle[iy][CountInt[iy] - 1] == 54)) ||
+		(IntDefault[iy][52 - 1] == 1 && chosen == 52 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 49 || BaseIntToggle[iy][CountInt[iy] - 1] == 50 || BaseIntToggle[iy][CountInt[iy] - 1] == 51 || BaseIntToggle[iy][CountInt[iy] - 1] == 53 || BaseIntToggle[iy][CountInt[iy] - 1] == 54)) ||
+		(IntDefault[iy][53 - 1] == 1 && chosen == 53 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 49 || BaseIntToggle[iy][CountInt[iy] - 1] == 50 || BaseIntToggle[iy][CountInt[iy] - 1] == 51 || BaseIntToggle[iy][CountInt[iy] - 1] == 52 || BaseIntToggle[iy][CountInt[iy] - 1] == 54)) ||
+		(IntDefault[iy][54 - 1] == 1 && chosen == 54 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 49 || BaseIntToggle[iy][CountInt[iy] - 1] == 50 || BaseIntToggle[iy][CountInt[iy] - 1] == 51 || BaseIntToggle[iy][CountInt[iy] - 1] == 52 || BaseIntToggle[iy][CountInt[iy] - 1] == 53)) ||
+		(IntDefault[iy][55 - 1] == 1 && chosen == 55 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 56 || BaseIntToggle[iy][CountInt[iy] - 1] == 57 || BaseIntToggle[iy][CountInt[iy] - 1] == 58 || BaseIntToggle[iy][CountInt[iy] - 1] == 59)) ||
+		(IntDefault[iy][56 - 1] == 1 && chosen == 56 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 55 || BaseIntToggle[iy][CountInt[iy] - 1] == 57 || BaseIntToggle[iy][CountInt[iy] - 1] == 58 || BaseIntToggle[iy][CountInt[iy] - 1] == 59)) ||
+		(IntDefault[iy][57 - 1] == 1 && chosen == 57 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 55 || BaseIntToggle[iy][CountInt[iy] - 1] == 56 || BaseIntToggle[iy][CountInt[iy] - 1] == 58 || BaseIntToggle[iy][CountInt[iy] - 1] == 59)) ||
+		(IntDefault[iy][58 - 1] == 1 && chosen == 58 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 55 || BaseIntToggle[iy][CountInt[iy] - 1] == 56 || BaseIntToggle[iy][CountInt[iy] - 1] == 57 || BaseIntToggle[iy][CountInt[iy] - 1] == 59)) ||
+		(IntDefault[iy][59 - 1] == 1 && chosen == 59 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 55 || BaseIntToggle[iy][CountInt[iy] - 1] == 56 || BaseIntToggle[iy][CountInt[iy] - 1] == 57 || BaseIntToggle[iy][CountInt[iy] - 1] == 58)) ||
+		(IntDefault[iy][60 - 1] == 1 && chosen == 60 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 65 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) ||
+		(IntDefault[iy][61 - 1] == 1 && chosen == 61 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 65 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) ||
+		(IntDefault[iy][62 - 1] == 1 && chosen == 62 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 65 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) ||
+		(IntDefault[iy][63 - 1] == 1 && chosen == 63 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 65 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) ||
+		(IntDefault[iy][64 - 1] == 1 && chosen == 64 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 65 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) ||
+		(IntDefault[iy][65 - 1] == 1 && chosen == 65 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) ||
+		(IntDefault[iy][66 - 1] == 1 && chosen == 66 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 65)) ||
+		(IntDefault[iy][67 - 1] == 1 && chosen == 67 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) ||
+		(IntDefault[iy][68 - 1] == 1 && chosen == 68 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) ||
+		(IntDefault[iy][69 - 1] == 1 && chosen == 69 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) ||
+		(IntDefault[iy][70 - 1] == 1 && chosen == 70 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) ||
+		(IntDefault[iy][71 - 1] == 1 && chosen == 71 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) ||
+		(IntDefault[iy][72 - 1] == 1 && chosen == 72 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) ||
+		(IntDefault[iy][73 - 1] == 1 && chosen == 73 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76 || BaseIntToggle[iy][CountInt[iy] - 1] == 77)) ||
+		(IntDefault[iy][74 - 1] == 1 && chosen == 74 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76 || BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 78)) ||
+		(IntDefault[iy][75 - 1] == 1 && chosen == 75 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 76 || BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 78 || BaseIntToggle[iy][CountInt[iy] - 1] == 79)) ||
+		(IntDefault[iy][76 - 1] == 1 && chosen == 76 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75)) ||
+		(IntDefault[iy][77 - 1] == 1 && chosen == 77 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 78 || BaseIntToggle[iy][CountInt[iy] - 1] == 79 || BaseIntToggle[iy][CountInt[iy] - 1] == 80 || BaseIntToggle[iy][CountInt[iy] - 1] == 81)) ||
+		(IntDefault[iy][78 - 1] == 1 && chosen == 78 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 79 || BaseIntToggle[iy][CountInt[iy] - 1] == 80 || BaseIntToggle[iy][CountInt[iy] - 1] == 81)) ||
+		(IntDefault[iy][79 - 1] == 1 && chosen == 79 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 78 || BaseIntToggle[iy][CountInt[iy] - 1] == 80 || BaseIntToggle[iy][CountInt[iy] - 1] == 81)) ||
+		(IntDefault[iy][80 - 1] == 1 && chosen == 80 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 78 || BaseIntToggle[iy][CountInt[iy] - 1] == 79 || BaseIntToggle[iy][CountInt[iy] - 1] == 81)) ||
+		(IntDefault[iy][81 - 1] == 1 && chosen == 81 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 78 || BaseIntToggle[iy][CountInt[iy] - 1] == 79 || BaseIntToggle[iy][CountInt[iy] - 1] == 80)) ||
+		(IntDefault[iy][82 - 1] == 1 && chosen == 82 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 87 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) ||
+		(IntDefault[iy][83 - 1] == 1 && chosen == 83 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 87 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) ||
+		(IntDefault[iy][84 - 1] == 1 && chosen == 84 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 87 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) ||
+		(IntDefault[iy][85 - 1] == 1 && chosen == 85 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 87 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) ||
+		(IntDefault[iy][86 - 1] == 1 && chosen == 86 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 87 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) ||
+		(IntDefault[iy][87 - 1] == 1 && chosen == 87 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) ||
+		(IntDefault[iy][88 - 1] == 1 && chosen == 88 - 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 87)) ||
+		(IntDefault[iy][89 - 1] == 1 && chosen == 89 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 90) ||
+		(IntDefault[iy][90 - 1] == 1 && chosen == 90 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 89) ||
+		(IntDefault[iy][91 - 1] == 1 && chosen == 91 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 92) ||
+		(IntDefault[iy][92 - 1] == 1 && chosen == 92 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 91) ||
+		(IntDefault[iy][93 - 1] == 1 && chosen == 93 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 94) ||
+		(IntDefault[iy][94 - 1] == 1 && chosen == 94 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 93) ||
+		(IntDefault[iy][95 - 1] == 1 && chosen == 95 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 96) ||
+		(IntDefault[iy][96 - 1] == 1 && chosen == 96 - 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 95) 
+
+
+
+		);
+}
+
+void ReleaseBaseInt(int Best, int iy) {
+	if (Best == 1 - 1) { BaseInt[iy][2 - 1] = 0; BaseInt[iy][3 - 1] = 0; BaseInt[iy][4 - 1] = 0; BaseInt[iy][5 - 1] = 0; BaseInt[iy][6 - 1] = 0; BaseInt[iy][7 - 1] = 0; }
+	if (Best == 2 - 1) { BaseInt[iy][1 - 1] = 0; BaseInt[iy][3 - 1] = 0; BaseInt[iy][4 - 1] = 0; BaseInt[iy][5 - 1] = 0; BaseInt[iy][6 - 1] = 0; BaseInt[iy][7 - 1] = 0; }
+	if (Best == 3 - 1) { BaseInt[iy][1 - 1] = 0; BaseInt[iy][2 - 1] = 0; BaseInt[iy][4 - 1] = 0; BaseInt[iy][5 - 1] = 0; BaseInt[iy][6 - 1] = 0; BaseInt[iy][7 - 1] = 0; }
+	if (Best == 4 - 1) { BaseInt[iy][1 - 1] = 0; BaseInt[iy][2 - 1] = 0; BaseInt[iy][3 - 1] = 0; BaseInt[iy][5 - 1] = 0; BaseInt[iy][6 - 1] = 0; BaseInt[iy][7 - 1] = 0; }
+	if (Best == 5 - 1) { BaseInt[iy][1 - 1] = 0; BaseInt[iy][2 - 1] = 0; BaseInt[iy][3 - 1] = 0; BaseInt[iy][4 - 1] = 0; BaseInt[iy][6 - 1] = 0; BaseInt[iy][7 - 1] = 0; }
+	if (Best == 6 - 1) { BaseInt[iy][1 - 1] = 0; BaseInt[iy][2 - 1] = 0; BaseInt[iy][3 - 1] = 0; BaseInt[iy][4 - 1] = 0; BaseInt[iy][5 - 1] = 0; BaseInt[iy][7 - 1] = 0; }
+	if (Best == 7 - 1) { BaseInt[iy][1 - 1] = 0; BaseInt[iy][2 - 1] = 0; BaseInt[iy][3 - 1] = 0; BaseInt[iy][4 - 1] = 0; BaseInt[iy][5 - 1] = 0; BaseInt[iy][6 - 1] = 0; }
+	if (Best == 8 - 1) { BaseInt[iy][9 - 1] = 0; BaseInt[iy][10 - 1] = 0; BaseInt[iy][11 - 1] = 0; BaseInt[iy][12 - 1] = 0; BaseInt[iy][13 - 1] = 0; BaseInt[iy][14 - 1] = 0; }
+	if (Best == 9 - 1) { BaseInt[iy][8 - 1] = 0; BaseInt[iy][10 - 1] = 0; BaseInt[iy][11 - 1] = 0; BaseInt[iy][12 - 1] = 0; BaseInt[iy][13 - 1] = 0; BaseInt[iy][14 - 1] = 0; }
+	if (Best == 10 - 1) { BaseInt[iy][8 - 1] = 0; BaseInt[iy][9 - 1] = 0; BaseInt[iy][11 - 1] = 0; BaseInt[iy][12 - 1] = 0; BaseInt[iy][13 - 1] = 0; BaseInt[iy][14 - 1] = 0; }
+	if (Best == 11 - 1) { BaseInt[iy][8 - 1] = 0; BaseInt[iy][9 - 1] = 0; BaseInt[iy][10 - 1] = 0; BaseInt[iy][12 - 1] = 0; BaseInt[iy][13 - 1] = 0; BaseInt[iy][14 - 1] = 0; }
+	if (Best == 12 - 1) { BaseInt[iy][8 - 1] = 0; BaseInt[iy][9 - 1] = 0; BaseInt[iy][10 - 1] = 0; BaseInt[iy][11 - 1] = 0; BaseInt[iy][13 - 1] = 0; BaseInt[iy][14 - 1] = 0; }
+	if (Best == 13 - 1) { BaseInt[iy][8 - 1] = 0; BaseInt[iy][9 - 1] = 0; BaseInt[iy][10 - 1] = 0; BaseInt[iy][11 - 1] = 0; BaseInt[iy][12 - 1] = 0; BaseInt[iy][14 - 1] = 0; }
+	if (Best == 14 - 1) { BaseInt[iy][8 - 1] = 0; BaseInt[iy][9 - 1] = 0; BaseInt[iy][10 - 1] = 0; BaseInt[iy][11 - 1] = 0; BaseInt[iy][12 - 1] = 0; BaseInt[iy][13 - 1] = 0; }
+	if (Best == 15 - 1) { BaseInt[iy][16 - 1] = 0; BaseInt[iy][17 - 1] = 0; BaseInt[iy][18 - 1] = 0; BaseInt[iy][19 - 1] = 0; BaseInt[iy][20 - 1] = 0; BaseInt[iy][21 - 1] = 0; }
+	if (Best == 16 - 1) { BaseInt[iy][15 - 1] = 0; BaseInt[iy][17 - 1] = 0; BaseInt[iy][18 - 1] = 0; BaseInt[iy][19 - 1] = 0; BaseInt[iy][20 - 1] = 0; BaseInt[iy][21 - 1] = 0; }
+	if (Best == 17 - 1) { BaseInt[iy][15 - 1] = 0; BaseInt[iy][16 - 1] = 0; BaseInt[iy][18 - 1] = 0; BaseInt[iy][19 - 1] = 0; BaseInt[iy][20 - 1] = 0; BaseInt[iy][21 - 1] = 0; }
+	if (Best == 18 - 1) { BaseInt[iy][15 - 1] = 0; BaseInt[iy][16 - 1] = 0; BaseInt[iy][17 - 1] = 0; BaseInt[iy][19 - 1] = 0; BaseInt[iy][20 - 1] = 0; BaseInt[iy][21 - 1] = 0; }
+	if (Best == 19 - 1) { BaseInt[iy][15 - 1] = 0; BaseInt[iy][16 - 1] = 0; BaseInt[iy][17 - 1] = 0; BaseInt[iy][18 - 1] = 0; BaseInt[iy][20 - 1] = 0; BaseInt[iy][21 - 1] = 0; }
+	if (Best == 20 - 1) { BaseInt[iy][15 - 1] = 0; BaseInt[iy][16 - 1] = 0; BaseInt[iy][17 - 1] = 0; BaseInt[iy][18 - 1] = 0; BaseInt[iy][19 - 1] = 0; BaseInt[iy][21 - 1] = 0; }
+	if (Best == 21 - 1) { BaseInt[iy][15 - 1] = 0; BaseInt[iy][16 - 1] = 0; BaseInt[iy][17 - 1] = 0; BaseInt[iy][18 - 1] = 0; BaseInt[iy][19 - 1] = 0; BaseInt[iy][20 - 1] = 0; }
+	if (Best == 22 - 1) { BaseInt[iy][23 - 1] = 0; BaseInt[iy][24 - 1] = 0; BaseInt[iy][25 - 1] = 0; BaseInt[iy][26 - 1] = 0; BaseInt[iy][27 - 1] = 0; BaseInt[iy][28 - 1] = 0; }
+	if (Best == 23 - 1) { BaseInt[iy][22 - 1] = 0; BaseInt[iy][24 - 1] = 0; BaseInt[iy][25 - 1] = 0; BaseInt[iy][26 - 1] = 0; BaseInt[iy][27 - 1] = 0; BaseInt[iy][28 - 1] = 0; }
+	if (Best == 24 - 1) { BaseInt[iy][22 - 1] = 0; BaseInt[iy][23 - 1] = 0; BaseInt[iy][25 - 1] = 0; BaseInt[iy][26 - 1] = 0; BaseInt[iy][27 - 1] = 0; BaseInt[iy][28 - 1] = 0; }
+	if (Best == 25 - 1) { BaseInt[iy][22 - 1] = 0; BaseInt[iy][23 - 1] = 0; BaseInt[iy][24 - 1] = 0; BaseInt[iy][26 - 1] = 0; BaseInt[iy][27 - 1] = 0; BaseInt[iy][28 - 1] = 0; }
+	if (Best == 26 - 1) { BaseInt[iy][22 - 1] = 0; BaseInt[iy][23 - 1] = 0; BaseInt[iy][24 - 1] = 0; BaseInt[iy][25 - 1] = 0; BaseInt[iy][27 - 1] = 0; BaseInt[iy][28 - 1] = 0; }
+	if (Best == 27 - 1) { BaseInt[iy][22 - 1] = 0; BaseInt[iy][23 - 1] = 0; BaseInt[iy][24 - 1] = 0; BaseInt[iy][25 - 1] = 0; BaseInt[iy][26 - 1] = 0; BaseInt[iy][28 - 1] = 0; }
+	if (Best == 28 - 1) { BaseInt[iy][22 - 1] = 0; BaseInt[iy][23 - 1] = 0; BaseInt[iy][24 - 1] = 0; BaseInt[iy][25 - 1] = 0; BaseInt[iy][26 - 1] = 0; BaseInt[iy][27 - 1] = 0; }
+	if (Best == 29 - 1) { BaseInt[iy][30 - 1] = 0; BaseInt[iy][31 - 1] = 0; BaseInt[iy][32 - 1] = 0; BaseInt[iy][33 - 1] = 0; BaseInt[iy][34 - 1] = 0; BaseInt[iy][35 - 1] = 0; }
+	if (Best == 30 - 1) { BaseInt[iy][29 - 1] = 0; BaseInt[iy][31 - 1] = 0; BaseInt[iy][32 - 1] = 0; BaseInt[iy][33 - 1] = 0; BaseInt[iy][34 - 1] = 0; BaseInt[iy][35 - 1] = 0; }
+	if (Best == 31 - 1) { BaseInt[iy][29 - 1] = 0; BaseInt[iy][30 - 1] = 0; BaseInt[iy][32 - 1] = 0; BaseInt[iy][33 - 1] = 0; BaseInt[iy][34 - 1] = 0; BaseInt[iy][35 - 1] = 0; }
+	if (Best == 32 - 1) { BaseInt[iy][29 - 1] = 0; BaseInt[iy][30 - 1] = 0; BaseInt[iy][31 - 1] = 0; BaseInt[iy][33 - 1] = 0; BaseInt[iy][34 - 1] = 0; BaseInt[iy][35 - 1] = 0; }
+	if (Best == 33 - 1) { BaseInt[iy][29 - 1] = 0; BaseInt[iy][30 - 1] = 0; BaseInt[iy][31 - 1] = 0; BaseInt[iy][32 - 1] = 0; BaseInt[iy][34 - 1] = 0; BaseInt[iy][35 - 1] = 0; }
+	if (Best == 34 - 1) { BaseInt[iy][29 - 1] = 0; BaseInt[iy][30 - 1] = 0; BaseInt[iy][31 - 1] = 0; BaseInt[iy][32 - 1] = 0; BaseInt[iy][33 - 1] = 0; BaseInt[iy][35 - 1] = 0; }
+	if (Best == 35 - 1) { BaseInt[iy][29 - 1] = 0; BaseInt[iy][30 - 1] = 0; BaseInt[iy][31 - 1] = 0; BaseInt[iy][32 - 1] = 0; BaseInt[iy][33 - 1] = 0; BaseInt[iy][34 - 1] = 0; }
+	if (Best == 36 - 1) { BaseInt[iy][37 - 1] = 0; BaseInt[iy][38 - 1] = 0; }
+	if (Best == 37 - 1) { BaseInt[iy][36 - 1] = 0; BaseInt[iy][38 - 1] = 0; }
+	if (Best == 38 - 1) { BaseInt[iy][36 - 1] = 0; BaseInt[iy][37 - 1] = 0; }
+	if (Best == 39 - 1) { BaseInt[iy][40 - 1] = 0; BaseInt[iy][41 - 1] = 0; BaseInt[iy][42 - 1] = 0; BaseInt[iy][43 - 1] = 0; }
+	if (Best == 40 - 1) { BaseInt[iy][39 - 1] = 0; BaseInt[iy][41 - 1] = 0; BaseInt[iy][42 - 1] = 0; BaseInt[iy][43 - 1] = 0; }
+	if (Best == 41 - 1) { BaseInt[iy][39 - 1] = 0; BaseInt[iy][40 - 1] = 0; BaseInt[iy][42 - 1] = 0; BaseInt[iy][43 - 1] = 0; }
+	if (Best == 42 - 1) { BaseInt[iy][39 - 1] = 0; BaseInt[iy][40 - 1] = 0; BaseInt[iy][41 - 1] = 0; BaseInt[iy][43 - 1] = 0; }
+	if (Best == 43 - 1) { BaseInt[iy][39 - 1] = 0; BaseInt[iy][40 - 1] = 0; BaseInt[iy][41 - 1] = 0; BaseInt[iy][42 - 1] = 0; }
+	if (Best == 44 - 1) { BaseInt[iy][45 - 1] = 0; BaseInt[iy][46 - 1] = 0; BaseInt[iy][47 - 1] = 0; BaseInt[iy][48 - 1] = 0; }
+	if (Best == 45 - 1) { BaseInt[iy][44 - 1] = 0; BaseInt[iy][46 - 1] = 0; BaseInt[iy][47 - 1] = 0; BaseInt[iy][48 - 1] = 0; }
+	if (Best == 46 - 1) { BaseInt[iy][44 - 1] = 0; BaseInt[iy][45 - 1] = 0; BaseInt[iy][47 - 1] = 0; BaseInt[iy][48 - 1] = 0; }
+	if (Best == 47 - 1) { BaseInt[iy][44 - 1] = 0; BaseInt[iy][45 - 1] = 0; BaseInt[iy][46 - 1] = 0; BaseInt[iy][48 - 1] = 0; }
+	if (Best == 48 - 1) { BaseInt[iy][44 - 1] = 0; BaseInt[iy][45 - 1] = 0; BaseInt[iy][46 - 1] = 0; BaseInt[iy][47 - 1] = 0; }
+	if (Best == 49 - 1) { BaseInt[iy][50 - 1] = 0; BaseInt[iy][51 - 1] = 0; BaseInt[iy][52 - 1] = 0; BaseInt[iy][53 - 1] = 0; BaseInt[iy][54 - 1] = 0; }
+	if (Best == 50 - 1) { BaseInt[iy][49 - 1] = 0; BaseInt[iy][51 - 1] = 0; BaseInt[iy][52 - 1] = 0; BaseInt[iy][53 - 1] = 0; BaseInt[iy][54 - 1] = 0; }
+	if (Best == 51 - 1) { BaseInt[iy][49 - 1] = 0; BaseInt[iy][50 - 1] = 0; BaseInt[iy][52 - 1] = 0; BaseInt[iy][53 - 1] = 0; BaseInt[iy][54 - 1] = 0; }
+	if (Best == 52 - 1) { BaseInt[iy][49 - 1] = 0; BaseInt[iy][50 - 1] = 0; BaseInt[iy][51 - 1] = 0; BaseInt[iy][53 - 1] = 0; BaseInt[iy][54 - 1] = 0; }
+	if (Best == 53 - 1) { BaseInt[iy][49 - 1] = 0; BaseInt[iy][50 - 1] = 0; BaseInt[iy][51 - 1] = 0; BaseInt[iy][52 - 1] = 0; BaseInt[iy][54 - 1] = 0; }
+	if (Best == 54 - 1) { BaseInt[iy][49 - 1] = 0; BaseInt[iy][50 - 1] = 0; BaseInt[iy][51 - 1] = 0; BaseInt[iy][52 - 1] = 0; BaseInt[iy][53 - 1] = 0; }
+	if (Best == 55 - 1) { BaseInt[iy][56 - 1] = 0; BaseInt[iy][57 - 1] = 0; BaseInt[iy][58 - 1] = 0; BaseInt[iy][59 - 1] = 0; }
+	if (Best == 56 - 1) { BaseInt[iy][55 - 1] = 0; BaseInt[iy][57 - 1] = 0; BaseInt[iy][58 - 1] = 0; BaseInt[iy][59 - 1] = 0; }
+	if (Best == 57 - 1) { BaseInt[iy][55 - 1] = 0; BaseInt[iy][56 - 1] = 0; BaseInt[iy][58 - 1] = 0; BaseInt[iy][59 - 1] = 0; }
+	if (Best == 58 - 1) { BaseInt[iy][55 - 1] = 0; BaseInt[iy][56 - 1] = 0; BaseInt[iy][57 - 1] = 0; BaseInt[iy][59 - 1] = 0; }
+	if (Best == 59 - 1) { BaseInt[iy][55 - 1] = 0; BaseInt[iy][56 - 1] = 0; BaseInt[iy][57 - 1] = 0; BaseInt[iy][58 - 1] = 0; }
+	if (Best == 60 - 1) { BaseInt[iy][61 - 1] = 0; BaseInt[iy][62 - 1] = 0; BaseInt[iy][63 - 1] = 0; BaseInt[iy][64 - 1] = 0; BaseInt[iy][65 - 1] = 0; BaseInt[iy][66 - 1] = 0; }
+	if (Best == 61 - 1) { BaseInt[iy][60 - 1] = 0; BaseInt[iy][62 - 1] = 0; BaseInt[iy][63 - 1] = 0; BaseInt[iy][64 - 1] = 0; BaseInt[iy][65 - 1] = 0; BaseInt[iy][66 - 1] = 0; }
+	if (Best == 62 - 1) { BaseInt[iy][60 - 1] = 0; BaseInt[iy][61 - 1] = 0; BaseInt[iy][63 - 1] = 0; BaseInt[iy][64 - 1] = 0; BaseInt[iy][65 - 1] = 0; BaseInt[iy][66 - 1] = 0; }
+	if (Best == 63 - 1) { BaseInt[iy][60 - 1] = 0; BaseInt[iy][61 - 1] = 0; BaseInt[iy][62 - 1] = 0; BaseInt[iy][64 - 1] = 0; BaseInt[iy][65 - 1] = 0; BaseInt[iy][66 - 1] = 0; }
+	if (Best == 64 - 1) { BaseInt[iy][60 - 1] = 0; BaseInt[iy][61 - 1] = 0; BaseInt[iy][62 - 1] = 0; BaseInt[iy][63 - 1] = 0; BaseInt[iy][65 - 1] = 0; BaseInt[iy][66 - 1] = 0; }
+	if (Best == 65 - 1) { BaseInt[iy][60 - 1] = 0; BaseInt[iy][61 - 1] = 0; BaseInt[iy][62 - 1] = 0; BaseInt[iy][63 - 1] = 0; BaseInt[iy][64 - 1] = 0; BaseInt[iy][66 - 1] = 0; }
+	if (Best == 66 - 1) { BaseInt[iy][60 - 1] = 0; BaseInt[iy][61 - 1] = 0; BaseInt[iy][62 - 1] = 0; BaseInt[iy][63 - 1] = 0; BaseInt[iy][64 - 1] = 0; BaseInt[iy][65 - 1] = 0; }
+	if (Best == 67 - 1) { BaseInt[iy][68 - 1] = 0; BaseInt[iy][69 - 1] = 0; BaseInt[iy][70 - 1] = 0; BaseInt[iy][71 - 1] = 0; BaseInt[iy][72 - 1] = 0; BaseInt[iy][73 - 1] = 0; BaseInt[iy][74 - 1] = 0; BaseInt[iy][75 - 1] = 0; BaseInt[iy][76 - 1] = 0; }
+	if (Best == 68 - 1) { BaseInt[iy][67 - 1] = 0; BaseInt[iy][69 - 1] = 0; BaseInt[iy][70 - 1] = 0; BaseInt[iy][71 - 1] = 0; BaseInt[iy][72 - 1] = 0; BaseInt[iy][73 - 1] = 0; BaseInt[iy][74 - 1] = 0; BaseInt[iy][75 - 1] = 0; BaseInt[iy][76 - 1] = 0; }
+	if (Best == 69 - 1) { BaseInt[iy][67 - 1] = 0; BaseInt[iy][68 - 1] = 0; BaseInt[iy][70 - 1] = 0; BaseInt[iy][71 - 1] = 0; BaseInt[iy][72 - 1] = 0; BaseInt[iy][73 - 1] = 0; BaseInt[iy][74 - 1] = 0; BaseInt[iy][75 - 1] = 0; BaseInt[iy][76 - 1] = 0; }
+	if (Best == 70 - 1) { BaseInt[iy][67 - 1] = 0; BaseInt[iy][68 - 1] = 0; BaseInt[iy][69 - 1] = 0; BaseInt[iy][71 - 1] = 0; BaseInt[iy][72 - 1] = 0; BaseInt[iy][73 - 1] = 0; BaseInt[iy][74 - 1] = 0; BaseInt[iy][75 - 1] = 0; BaseInt[iy][76 - 1] = 0; }
+	if (Best == 71 - 1) { BaseInt[iy][67 - 1] = 0; BaseInt[iy][68 - 1] = 0; BaseInt[iy][69 - 1] = 0; BaseInt[iy][70 - 1] = 0; BaseInt[iy][72 - 1] = 0; BaseInt[iy][73 - 1] = 0; BaseInt[iy][74 - 1] = 0; BaseInt[iy][75 - 1] = 0; BaseInt[iy][76 - 1] = 0; }
+	if (Best == 72 - 1) { BaseInt[iy][67 - 1] = 0; BaseInt[iy][68 - 1] = 0; BaseInt[iy][69 - 1] = 0; BaseInt[iy][70 - 1] = 0; BaseInt[iy][71 - 1] = 0; BaseInt[iy][73 - 1] = 0; BaseInt[iy][74 - 1] = 0; BaseInt[iy][75 - 1] = 0; BaseInt[iy][76 - 1] = 0; }
+	if (Best == 73 - 1) { BaseInt[iy][67 - 1] = 0; BaseInt[iy][68 - 1] = 0; BaseInt[iy][70 - 1] = 0; BaseInt[iy][71 - 1] = 0; BaseInt[iy][72 - 1] = 0; BaseInt[iy][74 - 1] = 0; BaseInt[iy][75 - 1] = 0; BaseInt[iy][76 - 1] = 0; BaseInt[iy][77 - 1] = 0; }
+	if (Best == 74 - 1) { BaseInt[iy][67 - 1] = 0; BaseInt[iy][68 - 1] = 0; BaseInt[iy][71 - 1] = 0; BaseInt[iy][72 - 1] = 0; BaseInt[iy][73 - 1] = 0; BaseInt[iy][75 - 1] = 0; BaseInt[iy][76 - 1] = 0; BaseInt[iy][77 - 1] = 0; BaseInt[iy][78 - 1] = 0; }
+	if (Best == 75 - 1) { BaseInt[iy][67 - 1] = 0; BaseInt[iy][68 - 1] = 0; BaseInt[iy][72 - 1] = 0; BaseInt[iy][73 - 1] = 0; BaseInt[iy][74 - 1] = 0; BaseInt[iy][76 - 1] = 0; BaseInt[iy][77 - 1] = 0; BaseInt[iy][78 - 1] = 0; BaseInt[iy][79 - 1] = 0; }
+	if (Best == 76 - 1) { BaseInt[iy][67 - 1] = 0; BaseInt[iy][68 - 1] = 0; BaseInt[iy][69 - 1] = 0; BaseInt[iy][70 - 1] = 0; BaseInt[iy][71 - 1] = 0; BaseInt[iy][72 - 1] = 0; BaseInt[iy][73 - 1] = 0; BaseInt[iy][74 - 1] = 0; BaseInt[iy][75 - 1] = 0; }
+	if (Best == 77 - 1) { BaseInt[iy][78 - 1] = 0; BaseInt[iy][79 - 1] = 0; BaseInt[iy][80 - 1] = 0; BaseInt[iy][81 - 1] = 0; }
+	if (Best == 78 - 1) { BaseInt[iy][77 - 1] = 0; BaseInt[iy][79 - 1] = 0; BaseInt[iy][80 - 1] = 0; BaseInt[iy][81 - 1] = 0; }
+	if (Best == 79 - 1) { BaseInt[iy][77 - 1] = 0; BaseInt[iy][78 - 1] = 0; BaseInt[iy][80 - 1] = 0; BaseInt[iy][81 - 1] = 0; }
+	if (Best == 80 - 1) { BaseInt[iy][77 - 1] = 0; BaseInt[iy][78 - 1] = 0; BaseInt[iy][79 - 1] = 0; BaseInt[iy][81 - 1] = 0; }
+	if (Best == 81 - 1) { BaseInt[iy][77 - 1] = 0; BaseInt[iy][78 - 1] = 0; BaseInt[iy][79 - 1] = 0; BaseInt[iy][80 - 1] = 0; }
+	if (Best == 82 - 1) { BaseInt[iy][83 - 1] = 0; BaseInt[iy][84 - 1] = 0; BaseInt[iy][85 - 1] = 0; BaseInt[iy][86 - 1] = 0; BaseInt[iy][87 - 1] = 0; BaseInt[iy][88 - 1] = 0; }
+	if (Best == 83 - 1) { BaseInt[iy][82 - 1] = 0; BaseInt[iy][84 - 1] = 0; BaseInt[iy][85 - 1] = 0; BaseInt[iy][86 - 1] = 0; BaseInt[iy][87 - 1] = 0; BaseInt[iy][88 - 1] = 0; }
+	if (Best == 84 - 1) { BaseInt[iy][82 - 1] = 0; BaseInt[iy][83 - 1] = 0; BaseInt[iy][85 - 1] = 0; BaseInt[iy][86 - 1] = 0; BaseInt[iy][87 - 1] = 0; BaseInt[iy][88 - 1] = 0; }
+	if (Best == 85 - 1) { BaseInt[iy][82 - 1] = 0; BaseInt[iy][83 - 1] = 0; BaseInt[iy][84 - 1] = 0; BaseInt[iy][86 - 1] = 0; BaseInt[iy][87 - 1] = 0; BaseInt[iy][88 - 1] = 0; }
+	if (Best == 86 - 1) { BaseInt[iy][82 - 1] = 0; BaseInt[iy][83 - 1] = 0; BaseInt[iy][84 - 1] = 0; BaseInt[iy][85 - 1] = 0; BaseInt[iy][87 - 1] = 0; BaseInt[iy][88 - 1] = 0; }
+	if (Best == 87 - 1) { BaseInt[iy][82 - 1] = 0; BaseInt[iy][83 - 1] = 0; BaseInt[iy][84 - 1] = 0; BaseInt[iy][85 - 1] = 0; BaseInt[iy][86 - 1] = 0; BaseInt[iy][88 - 1] = 0; }
+	if (Best == 88 - 1) { BaseInt[iy][82 - 1] = 0; BaseInt[iy][83 - 1] = 0; BaseInt[iy][84 - 1] = 0; BaseInt[iy][85 - 1] = 0; BaseInt[iy][86 - 1] = 0; BaseInt[iy][87 - 1] = 0; }
+	if (Best == 89 - 1) { BaseInt[iy][90 - 1] = 0; }
+	if (Best == 90 - 1) { BaseInt[iy][89 - 1] = 0; }
+	if (Best == 91 - 1) { BaseInt[iy][92 - 1] = 0; }
+	if (Best == 92 - 1) { BaseInt[iy][91 - 1] = 0; }
+	if (Best == 93 - 1) { BaseInt[iy][94 - 1] = 0; }
+	if (Best == 94 - 1) { BaseInt[iy][93 - 1] = 0; }
+	if (Best == 95 - 1) { BaseInt[iy][96 - 1] = 0; }
+	if (Best == 96 - 1) { BaseInt[iy][95 - 1] = 0; }
+
+
+
+
+
+}
+
+void EliminateCurrentDefault(int iy) {
+	std::fstream filesim;
+	filesim.open("RunningLOG.txt", std::fstream::app);
+
+	int def = -1;
+	
+	if (IntDefault[iy][1 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 6 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) {
+		IntAllow[iy][1 - 1] = 0; IntDefault[iy][1 - 1] = 0; def = 1;
+	}
+	if (IntDefault[iy][2 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 6 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) {
+		IntAllow[iy][2 - 1] = 0; IntDefault[iy][2 - 1] = 0; def = 2;
+	}
+	if (IntDefault[iy][3 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 6 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) {
+		IntAllow[iy][3 - 1] = 0; IntDefault[iy][3 - 1] = 0; def = 3;
+	}
+	if (IntDefault[iy][4 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 6 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) {
+		IntAllow[iy][4 - 1] = 0; IntDefault[iy][4 - 1] = 0; def = 4;
+	}
+	if (IntDefault[iy][5 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 6 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) {
+		IntAllow[iy][5 - 1] = 0; IntDefault[iy][5 - 1] = 0; def = 5;
+	}
+	if (IntDefault[iy][6 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 7)) {
+		IntAllow[iy][6 - 1] = 0; IntDefault[iy][6 - 1] = 0; def = 6;
+	}
+	if (IntDefault[iy][7 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 1 || BaseIntToggle[iy][CountInt[iy] - 1] == 2 || BaseIntToggle[iy][CountInt[iy] - 1] == 3 || BaseIntToggle[iy][CountInt[iy] - 1] == 4 || BaseIntToggle[iy][CountInt[iy] - 1] == 5 || BaseIntToggle[iy][CountInt[iy] - 1] == 6)) {
+		IntAllow[iy][7 - 1] = 0; IntDefault[iy][7 - 1] = 0; def = 7;
+	}
+	if (IntDefault[iy][8 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 13 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) {
+		IntAllow[iy][8 - 1] = 0; IntDefault[iy][8 - 1] = 0; def = 8;
+	}
+	if (IntDefault[iy][9 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 13 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) {
+		IntAllow[iy][9 - 1] = 0; IntDefault[iy][9 - 1] = 0; def = 9;
+	}
+	if (IntDefault[iy][10 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 13 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) {
+		IntAllow[iy][10 - 1] = 0; IntDefault[iy][10 - 1] = 0; def = 10;
+	}
+	if (IntDefault[iy][11 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 13 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) {
+		IntAllow[iy][11 - 1] = 0; IntDefault[iy][11 - 1] = 0; def = 11;
+	}
+	if (IntDefault[iy][12 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 13 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) {
+		IntAllow[iy][12 - 1] = 0; IntDefault[iy][12 - 1] = 0; def = 12;
+	}
+	if (IntDefault[iy][13 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 14)) {
+		IntAllow[iy][13 - 1] = 0; IntDefault[iy][13 - 1] = 0; def = 13;
+	}
+	if (IntDefault[iy][14 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 8 || BaseIntToggle[iy][CountInt[iy] - 1] == 9 || BaseIntToggle[iy][CountInt[iy] - 1] == 10 || BaseIntToggle[iy][CountInt[iy] - 1] == 11 || BaseIntToggle[iy][CountInt[iy] - 1] == 12 || BaseIntToggle[iy][CountInt[iy] - 1] == 13)) {
+		IntAllow[iy][14 - 1] = 0; IntDefault[iy][14 - 1] = 0; def = 14;
+	}
+	if (IntDefault[iy][15 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 20 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) {
+		IntAllow[iy][15 - 1] = 0; IntDefault[iy][15 - 1] = 0; def = 15;
+	}
+	if (IntDefault[iy][16 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 20 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) {
+		IntAllow[iy][16 - 1] = 0; IntDefault[iy][16 - 1] = 0; def = 16;
+	}
+	if (IntDefault[iy][17 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 20 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) {
+		IntAllow[iy][17 - 1] = 0; IntDefault[iy][17 - 1] = 0; def = 17;
+	}
+	if (IntDefault[iy][18 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 20 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) {
+		IntAllow[iy][18 - 1] = 0; IntDefault[iy][18 - 1] = 0; def = 18;
+	}
+	if (IntDefault[iy][19 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 20 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) {
+		IntAllow[iy][19 - 1] = 0; IntDefault[iy][19 - 1] = 0; def = 19;
+	}
+	if (IntDefault[iy][20 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 21)) {
+		IntAllow[iy][20 - 1] = 0; IntDefault[iy][20 - 1] = 0; def = 20;
+	}
+	if (IntDefault[iy][21 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 15 || BaseIntToggle[iy][CountInt[iy] - 1] == 16 || BaseIntToggle[iy][CountInt[iy] - 1] == 17 || BaseIntToggle[iy][CountInt[iy] - 1] == 18 || BaseIntToggle[iy][CountInt[iy] - 1] == 19 || BaseIntToggle[iy][CountInt[iy] - 1] == 20)) {
+		IntAllow[iy][21 - 1] = 0; IntDefault[iy][21 - 1] = 0; def = 21;
+	}
+	if (IntDefault[iy][22 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 27 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) {
+		IntAllow[iy][22 - 1] = 0; IntDefault[iy][22 - 1] = 0; def = 22;
+	}
+	if (IntDefault[iy][23 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 27 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) {
+		IntAllow[iy][23 - 1] = 0; IntDefault[iy][23 - 1] = 0; def = 23;
+	}
+	if (IntDefault[iy][24 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 27 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) {
+		IntAllow[iy][24 - 1] = 0; IntDefault[iy][24 - 1] = 0; def = 24;
+	}
+	if (IntDefault[iy][25 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 27 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) {
+		IntAllow[iy][25 - 1] = 0; IntDefault[iy][25 - 1] = 0; def = 25;
+	}
+	if (IntDefault[iy][26 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 27 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) {
+		IntAllow[iy][26 - 1] = 0; IntDefault[iy][26 - 1] = 0; def = 26;
+	}
+	if (IntDefault[iy][27 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 28)) {
+		IntAllow[iy][27 - 1] = 0; IntDefault[iy][27 - 1] = 0; def = 27;
+	}
+	if (IntDefault[iy][28 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 22 || BaseIntToggle[iy][CountInt[iy] - 1] == 23 || BaseIntToggle[iy][CountInt[iy] - 1] == 24 || BaseIntToggle[iy][CountInt[iy] - 1] == 25 || BaseIntToggle[iy][CountInt[iy] - 1] == 26 || BaseIntToggle[iy][CountInt[iy] - 1] == 27)) {
+		IntAllow[iy][28 - 1] = 0; IntDefault[iy][28 - 1] = 0; def = 28;
+	}
+	if (IntDefault[iy][29 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 34 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) {
+		IntAllow[iy][29 - 1] = 0; IntDefault[iy][29 - 1] = 0; def = 29;
+	}
+	if (IntDefault[iy][30 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 34 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) {
+		IntAllow[iy][30 - 1] = 0; IntDefault[iy][30 - 1] = 0; def = 30;
+	}
+	if (IntDefault[iy][31 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 34 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) {
+		IntAllow[iy][31 - 1] = 0; IntDefault[iy][31 - 1] = 0; def = 31;
+	}
+	if (IntDefault[iy][32 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 34 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) {
+		IntAllow[iy][32 - 1] = 0; IntDefault[iy][32 - 1] = 0; def = 32;
+	}
+	if (IntDefault[iy][33 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 34 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) {
+		IntAllow[iy][33 - 1] = 0; IntDefault[iy][33 - 1] = 0; def = 33;
+	}
+	if (IntDefault[iy][34 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 35)) {
+		IntAllow[iy][34 - 1] = 0; IntDefault[iy][34 - 1] = 0; def = 34;
+	}
+	if (IntDefault[iy][35 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 29 || BaseIntToggle[iy][CountInt[iy] - 1] == 30 || BaseIntToggle[iy][CountInt[iy] - 1] == 31 || BaseIntToggle[iy][CountInt[iy] - 1] == 32 || BaseIntToggle[iy][CountInt[iy] - 1] == 33 || BaseIntToggle[iy][CountInt[iy] - 1] == 34)) {
+		IntAllow[iy][35 - 1] = 0; IntDefault[iy][35 - 1] = 0; def = 35;
+	}
+	if (IntDefault[iy][36 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 37 || BaseIntToggle[iy][CountInt[iy] - 1] == 38)) {
+		IntAllow[iy][36 - 1] = 0; IntDefault[iy][36 - 1] = 0; def = 36;
+	}
+	if (IntDefault[iy][37 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 36 || BaseIntToggle[iy][CountInt[iy] - 1] == 38)) {
+		IntAllow[iy][37 - 1] = 0; IntDefault[iy][37 - 1] = 0; def = 37;
+	}
+	if (IntDefault[iy][38 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 36 || BaseIntToggle[iy][CountInt[iy] - 1] == 37)) {
+		IntAllow[iy][38 - 1] = 0; IntDefault[iy][38 - 1] = 0; def = 38;
+	}
+	if (IntDefault[iy][39 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 40 || BaseIntToggle[iy][CountInt[iy] - 1] == 41 || BaseIntToggle[iy][CountInt[iy] - 1] == 42 || BaseIntToggle[iy][CountInt[iy] - 1] == 43)) {
+		IntAllow[iy][39 - 1] = 0; IntDefault[iy][39 - 1] = 0; def = 39;
+	}
+	if (IntDefault[iy][40 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 39 || BaseIntToggle[iy][CountInt[iy] - 1] == 41 || BaseIntToggle[iy][CountInt[iy] - 1] == 42 || BaseIntToggle[iy][CountInt[iy] - 1] == 43)) {
+		IntAllow[iy][40 - 1] = 0; IntDefault[iy][40 - 1] = 0; def = 40;
+	}
+	if (IntDefault[iy][41 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 39 || BaseIntToggle[iy][CountInt[iy] - 1] == 40 || BaseIntToggle[iy][CountInt[iy] - 1] == 42 || BaseIntToggle[iy][CountInt[iy] - 1] == 43)) {
+		IntAllow[iy][41 - 1] = 0; IntDefault[iy][41 - 1] = 0; def = 41;
+	}
+	if (IntDefault[iy][42 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 39 || BaseIntToggle[iy][CountInt[iy] - 1] == 40 || BaseIntToggle[iy][CountInt[iy] - 1] == 41 || BaseIntToggle[iy][CountInt[iy] - 1] == 43)) {
+		IntAllow[iy][42 - 1] = 0; IntDefault[iy][42 - 1] = 0; def = 42;
+	}
+	if (IntDefault[iy][43 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 39 || BaseIntToggle[iy][CountInt[iy] - 1] == 40 || BaseIntToggle[iy][CountInt[iy] - 1] == 41 || BaseIntToggle[iy][CountInt[iy] - 1] == 42)) {
+		IntAllow[iy][43 - 1] = 0; IntDefault[iy][43 - 1] = 0; def = 43;
+	}
+	if (IntDefault[iy][44 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 45 || BaseIntToggle[iy][CountInt[iy] - 1] == 46 || BaseIntToggle[iy][CountInt[iy] - 1] == 47 || BaseIntToggle[iy][CountInt[iy] - 1] == 48)) {
+		IntAllow[iy][44 - 1] = 0; IntDefault[iy][44 - 1] = 0; def = 44;
+	}
+	if (IntDefault[iy][45 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 44 || BaseIntToggle[iy][CountInt[iy] - 1] == 46 || BaseIntToggle[iy][CountInt[iy] - 1] == 47 || BaseIntToggle[iy][CountInt[iy] - 1] == 48)) {
+		IntAllow[iy][45 - 1] = 0; IntDefault[iy][45 - 1] = 0; def = 45;
+	}
+	if (IntDefault[iy][46 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 44 || BaseIntToggle[iy][CountInt[iy] - 1] == 45 || BaseIntToggle[iy][CountInt[iy] - 1] == 47 || BaseIntToggle[iy][CountInt[iy] - 1] == 48)) {
+		IntAllow[iy][46 - 1] = 0; IntDefault[iy][46 - 1] = 0; def = 46;
+	}
+	if (IntDefault[iy][47 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 44 || BaseIntToggle[iy][CountInt[iy] - 1] == 45 || BaseIntToggle[iy][CountInt[iy] - 1] == 46 || BaseIntToggle[iy][CountInt[iy] - 1] == 48)) {
+		IntAllow[iy][47 - 1] = 0; IntDefault[iy][47 - 1] = 0; def = 47;
+	}
+	if (IntDefault[iy][48 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 44 || BaseIntToggle[iy][CountInt[iy] - 1] == 45 || BaseIntToggle[iy][CountInt[iy] - 1] == 46 || BaseIntToggle[iy][CountInt[iy] - 1] == 47)) {
+		IntAllow[iy][48 - 1] = 0; IntDefault[iy][48 - 1] = 0; def = 48;
+	}
+	if (IntDefault[iy][49 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 50 || BaseIntToggle[iy][CountInt[iy] - 1] == 51 || BaseIntToggle[iy][CountInt[iy] - 1] == 52 || BaseIntToggle[iy][CountInt[iy] - 1] == 53 || BaseIntToggle[iy][CountInt[iy] - 1] == 54)) {
+		IntAllow[iy][49 - 1] = 0; IntDefault[iy][49 - 1] = 0; def = 49;
+	}
+	if (IntDefault[iy][50 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 49 || BaseIntToggle[iy][CountInt[iy] - 1] == 51 || BaseIntToggle[iy][CountInt[iy] - 1] == 52 || BaseIntToggle[iy][CountInt[iy] - 1] == 53 || BaseIntToggle[iy][CountInt[iy] - 1] == 54)) {
+		IntAllow[iy][50 - 1] = 0; IntDefault[iy][50 - 1] = 0; def = 50;
+	}
+	if (IntDefault[iy][51 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 49 || BaseIntToggle[iy][CountInt[iy] - 1] == 50 || BaseIntToggle[iy][CountInt[iy] - 1] == 52 || BaseIntToggle[iy][CountInt[iy] - 1] == 53 || BaseIntToggle[iy][CountInt[iy] - 1] == 54)) {
+		IntAllow[iy][51 - 1] = 0; IntDefault[iy][51 - 1] = 0; def = 51;
+	}
+	if (IntDefault[iy][52 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 49 || BaseIntToggle[iy][CountInt[iy] - 1] == 50 || BaseIntToggle[iy][CountInt[iy] - 1] == 51 || BaseIntToggle[iy][CountInt[iy] - 1] == 53 || BaseIntToggle[iy][CountInt[iy] - 1] == 54)) {
+		IntAllow[iy][52 - 1] = 0; IntDefault[iy][52 - 1] = 0; def = 52;
+	}
+	if (IntDefault[iy][53 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 49 || BaseIntToggle[iy][CountInt[iy] - 1] == 50 || BaseIntToggle[iy][CountInt[iy] - 1] == 51 || BaseIntToggle[iy][CountInt[iy] - 1] == 52 || BaseIntToggle[iy][CountInt[iy] - 1] == 54)) {
+		IntAllow[iy][53 - 1] = 0; IntDefault[iy][53 - 1] = 0; def = 53;
+	}
+	if (IntDefault[iy][54 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 49 || BaseIntToggle[iy][CountInt[iy] - 1] == 50 || BaseIntToggle[iy][CountInt[iy] - 1] == 51 || BaseIntToggle[iy][CountInt[iy] - 1] == 52 || BaseIntToggle[iy][CountInt[iy] - 1] == 53)) {
+		IntAllow[iy][54 - 1] = 0; IntDefault[iy][54 - 1] = 0; def = 54;
+	}
+	if (IntDefault[iy][55 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 56 || BaseIntToggle[iy][CountInt[iy] - 1] == 57 || BaseIntToggle[iy][CountInt[iy] - 1] == 58 || BaseIntToggle[iy][CountInt[iy] - 1] == 59)) {
+		IntAllow[iy][55 - 1] = 0; IntDefault[iy][55 - 1] = 0; def = 55;
+	}
+	if (IntDefault[iy][56 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 55 || BaseIntToggle[iy][CountInt[iy] - 1] == 57 || BaseIntToggle[iy][CountInt[iy] - 1] == 58 || BaseIntToggle[iy][CountInt[iy] - 1] == 59)) {
+		IntAllow[iy][56 - 1] = 0; IntDefault[iy][56 - 1] = 0; def = 56;
+	}
+	if (IntDefault[iy][57 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 55 || BaseIntToggle[iy][CountInt[iy] - 1] == 56 || BaseIntToggle[iy][CountInt[iy] - 1] == 58 || BaseIntToggle[iy][CountInt[iy] - 1] == 59)) {
+		IntAllow[iy][57 - 1] = 0; IntDefault[iy][57 - 1] = 0; def = 57;
+	}
+	if (IntDefault[iy][58 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 55 || BaseIntToggle[iy][CountInt[iy] - 1] == 56 || BaseIntToggle[iy][CountInt[iy] - 1] == 57 || BaseIntToggle[iy][CountInt[iy] - 1] == 59)) {
+		IntAllow[iy][58 - 1] = 0; IntDefault[iy][58 - 1] = 0; def = 58;
+	}
+	if (IntDefault[iy][59 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 55 || BaseIntToggle[iy][CountInt[iy] - 1] == 56 || BaseIntToggle[iy][CountInt[iy] - 1] == 57 || BaseIntToggle[iy][CountInt[iy] - 1] == 58)) {
+		IntAllow[iy][59 - 1] = 0; IntDefault[iy][59 - 1] = 0; def = 59;
+	}
+	if (IntDefault[iy][60 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 65 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) {
+		IntAllow[iy][60 - 1] = 0; IntDefault[iy][60 - 1] = 0; def = 60;
+	}
+	if (IntDefault[iy][61 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 65 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) {
+		IntAllow[iy][61 - 1] = 0; IntDefault[iy][61 - 1] = 0; def = 61;
+	}
+	if (IntDefault[iy][62 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 65 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) {
+		IntAllow[iy][62 - 1] = 0; IntDefault[iy][62 - 1] = 0; def = 62;
+	}
+	if (IntDefault[iy][63 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 65 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) {
+		IntAllow[iy][63 - 1] = 0; IntDefault[iy][63 - 1] = 0; def = 63;
+	}
+	if (IntDefault[iy][64 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 65 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) {
+		IntAllow[iy][64 - 1] = 0; IntDefault[iy][64 - 1] = 0; def = 64;
+	}
+	if (IntDefault[iy][65 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 66)) {
+		IntAllow[iy][65 - 1] = 0; IntDefault[iy][65 - 1] = 0; def = 65;
+	}
+	if (IntDefault[iy][66 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 60 || BaseIntToggle[iy][CountInt[iy] - 1] == 61 || BaseIntToggle[iy][CountInt[iy] - 1] == 62 || BaseIntToggle[iy][CountInt[iy] - 1] == 63 || BaseIntToggle[iy][CountInt[iy] - 1] == 64 || BaseIntToggle[iy][CountInt[iy] - 1] == 65)) {
+		IntAllow[iy][66 - 1] = 0; IntDefault[iy][66 - 1] = 0; def = 66;
+	}
+	if (IntDefault[iy][67 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) {
+		IntAllow[iy][67 - 1] = 0; IntDefault[iy][67 - 1] = 0; def = 67;
+	}
+	if (IntDefault[iy][68 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) {
+		IntAllow[iy][68 - 1] = 0; IntDefault[iy][68 - 1] = 0; def = 68;
+	}
+	if (IntDefault[iy][69 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) {
+		IntAllow[iy][69 - 1] = 0; IntDefault[iy][69 - 1] = 0; def = 69;
+	}
+	if (IntDefault[iy][70 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) {
+		IntAllow[iy][70 - 1] = 0; IntDefault[iy][70 - 1] = 0; def = 70;
+	}
+	if (IntDefault[iy][71 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) {
+		IntAllow[iy][71 - 1] = 0; IntDefault[iy][71 - 1] = 0; def = 71;
+	}
+	if (IntDefault[iy][72 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76)) {
+		IntAllow[iy][72 - 1] = 0; IntDefault[iy][72 - 1] = 0; def = 72;
+	}
+	if (IntDefault[iy][73 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76 || BaseIntToggle[iy][CountInt[iy] - 1] == 77)) {
+		IntAllow[iy][73 - 1] = 0; IntDefault[iy][73 - 1] = 0; def = 73;
+	}
+	if (IntDefault[iy][74 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 75 || BaseIntToggle[iy][CountInt[iy] - 1] == 76 || BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 78)) {
+		IntAllow[iy][74 - 1] = 0; IntDefault[iy][74 - 1] = 0; def = 74;
+	}
+	if (IntDefault[iy][75 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 76 || BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 78 || BaseIntToggle[iy][CountInt[iy] - 1] == 79)) {
+		IntAllow[iy][75 - 1] = 0; IntDefault[iy][75 - 1] = 0; def = 75;
+	}
+	if (IntDefault[iy][76 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 67 || BaseIntToggle[iy][CountInt[iy] - 1] == 68 || BaseIntToggle[iy][CountInt[iy] - 1] == 69 || BaseIntToggle[iy][CountInt[iy] - 1] == 70 || BaseIntToggle[iy][CountInt[iy] - 1] == 71 || BaseIntToggle[iy][CountInt[iy] - 1] == 72 || BaseIntToggle[iy][CountInt[iy] - 1] == 73 || BaseIntToggle[iy][CountInt[iy] - 1] == 74 || BaseIntToggle[iy][CountInt[iy] - 1] == 75)) {
+		IntAllow[iy][76 - 1] = 0; IntDefault[iy][76 - 1] = 0; def = 76;
+	}
+	if (IntDefault[iy][77 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 78 || BaseIntToggle[iy][CountInt[iy] - 1] == 79 || BaseIntToggle[iy][CountInt[iy] - 1] == 80 || BaseIntToggle[iy][CountInt[iy] - 1] == 81)) {
+		IntAllow[iy][77 - 1] = 0; IntDefault[iy][77 - 1] = 0; def = 77;
+	}
+	if (IntDefault[iy][78 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 79 || BaseIntToggle[iy][CountInt[iy] - 1] == 80 || BaseIntToggle[iy][CountInt[iy] - 1] == 81)) {
+		IntAllow[iy][78 - 1] = 0; IntDefault[iy][78 - 1] = 0; def = 78;
+	}
+	if (IntDefault[iy][79 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 78 || BaseIntToggle[iy][CountInt[iy] - 1] == 80 || BaseIntToggle[iy][CountInt[iy] - 1] == 81)) {
+		IntAllow[iy][79 - 1] = 0; IntDefault[iy][79 - 1] = 0; def = 79;
+	}
+	if (IntDefault[iy][80 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 78 || BaseIntToggle[iy][CountInt[iy] - 1] == 79 || BaseIntToggle[iy][CountInt[iy] - 1] == 81)) {
+		IntAllow[iy][80 - 1] = 0; IntDefault[iy][80 - 1] = 0; def = 80;
+	}
+	if (IntDefault[iy][81 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 77 || BaseIntToggle[iy][CountInt[iy] - 1] == 78 || BaseIntToggle[iy][CountInt[iy] - 1] == 79 || BaseIntToggle[iy][CountInt[iy] - 1] == 80)) {
+		IntAllow[iy][81 - 1] = 0; IntDefault[iy][81 - 1] = 0; def = 81;
+	}
+	if (IntDefault[iy][82 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 87 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) {
+		IntAllow[iy][82 - 1] = 0; IntDefault[iy][82 - 1] = 0; def = 82;
+	}
+	if (IntDefault[iy][83 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 87 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) {
+		IntAllow[iy][83 - 1] = 0; IntDefault[iy][83 - 1] = 0; def = 83;
+	}
+	if (IntDefault[iy][84 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 87 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) {
+		IntAllow[iy][84 - 1] = 0; IntDefault[iy][84 - 1] = 0; def = 84;
+	}
+	if (IntDefault[iy][85 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 87 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) {
+		IntAllow[iy][85 - 1] = 0; IntDefault[iy][85 - 1] = 0; def = 85;
+	}
+	if (IntDefault[iy][86 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 87 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) {
+		IntAllow[iy][86 - 1] = 0; IntDefault[iy][86 - 1] = 0; def = 86;
+	}
+	if (IntDefault[iy][87 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 88)) {
+		IntAllow[iy][87 - 1] = 0; IntDefault[iy][87 - 1] = 0; def = 87;
+	}
+	if (IntDefault[iy][88 - 1] == 1 && (BaseIntToggle[iy][CountInt[iy] - 1] == 82 || BaseIntToggle[iy][CountInt[iy] - 1] == 83 || BaseIntToggle[iy][CountInt[iy] - 1] == 84 || BaseIntToggle[iy][CountInt[iy] - 1] == 85 || BaseIntToggle[iy][CountInt[iy] - 1] == 86 || BaseIntToggle[iy][CountInt[iy] - 1] == 87)) {
+		IntAllow[iy][88 - 1] = 0; IntDefault[iy][88 - 1] = 0; def = 88;
+	}
+	if (IntDefault[iy][89 - 1] == 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 90) {
+		IntAllow[iy][89 - 1] = 0; IntDefault[iy][89 - 1] = 0; def = 89;
+	}
+	if (IntDefault[iy][90 - 1] == 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 89) {
+		IntAllow[iy][90 - 1] = 0; IntDefault[iy][90 - 1] = 0; def = 90;
+	}
+	if (IntDefault[iy][91 - 1] == 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 92) {
+		IntAllow[iy][91 - 1] = 0; IntDefault[iy][91 - 1] = 0; def = 91;
+	}
+	if (IntDefault[iy][92 - 1] == 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 91) {
+		IntAllow[iy][92 - 1] = 0; IntDefault[iy][92 - 1] = 0; def = 92;
+	}
+	if (IntDefault[iy][93 - 1] == 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 94) {
+		IntAllow[iy][93 - 1] = 0; IntDefault[iy][93 - 1] = 0; def = 93;
+	}
+	if (IntDefault[iy][94 - 1] == 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 93) {
+		IntAllow[iy][94 - 1] = 0; IntDefault[iy][94 - 1] = 0; def = 94;
+	}
+	if (IntDefault[iy][95 - 1] == 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 96) {
+		IntAllow[iy][95 - 1] = 0; IntDefault[iy][95 - 1] = 0; def = 95;
+	}
+	if (IntDefault[iy][96 - 1] == 1 && BaseIntToggle[iy][CountInt[iy] - 1] == 95) {
+		IntAllow[iy][96 - 1] = 0; IntDefault[iy][96 - 1] = 0; def = 96;
+	}
+
+
+
+
+	if (def != -1) {
+		cout << "Action: Excluded 'default' " << InterventionName[iy][def - 1] << endl;
+		filesim << "Action: Excluded 'default' " << InterventionName[iy][def - 1] << endl;
+	}
+
+	filesim.close();
+}
+
+void EliminateLowerCoverage(int iy) {
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 2) { IntAllow[iy][1 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 3) { IntAllow[iy][1 - 1] = 0; IntAllow[iy][2 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 4) { IntAllow[iy][1 - 1] = 0; IntAllow[iy][2 - 1] = 0; IntAllow[iy][3 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 5) { IntAllow[iy][1 - 1] = 0; IntAllow[iy][2 - 1] = 0; IntAllow[iy][3 - 1] = 0; IntAllow[iy][4 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 6) { IntAllow[iy][1 - 1] = 0; IntAllow[iy][2 - 1] = 0; IntAllow[iy][3 - 1] = 0; IntAllow[iy][4 - 1] = 0; IntAllow[iy][5 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 7) { IntAllow[iy][1 - 1] = 0; IntAllow[iy][2 - 1] = 0; IntAllow[iy][3 - 1] = 0; IntAllow[iy][4 - 1] = 0; IntAllow[iy][5 - 1] = 0; IntAllow[iy][6 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 9) { IntAllow[iy][8 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 10) { IntAllow[iy][8 - 1] = 0; IntAllow[iy][9 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 11) { IntAllow[iy][8 - 1] = 0; IntAllow[iy][9 - 1] = 0; IntAllow[iy][10 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 12) { IntAllow[iy][8 - 1] = 0; IntAllow[iy][9 - 1] = 0; IntAllow[iy][10 - 1] = 0; IntAllow[iy][11 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 13) { IntAllow[iy][8 - 1] = 0; IntAllow[iy][9 - 1] = 0; IntAllow[iy][10 - 1] = 0; IntAllow[iy][11 - 1] = 0; IntAllow[iy][12 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 14) { IntAllow[iy][8 - 1] = 0; IntAllow[iy][9 - 1] = 0; IntAllow[iy][10 - 1] = 0; IntAllow[iy][11 - 1] = 0; IntAllow[iy][12 - 1] = 0; IntAllow[iy][13 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 16) { IntAllow[iy][15 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 17) { IntAllow[iy][15 - 1] = 0; IntAllow[iy][16 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 18) { IntAllow[iy][15 - 1] = 0; IntAllow[iy][16 - 1] = 0; IntAllow[iy][17 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 19) { IntAllow[iy][15 - 1] = 0; IntAllow[iy][16 - 1] = 0; IntAllow[iy][17 - 1] = 0; IntAllow[iy][18 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 20) { IntAllow[iy][15 - 1] = 0; IntAllow[iy][16 - 1] = 0; IntAllow[iy][17 - 1] = 0; IntAllow[iy][18 - 1] = 0; IntAllow[iy][19 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 21) { IntAllow[iy][15 - 1] = 0; IntAllow[iy][16 - 1] = 0; IntAllow[iy][17 - 1] = 0; IntAllow[iy][18 - 1] = 0; IntAllow[iy][19 - 1] = 0; IntAllow[iy][20 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 23) { IntAllow[iy][22 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 24) { IntAllow[iy][22 - 1] = 0; IntAllow[iy][23 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 25) { IntAllow[iy][22 - 1] = 0; IntAllow[iy][23 - 1] = 0; IntAllow[iy][24 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 26) { IntAllow[iy][22 - 1] = 0; IntAllow[iy][23 - 1] = 0; IntAllow[iy][24 - 1] = 0; IntAllow[iy][25 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 27) { IntAllow[iy][22 - 1] = 0; IntAllow[iy][23 - 1] = 0; IntAllow[iy][24 - 1] = 0; IntAllow[iy][25 - 1] = 0; IntAllow[iy][26 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 28) { IntAllow[iy][22 - 1] = 0; IntAllow[iy][23 - 1] = 0; IntAllow[iy][24 - 1] = 0; IntAllow[iy][25 - 1] = 0; IntAllow[iy][26 - 1] = 0; IntAllow[iy][27 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 30) { IntAllow[iy][29 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 31) { IntAllow[iy][29 - 1] = 0; IntAllow[iy][30 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 32) { IntAllow[iy][29 - 1] = 0; IntAllow[iy][30 - 1] = 0; IntAllow[iy][31 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 33) { IntAllow[iy][29 - 1] = 0; IntAllow[iy][30 - 1] = 0; IntAllow[iy][31 - 1] = 0; IntAllow[iy][32 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 34) { IntAllow[iy][29 - 1] = 0; IntAllow[iy][30 - 1] = 0; IntAllow[iy][31 - 1] = 0; IntAllow[iy][32 - 1] = 0; IntAllow[iy][33 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 35) { IntAllow[iy][29 - 1] = 0; IntAllow[iy][30 - 1] = 0; IntAllow[iy][31 - 1] = 0; IntAllow[iy][32 - 1] = 0; IntAllow[iy][33 - 1] = 0; IntAllow[iy][34 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 37) { IntAllow[iy][36 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 38) { IntAllow[iy][36 - 1] = 0; IntAllow[iy][37 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 40) { IntAllow[iy][39 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 41) { IntAllow[iy][39 - 1] = 0; IntAllow[iy][40 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 42) { IntAllow[iy][39 - 1] = 0; IntAllow[iy][40 - 1] = 0; IntAllow[iy][41 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 43) { IntAllow[iy][39 - 1] = 0; IntAllow[iy][40 - 1] = 0; IntAllow[iy][41 - 1] = 0; IntAllow[iy][42 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 45) { IntAllow[iy][44 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 46) { IntAllow[iy][44 - 1] = 0; IntAllow[iy][45 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 47) { IntAllow[iy][44 - 1] = 0; IntAllow[iy][45 - 1] = 0; IntAllow[iy][46 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 48) { IntAllow[iy][44 - 1] = 0; IntAllow[iy][45 - 1] = 0; IntAllow[iy][46 - 1] = 0; IntAllow[iy][47 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 50) { IntAllow[iy][49 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 51) { IntAllow[iy][49 - 1] = 0; IntAllow[iy][50 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 52) { IntAllow[iy][49 - 1] = 0; IntAllow[iy][50 - 1] = 0; IntAllow[iy][51 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 53) { IntAllow[iy][49 - 1] = 0; IntAllow[iy][50 - 1] = 0; IntAllow[iy][51 - 1] = 0; IntAllow[iy][52 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 54) { IntAllow[iy][49 - 1] = 0; IntAllow[iy][50 - 1] = 0; IntAllow[iy][51 - 1] = 0; IntAllow[iy][52 - 1] = 0; IntAllow[iy][53 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 56) { IntAllow[iy][55 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 57) { IntAllow[iy][55 - 1] = 0; IntAllow[iy][56 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 58) { IntAllow[iy][55 - 1] = 0; IntAllow[iy][56 - 1] = 0; IntAllow[iy][57 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 59) { IntAllow[iy][55 - 1] = 0; IntAllow[iy][56 - 1] = 0; IntAllow[iy][57 - 1] = 0; IntAllow[iy][58 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 61) { IntAllow[iy][60 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 62) { IntAllow[iy][60 - 1] = 0; IntAllow[iy][61 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 63) { IntAllow[iy][60 - 1] = 0; IntAllow[iy][61 - 1] = 0; IntAllow[iy][62 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 64) { IntAllow[iy][60 - 1] = 0; IntAllow[iy][61 - 1] = 0; IntAllow[iy][62 - 1] = 0; IntAllow[iy][63 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 65) { IntAllow[iy][60 - 1] = 0; IntAllow[iy][61 - 1] = 0; IntAllow[iy][62 - 1] = 0; IntAllow[iy][63 - 1] = 0; IntAllow[iy][64 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 66) { IntAllow[iy][60 - 1] = 0; IntAllow[iy][61 - 1] = 0; IntAllow[iy][62 - 1] = 0; IntAllow[iy][63 - 1] = 0; IntAllow[iy][64 - 1] = 0; IntAllow[iy][65 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 68) { IntAllow[iy][67 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 69) { IntAllow[iy][67 - 1] = 0; IntAllow[iy][68 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 70) { IntAllow[iy][67 - 1] = 0; IntAllow[iy][68 - 1] = 0; IntAllow[iy][69 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 71) { IntAllow[iy][67 - 1] = 0; IntAllow[iy][68 - 1] = 0; IntAllow[iy][69 - 1] = 0; IntAllow[iy][70 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 72) { IntAllow[iy][67 - 1] = 0; IntAllow[iy][68 - 1] = 0; IntAllow[iy][69 - 1] = 0; IntAllow[iy][70 - 1] = 0; IntAllow[iy][71 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 73) { IntAllow[iy][67 - 1] = 0; IntAllow[iy][68 - 1] = 0; IntAllow[iy][69 - 1] = 0; IntAllow[iy][70 - 1] = 0; IntAllow[iy][71 - 1] = 0; IntAllow[iy][72 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 74) { IntAllow[iy][67 - 1] = 0; IntAllow[iy][68 - 1] = 0; IntAllow[iy][69 - 1] = 0; IntAllow[iy][70 - 1] = 0; IntAllow[iy][71 - 1] = 0; IntAllow[iy][72 - 1] = 0; IntAllow[iy][73 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 75) { IntAllow[iy][67 - 1] = 0; IntAllow[iy][68 - 1] = 0; IntAllow[iy][69 - 1] = 0; IntAllow[iy][70 - 1] = 0; IntAllow[iy][71 - 1] = 0; IntAllow[iy][72 - 1] = 0; IntAllow[iy][73 - 1] = 0; IntAllow[iy][74 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 76) { IntAllow[iy][67 - 1] = 0; IntAllow[iy][68 - 1] = 0; IntAllow[iy][69 - 1] = 0; IntAllow[iy][70 - 1] = 0; IntAllow[iy][71 - 1] = 0; IntAllow[iy][72 - 1] = 0; IntAllow[iy][73 - 1] = 0; IntAllow[iy][74 - 1] = 0; IntAllow[iy][75 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 78) { IntAllow[iy][77 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 79) { IntAllow[iy][77 - 1] = 0; IntAllow[iy][78 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 80) { IntAllow[iy][77 - 1] = 0; IntAllow[iy][78 - 1] = 0; IntAllow[iy][79 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 81) { IntAllow[iy][77 - 1] = 0; IntAllow[iy][78 - 1] = 0; IntAllow[iy][79 - 1] = 0; IntAllow[iy][80 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 83) { IntAllow[iy][82 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 84) { IntAllow[iy][82 - 1] = 0; IntAllow[iy][83 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 85) { IntAllow[iy][82 - 1] = 0; IntAllow[iy][83 - 1] = 0; IntAllow[iy][84 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 86) { IntAllow[iy][82 - 1] = 0; IntAllow[iy][83 - 1] = 0; IntAllow[iy][84 - 1] = 0; IntAllow[iy][85 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 87) { IntAllow[iy][82 - 1] = 0; IntAllow[iy][83 - 1] = 0; IntAllow[iy][84 - 1] = 0; IntAllow[iy][85 - 1] = 0; IntAllow[iy][86 - 1] = 0; }
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 88) { IntAllow[iy][82 - 1] = 0; IntAllow[iy][83 - 1] = 0; IntAllow[iy][84 - 1] = 0; IntAllow[iy][85 - 1] = 0; IntAllow[iy][86 - 1] = 0; IntAllow[iy][87 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 90) { IntAllow[iy][89 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 92) { IntAllow[iy][91 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 94) { IntAllow[iy][93 - 1] = 0; }
+
+	if (BaseIntToggle[iy][CountInt[iy] - 1] == 96) { IntAllow[iy][95 - 1] = 0; }
+
+
+
+
+}
+
+void GetDefaultAssump() {
+	for (int iy = 30; iy < 86; iy++) {
+		RR_MMCpromo10_def[iy] = RR_MMCpromo10[iy]; // RR of MMC promotion at ages 10-14
+		RR_MMCpromo15_def[iy] = RR_MMCpromo15[iy]; // RR of MMC promotion at ages 15-19
+		RR_MMCpromo20_def[iy] = RR_MMCpromo20[iy]; // RR of MMC promotion at ages 20-24
+		RR_MMCpromo25_def[iy] = RR_MMCpromo25[iy]; // RR of MMC promotion at ages 25-49
+		RR_MMCpromo50_def[iy] = RR_MMCpromo50[iy]; // RR of MMC promotion at ages 50+
+
+		for (int ic = 0; ic < ResampleSize; ic++) {
+			CovNeonatalCirc_def.out[ic][iy] = CovNeonatalCirc.out[ic][iy];  //Used for EIMC			
+		}
+
+	}
+}
+
+
+
+void Int_MMCBm2() {
+	double mmcfactor = 0.5;
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		for (int iy = ICstart - 1; iy < 86; iy++) {
+			RR_MMCpromo10[iy] = 1 * mmcfactor;
+			RR_MMCpromo15[iy] = 0.59 * mmcfactor;
+			RR_MMCpromo20[iy] = 0.27 * mmcfactor;
+			RR_MMCpromo25[iy] = 0.14 * mmcfactor;
+			RR_MMCpromo50[iy] = 0.012 * mmcfactor;
+		}
+	}
+	if (bl == 2 || bl == 4) {
+		for (int iy = ICstart - 1; iy < 86; iy++) {
+			RR_MMCpromo10[iy] = 0.55 * mmcfactor;
+			RR_MMCpromo15[iy] = 0.3245 * mmcfactor;
+			RR_MMCpromo20[iy] = 0.1485 * mmcfactor;
+			RR_MMCpromo25[iy] = 0.077 * mmcfactor;
+			RR_MMCpromo50[iy] = 0.0066 * mmcfactor;
+		}
+	}
+
+
+}
+void Int_MMCBm1() {
+	double mmcfactor = 0.8;
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		for (int iy = ICstart - 1; iy < 86; iy++) {
+			RR_MMCpromo10[iy] = 1 * mmcfactor;
+			RR_MMCpromo15[iy] = 0.59 * mmcfactor;
+			RR_MMCpromo20[iy] = 0.27 * mmcfactor;
+			RR_MMCpromo25[iy] = 0.14 * mmcfactor;
+			RR_MMCpromo50[iy] = 0.012 * mmcfactor;
+		}
+	}
+	if (bl == 2 || bl == 4) {
+		for (int iy = ICstart - 1; iy < 86; iy++) {
+			RR_MMCpromo10[iy] = 0.55 * mmcfactor;
+			RR_MMCpromo15[iy] = 0.3245 * mmcfactor;
+			RR_MMCpromo20[iy] = 0.1485 * mmcfactor;
+			RR_MMCpromo25[iy] = 0.077 * mmcfactor;
+			RR_MMCpromo50[iy] = 0.0066 * mmcfactor;
+		}
+	}
+}
+void Int_MMCDefault() {
+	double mmcfactor = 1;
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		for (int iy = ICstart - 1; iy < 86; iy++) {
+			RR_MMCpromo10[iy] = 1 * mmcfactor;
+			RR_MMCpromo15[iy] = 0.59 * mmcfactor;
+			RR_MMCpromo20[iy] = 0.27 * mmcfactor;
+			RR_MMCpromo25[iy] = 0.14 * mmcfactor;
+			RR_MMCpromo50[iy] = 0.012 * mmcfactor;
+		}
+	}
+	if (bl == 2 || bl == 4) {
+		for (int iy = ICstart - 1; iy < 86; iy++) {
+			RR_MMCpromo10[iy] = 0.55 * mmcfactor;
+			RR_MMCpromo15[iy] = 0.3245 * mmcfactor;
+			RR_MMCpromo20[iy] = 0.1485 * mmcfactor;
+			RR_MMCpromo25[iy] = 0.077 * mmcfactor;
+			RR_MMCpromo50[iy] = 0.0066 * mmcfactor;
+		}
+	}
+}
+
+void Int_MMCBp1() {
+	double mmcfactor;
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		mmcfactor = 1.25;
+		for (int iy = ICstart - 1; iy < 86; iy++) {
+			RR_MMCpromo10[iy] = 1 * mmcfactor;
+			RR_MMCpromo15[iy] = 0.59 * mmcfactor;
+			RR_MMCpromo20[iy] = 0.27 * mmcfactor;
+			RR_MMCpromo25[iy] = 0.14 * mmcfactor;
+			RR_MMCpromo50[iy] = 0.012 * mmcfactor;
+		}
+	}
+	if (bl == 2 || bl == 4) {
+		mmcfactor = 1.65;
+		for (int iy = ICstart - 1; iy < 86; iy++) {
+			RR_MMCpromo10[iy] = 0.55 * mmcfactor;
+			RR_MMCpromo15[iy] = 0.3245 * mmcfactor;
+			RR_MMCpromo20[iy] = 0.1485 * mmcfactor;
+			RR_MMCpromo25[iy] = 0.077 * mmcfactor;
+			RR_MMCpromo50[iy] = 0.0066 * mmcfactor;
+		}
+	}
+}
+
+
+
+
+void Int_MMCBp2() {
+	double mmcfactor;
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		mmcfactor = 1.50;
+		for (int iy = ICstart - 1; iy < 86; iy++) {
+			RR_MMCpromo10[iy] = 1 * mmcfactor;
+			RR_MMCpromo15[iy] = 0.59 * mmcfactor;
+			RR_MMCpromo20[iy] = 0.27 * mmcfactor;
+			RR_MMCpromo25[iy] = 0.14 * mmcfactor;
+			RR_MMCpromo50[iy] = 0.012 * mmcfactor;
+		}
+	}
+	if (bl == 2 || bl == 4) {
+		mmcfactor = 2.30;
+		for (int iy = ICstart - 1; iy < 86; iy++) {
+			RR_MMCpromo10[iy] = 0.55 * mmcfactor;
+			RR_MMCpromo15[iy] = 0.3245 * mmcfactor;
+			RR_MMCpromo20[iy] = 0.1485 * mmcfactor;
+			RR_MMCpromo25[iy] = 0.077 * mmcfactor;
+			RR_MMCpromo50[iy] = 0.0066 * mmcfactor;
+		}
+	}
+}
+
+
+void Int_MMCBp3() {
+	double mmcfactor;
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		mmcfactor = 1.75;
+		for (int iy = ICstart - 1; iy < 86; iy++) {
+			RR_MMCpromo10[iy] = 1 * mmcfactor;
+			RR_MMCpromo15[iy] = 0.59 * mmcfactor;
+			RR_MMCpromo20[iy] = 0.27 * mmcfactor;
+			RR_MMCpromo25[iy] = 0.14 * mmcfactor;
+			RR_MMCpromo50[iy] = 0.012 * mmcfactor;
+		}
+	}
+	if (bl == 2 || bl == 4) {
+		mmcfactor = 2.95;
+		for (int iy = ICstart - 1; iy < 86; iy++) {
+			RR_MMCpromo10[iy] = 0.55 * mmcfactor;
+			RR_MMCpromo15[iy] = 0.3245 * mmcfactor;
+			RR_MMCpromo20[iy] = 0.1485 * mmcfactor;
+			RR_MMCpromo25[iy] = 0.077 * mmcfactor;
+			RR_MMCpromo50[iy] = 0.0066 * mmcfactor;
+		}
+	}
+}
+
+
+void Int_MMCMax() {
+	double mmcfactor;
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		mmcfactor = 2;
+		for (int iy = ICstart - 1; iy < 86; iy++) {
+			RR_MMCpromo10[iy] = 1 * mmcfactor;
+			RR_MMCpromo15[iy] = 0.59 * mmcfactor;
+			RR_MMCpromo20[iy] = 0.27 * mmcfactor;
+			RR_MMCpromo25[iy] = 0.14 * mmcfactor;
+			RR_MMCpromo50[iy] = 0.012 * mmcfactor;
+		}
+	}
+	if (bl == 2 || bl == 4) {
+		mmcfactor = 3.6;
+		for (int iy = ICstart - 1; iy < 86; iy++) {
+			RR_MMCpromo10[iy] = 0.55 * mmcfactor;
+			RR_MMCpromo15[iy] = 0.3245 * mmcfactor;
+			RR_MMCpromo20[iy] = 0.1485 * mmcfactor;
+			RR_MMCpromo25[iy] = 0.077 * mmcfactor;
+			RR_MMCpromo50[iy] = 0.0066 * mmcfactor;
+		}
+	}
+}
+
+
+void Int_EIMCBm2() {
+	NeonatalMMC[ICstart] = 0.0408;
+	NeonatalMMC[ICstart + 1] = 0.0;
+	for (int iy = ICstart; iy < 86; iy++) {
+		CovNeonatalCirc.out[CurrSim - 1][iy] = 0.0;
+		if (iy >= ICstart + 2) { NeonatalMMC[iy] = 0.0; }
+	}
+}
+
+void Int_EIMCBm1() {
+	NeonatalMMC[ICstart] = 0.0729;
+	NeonatalMMC[ICstart + 1] = 0.0146;
+	for (int iy = ICstart; iy < 86; iy++) {
+		CovNeonatalCirc.out[CurrSim - 1][iy] = 0.0;
+		if (iy >= ICstart + 2) { NeonatalMMC[iy] = 0.0; }
+	}
+}
+
+void Int_EIMCDefault() {
+	for (int iy = ICstart; iy < 86; iy++) {
+		CovNeonatalCirc.out[CurrSim - 1][iy] = 0.1050;
+		NeonatalMMC[iy] = 0.1050;
+	}
+}
+
+void Int_EIMCBp1() {
+	NeonatalMMC[ICstart] = 0.1371;
+	NeonatalMMC[ICstart + 1] = 0.1954;
+	for (int iy = ICstart; iy < 86; iy++) {
+		CovNeonatalCirc.out[CurrSim - 1][iy] = 0.2538;
+		if (iy >= ICstart + 2) { NeonatalMMC[iy] = 0.2538; }
+	}
+}
+void Int_EIMCBp2() {
+	NeonatalMMC[ICstart] = 0.1692;
+	NeonatalMMC[ICstart + 1] = 0.2858;
+	for (int iy = ICstart; iy < 86; iy++) {
+		CovNeonatalCirc.out[CurrSim - 1][iy] = 0.4025;
+		if (iy >= ICstart + 2) { NeonatalMMC[iy] = 0.4025; }
+	}
+}
+void Int_EIMCBp3() {
+	NeonatalMMC[ICstart] = 0.2013;
+	NeonatalMMC[ICstart + 1] = 0.3763;
+	for (int iy = ICstart; iy < 86; iy++) {
+		CovNeonatalCirc.out[CurrSim - 1][iy] = 0.5513;
+		if (iy >= ICstart + 2) { NeonatalMMC[iy] = 0.5513; }
+	}
+}
+void Int_EIMCMax() {
+	NeonatalMMC[ICstart] = 0.2333;
+	NeonatalMMC[ICstart + 1] = 0.4667;
+	for (int iy = ICstart; iy < 86; iy++) {
+		CovNeonatalCirc.out[CurrSim - 1][iy] = 0.700;
+		if (iy >= ICstart + 2) { NeonatalMMC[iy] = 0.700; }
+	}
+}
+
+
+
+
+void Int_CondomSupplyBm2() {
+	LastCondomMultiplier = 0.5;
+	for (int iy = ICstart; iy < 86; iy++) {
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
+	}
+}
+void Int_CondomSupplyBm1() {
+	LastCondomMultiplier = 0.8;
+	for (int iy = ICstart; iy < 86; iy++) {
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
+	}
+}
+void Int_CondomSupplyDefault() {
+	LastCondomMultiplier = 1.00;
+	for (int iy = ICstart; iy < 86; iy++) {
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
+	}
+}
+void Int_CondomSupplyBp1() {
+	LastCondomMultiplier = 1.5;
+	for (int iy = ICstart; iy < 86; iy++) {
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
+	}
+}
+void Int_CondomSupplyBp2() {
+	LastCondomMultiplier = 2;
+	for (int iy = ICstart; iy < 86; iy++) {
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
+	}
+}
+void Int_CondomSupplyBp3() {
+	LastCondomMultiplier = 2.5;
+	for (int iy = ICstart; iy < 86; iy++) {
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
+	}
+}
+void Int_CondomSupplyMax() {
+	LastCondomMultiplier = 3;
+	for (int iy = ICstart; iy < 86; iy++) {
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
+	}
+}
+
+
+
+
+
+void Int_Test18monthsBm2() {
+	
+	
+	if (ProvModel == 0) { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
+	if (ProvModel == 1 && ProvID == "EC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
+	if (ProvModel == 1 && ProvID == "FS") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.0908; } }
+	if (ProvModel == 1 && ProvID == "GT") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.1244; } }
+	if (ProvModel == 1 && ProvID == "KZ") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.00845000000000001; } }
+	if (ProvModel == 1 && ProvID == "LM") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
+	if (ProvModel == 1 && ProvID == "MP") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.19235; } }
+	if (ProvModel == 1 && ProvID == "NC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
+	if (ProvModel == 1 && ProvID == "NW") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
+	if (ProvModel == 1 && ProvID == "WC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
+
+
+}
+void Int_Test18monthsBm1() {
+	
+	if (ProvModel == 0) { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.137875; } }
+	if (ProvModel == 1 && ProvID == "EC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.080625; } }
+	if (ProvModel == 1 && ProvID == "FS") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.234; } }
+	if (ProvModel == 1 && ProvID == "GT") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.262; } }
+	if (ProvModel == 1 && ProvID == "KZ") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.165375; } }
+	if (ProvModel == 1 && ProvID == "LM") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.0794; } }
+	if (ProvModel == 1 && ProvID == "MP") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.318625; } }
+	if (ProvModel == 1 && ProvID == "NC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.02; } }
+	if (ProvModel == 1 && ProvID == "NW") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.1215; } }
+	if (ProvModel == 1 && ProvID == "WC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.0255; } }
+
+}
+void Int_Test18monthsDefault() {
+	if (ProvModel == 0) { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.3003; } }
+	if (ProvModel == 1 && ProvID == "EC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.2545; } }
+	if (ProvModel == 1 && ProvID == "FS") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.3772; } }
+	if (ProvModel == 1 && ProvID == "GT") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.3996; } }
+	if (ProvModel == 1 && ProvID == "KZ") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.3223; } }
+	if (ProvModel == 1 && ProvID == "LM") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.1588; } }
+	if (ProvModel == 1 && ProvID == "MP") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.4449; } }
+	if (ProvModel == 1 && ProvID == "NC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.206; } }
+	if (ProvModel == 1 && ProvID == "NW") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.2872; } }
+	if (ProvModel == 1 && ProvID == "WC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.051; } }
+
+}
+void Int_Test18monthsBp1() {
+
+	if (ProvModel == 0) { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.462725; } }
+	if (ProvModel == 1 && ProvID == "EC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.428375; } }
+	if (ProvModel == 1 && ProvID == "FS") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.5204; } }
+	if (ProvModel == 1 && ProvID == "GT") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.5372; } }
+	if (ProvModel == 1 && ProvID == "KZ") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.479225; } }
+	if (ProvModel == 1 && ProvID == "LM") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.3566; } }
+	if (ProvModel == 1 && ProvID == "MP") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.571175; } }
+	if (ProvModel == 1 && ProvID == "NC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.392; } }
+	if (ProvModel == 1 && ProvID == "NW") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.4529; } }
+	if (ProvModel == 1 && ProvID == "WC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.27575; } }
+
+}
+
+void Int_Test18monthsBp2() {
+	
+	if (ProvModel == 0) { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.62515; } }
+	if (ProvModel == 1 && ProvID == "EC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.60225; } }
+	if (ProvModel == 1 && ProvID == "FS") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.6636; } }
+	if (ProvModel == 1 && ProvID == "GT") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.6748; } }
+	if (ProvModel == 1 && ProvID == "KZ") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.63615; } }
+	if (ProvModel == 1 && ProvID == "LM") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.5544; } }
+	if (ProvModel == 1 && ProvID == "MP") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.69745; } }
+	if (ProvModel == 1 && ProvID == "NC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.578; } }
+	if (ProvModel == 1 && ProvID == "NW") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.6186; } }
+	if (ProvModel == 1 && ProvID == "WC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.5005; } }
+
+}
+void Int_Test18monthsBp3() {	
+	if (ProvModel == 0) { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.787575; } }
+	if (ProvModel == 1 && ProvID == "EC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.776125; } }
+	if (ProvModel == 1 && ProvID == "FS") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.8068; } }
+	if (ProvModel == 1 && ProvID == "GT") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.8124; } }
+	if (ProvModel == 1 && ProvID == "KZ") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.793075; } }
+	if (ProvModel == 1 && ProvID == "LM") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.7522; } }
+	if (ProvModel == 1 && ProvID == "MP") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.823725; } }
+	if (ProvModel == 1 && ProvID == "NC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.764; } }
+	if (ProvModel == 1 && ProvID == "NW") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.7843; } }
+	if (ProvModel == 1 && ProvID == "WC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.72525; } }
+
+}
+void Int_Test18monthsMax() {
+	for (int iy = ICstart; iy < 86; iy++) {
+		TestingAt18mo[iy] = 0.95;
+	}
+}
+
+
+
+void Int_Test6monthsBm2() {
+	
+	if (ProvModel == 0) { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.1256; } }
+	if (ProvModel == 1 && ProvID == "EC") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0; } }
+	if (ProvModel == 1 && ProvID == "FS") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.04895; } }
+	if (ProvModel == 1 && ProvID == "GT") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.2687; } }
+	if (ProvModel == 1 && ProvID == "KZ") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.2309; } }
+	if (ProvModel == 1 && ProvID == "LM") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0; } }
+	if (ProvModel == 1 && ProvID == "MP") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.26975; } }
+	if (ProvModel == 1 && ProvID == "NC") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0; } }
+	if (ProvModel == 1 && ProvID == "NW") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.0995; } }
+	if (ProvModel == 1 && ProvID == "WC") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.2834; } }
+
+}
+
+void Int_Test6monthsBm1() {
+	if (ProvModel == 0) { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.263; } }
+	if (ProvModel == 1 && ProvID == "EC") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.061875; } }
+	if (ProvModel == 1 && ProvID == "FS") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.199125; } }
+	if (ProvModel == 1 && ProvID == "GT") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.38225; } }
+	if (ProvModel == 1 && ProvID == "KZ") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.35075; } }
+	if (ProvModel == 1 && ProvID == "LM") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.05275; } }
+	if (ProvModel == 1 && ProvID == "MP") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.383125; } }
+	if (ProvModel == 1 && ProvID == "NC") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.09335; } }
+	if (ProvModel == 1 && ProvID == "NW") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.24125; } }
+	if (ProvModel == 1 && ProvID == "WC") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.3945; } }
+
+}
+void Int_Test6monthsDefault() {
+
+	if (ProvModel == 0) {for (int iy = ICstart; iy < 86; iy++) {	PCR6month[iy] = 0.4004;	}	}
+	if (ProvModel == 1 && ProvID == "EC") {for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.2395; }}
+	if (ProvModel == 1 && ProvID == "FS") {for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.3493; }}
+	if (ProvModel == 1 && ProvID == "GT") {for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.4958; }}
+	if (ProvModel == 1 && ProvID == "KZ") {for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.4706; }}
+	if (ProvModel == 1 && ProvID == "LM") {for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.1055; }}
+	if (ProvModel == 1 && ProvID == "MP") {for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.4965; }}
+	if (ProvModel == 1 && ProvID == "NC") {for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.1867; }}
+	if (ProvModel == 1 && ProvID == "NW") {for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.3830; }}
+	if (ProvModel == 1 && ProvID == "WC") {for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.5056; }}	
+	
+}
+void Int_Test6monthsBp1() {
+	if (ProvModel == 0) { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.5378; } }
+	if (ProvModel == 1 && ProvID == "EC") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.417125; } }
+	if (ProvModel == 1 && ProvID == "FS") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.499475; } }
+	if (ProvModel == 1 && ProvID == "GT") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.60935; } }
+	if (ProvModel == 1 && ProvID == "KZ") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.59045; } }
+	if (ProvModel == 1 && ProvID == "LM") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.316625; } }
+	if (ProvModel == 1 && ProvID == "MP") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.609875; } }
+	if (ProvModel == 1 && ProvID == "NC") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.377525; } }
+	if (ProvModel == 1 && ProvID == "NW") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.52475; } }
+	if (ProvModel == 1 && ProvID == "WC") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.6167; } }
+
+}
+void Int_Test6monthsBp2() {
+	if (ProvModel == 0) { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.6752; } }
+	if (ProvModel == 1 && ProvID == "EC") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.59475; } }
+	if (ProvModel == 1 && ProvID == "FS") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.64965; } }
+	if (ProvModel == 1 && ProvID == "GT") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.7229; } }
+	if (ProvModel == 1 && ProvID == "KZ") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.7103; } }
+	if (ProvModel == 1 && ProvID == "LM") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.52775; } }
+	if (ProvModel == 1 && ProvID == "MP") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.72325; } }
+	if (ProvModel == 1 && ProvID == "NC") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.56835; } }
+	if (ProvModel == 1 && ProvID == "NW") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.6665; } }
+	if (ProvModel == 1 && ProvID == "WC") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.7278; } }
+
+}
+void Int_Test6monthsBp3() {
+	if (ProvModel == 0) { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.8126; } }
+	if (ProvModel == 1 && ProvID == "EC") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.772375; } }
+	if (ProvModel == 1 && ProvID == "FS") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.799825; } }
+	if (ProvModel == 1 && ProvID == "GT") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.83645; } }
+	if (ProvModel == 1 && ProvID == "KZ") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.83015; } }
+	if (ProvModel == 1 && ProvID == "LM") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.738875; } }
+	if (ProvModel == 1 && ProvID == "MP") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.836625; } }
+	if (ProvModel == 1 && ProvID == "NC") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.759175; } }
+	if (ProvModel == 1 && ProvID == "NW") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.80825; } }
+	if (ProvModel == 1 && ProvID == "WC") { for (int iy = ICstart; iy < 86; iy++) { PCR6month[iy] = 0.8389; } }
+
+}
+void Int_Test6monthsMax() {
+	for (int iy = ICstart; iy < 86; iy++) {
+		PCR6month[iy] = 0.95;
+	}
+}
+
+
+void Int_Test10weeksBm2() {
+	for (int iy = ICstart; iy < 86; iy++) {
+		PCR6week[iy] = 0.7250;
+	}
+}
+
+void Int_Test10weeksBm1() {
+	for (int iy = ICstart; iy < 86; iy++) {
+		PCR6week[iy] = 0.7625;
+	}
+}
+
+void Int_Test10weeksDefault() {
+	for (int iy = ICstart; iy < 86; iy++) {
+		PCR6week[iy] = 0.80;
+	}
+}
+void Int_Test10weeksBp1() {
+	for (int iy = ICstart; iy < 86; iy++) {
+		PCR6week[iy] = 0.8375;
+	}
+}
+void Int_Test10weeksBp2() {
+	for (int iy = ICstart; iy < 86; iy++) {
+		PCR6week[iy] = 0.8750;
+	}
+}
+void Int_Test10weeksBp3() {
+	for (int iy = ICstart; iy < 86; iy++) {
+		PCR6week[iy] = 0.9125;
+	}
+}
+void Int_Test10weeksMax() {
+	for (int iy = ICstart; iy < 86; iy++) {
+		PCR6week[iy] = 0.95;
+	}
+}
+
+
+
+
+
+void Int_OralPrepDefault() {
+	if (bl == 0 || bl == 1) {
+		if (CurrYear >= ICstart - 1) {
+			UltPrEPrateFSW = 0.035;
+		}
+
+		for (int iy = ICstart; iy < 86; iy++) {
+			PrEPeligMSM[iy] = 1;
+			PrEPeligOtherG[iy][1] = 0.02; //other women	
+			PrEPeligOtherG[iy][0] = 0.02; //other men	
+			PrEPeligAGYW[iy] = 1;
+
+			RR_PrEPstartF20[iy] = 0.5; //AGYW
+			RR_PrEPstartMSM[iy] = 0.4; //MSM			
+		}
+	}
+
+	if (bl == 3) {
+		//reduction on oral PrEP due to 50% OP to LEN (planned dist) on BL old	
+			
+		double OPtempAGYW[19] = {0.284988658904142,0.311236414844098,0.317339542464181,0.315863546498,0.315782215980871,0.328913599638829,0.328514625126812,0.329079570715253,0.330009489402073,0.330691694218155,0.33012062886437,0.330080428539509,0.32956059816084,0.329344953564536,0.329259114407213,0.329358419630089,0.329584304487113,0.329852934067434,0.344983943853991};
+		double OPtempFSW[19] = { 0.0253478397946021,0.0230674126675031,0.0225626151103978,0.0226209881009839,0.0225891294921098,0.0216424687100732,0.0216575985693442,0.0216649074160448,0.0216524540305742,0.0216241212266514,0.0216048619810834,0.0215957938516041,0.0215902870185404,0.0215892569290466,0.0215851279666815,0.0215663361022456,0.0215402542379482,0.0215185380922861,0.0205784930375266 };
+		double OPtempMSM[19] = { 0.389506918510113,0.407699037760727,0.409954006046206,0.405870196604483,0.405074798788771,0.42129431973938,0.42113953807894,0.419877023588626,0.417706709636956,0.415870631875716,0.415824136339286,0.415151785536109,0.414076587601332,0.414032947427478,0.414169473747495,0.41339533589962,0.412180137905985,0.411020874273844,0.42907992055608 };
+		double OPtempmen[19] = { 0.0192966358249795,0.0193219654765607,0.0192679003896619,0.0191988906135866,0.0191399052634929,0.0190731714041869,0.0189899668066841,0.0189182042426897,0.0188517013249968,0.0187863291788027,0.0187356529133891,0.0186801543979811,0.0186240694622907,0.0185602443572411,0.0185126017722302,0.0184606744825046,0.0184039101571664,0.0183434210103421,0.0182784598161834 }; 
+				
+		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltPrEPrateFSW = OPtempFSW[CurrYear - 2027]; } //FSW
+		if (CurrYear > 2045) { UltPrEPrateFSW = 0; } //FSW
+		
+		//from 2028
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			PrEPeligMSM[iy] = 1;
+			PrEPeligOtherG[iy][1] = 1; //other women	
+			PrEPeligOtherG[iy][0] = OPtempmen[iy - ICstart - 1]; //other men	
+			PrEPeligAGYW[iy] = 1;
+
+			RR_PrEPstartF20[iy] = OPtempAGYW[iy - ICstart - 1]; //AGYW
+			RR_PrEPstartMSM[iy] = OPtempMSM[iy - ICstart - 1]; //MSM					
+		}
+	}
+	if (bl == 4) {
+
+		//reduction on oral PrEP
+		double OPtempAGYW[20] = { 0.0449185192751223,0.0481178367014518,0.0544895334188093,0.0564432781088772,0.0566843713535195,0.0558987985266399,0.054457650338534,0.0526313924303909,0.0509679626045153,0.0494243959504602,0.0478599418926793,0.0462366948058533,0.0448368236589839,0.0434493675769212,0.0421389773553893,0.041031059634061,0.0402858650219301,0.0397371094869155,0.0393845065715682,0.0392643120191439 };
+		double OPtempFSW[20] = { 0.0191644134188622,0.0197646801582181,0.0172740686067107,0.0163777021421273,0.0159967094490055,0.015810718502553,0.015728560409162,0.0157066488899985,0.0156758429808126,0.0156053345507765,0.0155263656255683,0.0154824997262143,0.0154522388551283,0.0154242800227396,0.0153846080197642,0.0153372834284121,0.0152891722212207,0.0152395503720741,0.0151930957425228,0.0151454090843067 };
+		double OPtempPBFW[20] = { 0.0675726924964318,0.0675898124727655,0.0683893167552858,0.0692712750779918,0.070091624754363,0.0709633905036695,0.0718549245565968,0.0727343575764936,0.0735913067970215,0.0744751437555695,0.0753981773490508,0.0762720447189409,0.0771967942881696,0.0781687506574088,0.0791318676361985,0.0801119487658186,0.0811189847570118,0.0821529889944375,0.0832090901690509,0.0842335722938514 };
+		double OPtempMSM[20] = { 0.384785359225636,0.386335542401396,0.405959799473164,0.412988658519685,0.418225174633974,0.423078699386503,0.423321588738059,0.422547624675325,0.423331001176747,0.422343947224196,0.421597122234241,0.421790623036649,0.421952625,0.422071476923077,0.42240702668585,0.42286780623608,0.423395795567867,0.423992889215102,0.424570648514851,0.425847248901099 };
+
+		double OPtempmen[20] = { 0.113642603689901,0.111954409416022,0.11158211261834,0.112569445029346,0.114528791099048,0.117204563455895,0.120620048735977,0.124705976616963,0.128857089723576,0.133273228783492,0.138027313987846,0.142846313297448,0.147260649497728,0.151838543236189,  0.156577391139001,0.160921597598497,0.16400367310262,0.166405607891529,0.168022335028178,0.169039266703699 };
+
+		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltPrEPrateFSW = OPtempFSW[CurrYear - 2027]; } //FSW
+		if (CurrYear > 2045) { UltPrEPrateFSW = 0; } //FSW
+
+		for (int iy = ICstart; iy < 86; iy++) {
+			PrEPeligMSM[iy] = 1;
+			PrEPeligOtherG[iy][1] = 1; //other women	
+			PrEPeligOtherG[iy][0] = OPtempmen[iy - ICstart - 1];; //other men	
+			PrEPeligAGYW[iy] = 1;
+
+			RR_PrEPstartF20[iy] = OPtempAGYW[iy - ICstart - 1]; //AGYW
+			RR_PrEPstartMSM[iy] = OPtempMSM[iy - ICstart - 1]; //MSM
+			//PrEPpregnant[iy] = OPtempPBFW[iy - ICstart - 1]; //PBFW					
+
+		}
+
+	}
+
+}
+
+
+void Int_OralPrepMedium() {
+	if (bl == 0 || bl == 1) {
+		if (CurrYear >= ICstart + 1985 - 1) {
+			UltPrEPrateFSW = 0.05;
+		}
+
+		for (int iy = ICstart; iy < 86; iy++) {
+			PrEPeligMSM[iy] = 1;
+			PrEPeligOtherG[iy][1] = 0.02; //other women	
+			PrEPeligOtherG[iy][0] = 0.02; //other men	
+			PrEPeligAGYW[iy] = 1;
+
+			RR_PrEPstartF20[iy] = 0.5; //AGYW
+			RR_PrEPstartMSM[iy] = 0.4; //MSM			
+		}
+	}
+	if (bl == 3 || bl == 4) {
+		if (CurrYear >= ICstart + 1985 - 1) {
+			UltPrEPrateFSW = 0.035;
+		}
+
+		for (int iy = ICstart; iy < 86; iy++) {
+			PrEPeligMSM[iy] = 1;
+			PrEPeligOtherG[iy][1] = 0.02; //other women	
+			PrEPeligOtherG[iy][0] = 0.02; //other men	
+			PrEPeligAGYW[iy] = 1;
+
+			RR_PrEPstartF20[iy] = 0.5; //AGYW
+			RR_PrEPstartMSM[iy] = 0.4; //MSM				
+		}
+	}
+
+
+}
+void Int_OralPrepHigh() {
+
+	if (bl == 0 || bl == 1) {
+		if (CurrYear >= ICstart + 1985 - 1) {
+			UltPrEPrateFSW = 0.065;
+		}
+
+		for (int iy = ICstart; iy < 86; iy++) {
+			PrEPeligMSM[iy] = 1;
+			PrEPeligOtherG[iy][1] = 0.02; //other women	
+			PrEPeligOtherG[iy][0] = 0.02; //other men	
+			PrEPeligAGYW[iy] = 1;
+
+			RR_PrEPstartF20[iy] = 0.5; //AGYW
+			RR_PrEPstartMSM[iy] = 0.4; //MSM			
+		}
+	}
+	if (bl == 3 || bl == 4) {
+		if (CurrYear >= ICstart + 1985 - 1) {
+			UltPrEPrateFSW = 0.07;
+		}
+
+		for (int iy = ICstart; iy < 86; iy++) {
+			PrEPeligMSM[iy] = 1;
+			PrEPeligOtherG[iy][1] = 0.02; //other women	
+			PrEPeligOtherG[iy][0] = 0.02; //other men	
+			PrEPeligAGYW[iy] = 1;
+
+			RR_PrEPstartF20[iy] = 0.5; //AGYW
+			RR_PrEPstartMSM[iy] = 0.4; //MSM			
+		}
+	}
+
+}
+
+
+void Int_OralPrepPregDefault() {
+
+	if (bl == 0 || bl == 1) {
+		for (int iy = ICstart; iy < 86; iy++) {
+			PrEPpregnant[iy] = 0.0961;
+		}
+	}
+
+	if (bl == 3) {
+		//reduction on oral PrEP due to 50% OP to LEN (planned dist) on BL old	
+		double OPtempPBFW[19] = { 0.0499505679755955,0.0497046925509099,0.049662906890645,0.0496282992186634,0.04959756408911,0.0495813045154604,0.0495861708759823,0.049584753351655,0.0495628389652968,0.0495332888161316,0.0495199651106715,0.0495169635942209,0.0495185872393578,0.0495165930625585,0.0495087237157914,0.0495003095935348,0.0494921224050725,0.0494839044561883,0.0494775358755037 };
+
+		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
+			PrEPpregnant[iy] = OPtempPBFW[iy - ICstart-1]; //PBFW			
+		}
+	}
+
+	if (bl == 4) {
+		//reduction on oral PrEP due to 50% OP to LEN (planned dist) on BL old	
+		double OPtempPBFW[20] = { 0.0923800233887172,0.0350467205599741,0.0343554650454656,0.0341334530749161,0.034195718940832,0.0344144357596978,0.0353174796934169,0.036535058659645,0.036725080477406,0.0365803547349116,0.0367091985214758,0.0376146557616668,0.0380872816508573,0.0386988160229885,0.0387988622550015,0.038991447304361,0.0392567551470219,0.0394482954520425,0.0396095419658494,0.0398378354106509 };
+		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
+			PrEPpregnant[iy] = OPtempPBFW[iy - ICstart - 1]; //PBFW			
+		}
+	}
+}
+
+
+void Int_OralPrepPregBp1() {
+	if (bl == 0 || bl == 1) {
+		PrEPpregnant[ICstart] = 0.045;
+		PrEPpregnant[ICstart + 1] = 0.09;
+		for (int iy = ICstart + 2; iy < 86; iy++) {
+			PrEPpregnant[iy] = 0.1350;
+		}
+	}
+	if (bl == 3 || bl == 4) {
+		PrEPpregnant[ICstart] = 0.0787;
+		PrEPpregnant[ICstart + 1] = 0.0874;
+		for (int iy = ICstart + 2; iy < 86; iy++) {
+			PrEPpregnant[iy] = 0.0961;
+		}
+	}
+}
+void Int_OralPrepPregBp2() {
+	if (bl == 0 || bl == 1) {
+		PrEPpregnant[ICstart] = 0.09;
+		PrEPpregnant[ICstart + 1] = 0.18;
+		for (int iy = ICstart + 2; iy < 86; iy++) {
+			PrEPpregnant[iy] = 0.2528;
+		}
+	}
+	if (bl == 3 || bl == 4) {
+		PrEPpregnant[ICstart] = 0.1309;
+		PrEPpregnant[ICstart + 1] = 0.1918;
+		for (int iy = ICstart + 2; iy < 86; iy++) {
+			PrEPpregnant[iy] = 0.2528;
+		}
+	}
+}
+void Int_OralPrepPregBp3() {
+	if (bl == 0 || bl == 1) {
+		PrEPpregnant[ICstart] = 0.1350;
+		PrEPpregnant[ICstart + 1] = 0.2700;
+		for (int iy = ICstart + 2; iy < 86; iy++) {
+			PrEPpregnant[iy] = 0.4094;
+		}
+	}
+	if (bl == 3 || bl == 4) {
+		PrEPpregnant[ICstart] = 0.1831;
+		PrEPpregnant[ICstart + 1] = 0.2963;
+		for (int iy = ICstart + 2; iy < 86; iy++) {
+			PrEPpregnant[iy] = 0.4094;
+		}
+	}
+}
+void Int_OralPrepPregMax() {
+	if (bl == 0 || bl == 1) {
+		PrEPpregnant[ICstart] = 0.18;
+		PrEPpregnant[ICstart + 1] = 0.36;
+		for (int iy = ICstart + 2; iy < 86; iy++) {
+			PrEPpregnant[iy] = 0.5400;
+		}
+	}
+	if (bl == 3 || bl == 4) {
+		PrEPpregnant[ICstart] = 0.2267;
+		PrEPpregnant[ICstart + 1] = 0.3833;
+		for (int iy = ICstart + 2; iy < 86; iy++) {
+			PrEPpregnant[iy] = 0.5400;
+		}
+	}
+}
+
+
+
+void Int_LENndohDefault() {
+
+	//LEN duration per group
+	CABLAdur[0] = 1 + 0.5;   //men nonMSM
+	CABLAdur[1] = 1 + 0.5;   //women
+	CABLAdur[2] = 1 + 0.5;   //MSM
+	CABLAdurPreg = 1 + 0.5;  //pregnant women		
+
+	if (bl == 0 || bl == 1) {
+		if (CurrYear >= 2027) { UltCABLArateFSW = 0.0; } //FSW
+		for (int iy = ICstart; iy < 86; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = 0; //AGYW
+			RR_CABLAstartMSM[iy] = 0; //MSM
+			CABLApregnant[iy] = 0; //PBFW
+		}
+	}
+
+	if (bl == 3) {  //BL old + GF LEN + 50% OP to LEN (planned dist)	
+
+		//LEN as per planned distribution, 50% of OP budget
+
+		//LEN duration per group
+		CABLAdur[0] = 1 + 0.5;   //men nonMSM
+		CABLAdur[1] = 1 + 0.5;   //women
+		CABLAdur[2] = 1 + 0.5;   //MSM
+		CABLAdurPreg = 1 + 0.5;  //pregnant women	
+
+
+		//parameters by pop and year, these are from 2028-2045	
+		double tempAGYW[19] = { 0.193333690819977,0.209016691611884,0.21976281905511,0.230677519844769,0.238244453582254,0.235042875411287,0.230696005806226,0.239009172499309,0.252619772055518,0.263267870559717,0.260789770073263,0.266013882880684,0.267276156947148,0.275088690639931,0.282586267032557,0.290355349073251,0.29928269819117,0.307542093907507,0.314010459445996 };
+		double tempFSW[19] = { 0.0405217371060881,0.028274712793081,0.0216435940060257,0.0208007124986462,0.0202791224801466,0.0204799802497822,0.0208391126972375,0.0205051691799352,0.0198684170049841,0.019438947361809,0.0196395860978148,0.019491471167415,0.0195190755704231,0.0192176007993127,0.0189289937951459,0.0185874698284486,0.018197156461126,0.0178521467507275,0.0176038481279223 };
+		double tempPBFW[19] = { 0.0393488123047293,0.0395260038727235,0.040247173324515,0.0410490419490648,0.0419131898577641,0.0438471019658065,0.0460133130741228,0.0466228006825007,0.0467082620493176,0.0472189971786719,0.049116986096759,0.0501195358875413,0.0515548045765612,0.0521184482357466,0.0526987483409176,0.0533365298637804,0.0537919518525623,0.0541622977107246,0.0549580330487144 };
+		double tempMSM[19] = { 0.432144897532075,0.422611565699208,0.420021001168133,0.425972118251644,0.428687781437232,0.422648380073065,0.427844524792483,0.418609492488757,0.409279568747272,0.411896682890547,0.415865368556489,0.406319300835307,0.403315005186876,0.419320535898175,0.428216076479278,0.427782933584661,0.431305099145499,0.436390974466965,0.468899559103469 };
+			   
+		//LEN from 2028
+		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		if (CurrYear > 2045) { UltCABLArateFSW = 0; } //FSW
+
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW		
+		}
+	}
+
+
+	if (bl == 4) {  //BL PEPFAR min + GF LEN + 50% OP to LEN (planned dist)		
+
+		//planned LEN
+
+		//LEN duration per group
+		CABLAdur[0] = 1 + 0.5;   //men nonMSM
+		CABLAdur[1] = 1 + 0.5;   //women
+		CABLAdur[2] = 1 + 0.5;   //MSM
+		CABLAdurPreg = 1 + 0.5;  //pregnant women		
+
+		double tempAGYW[20] = { 0.0301567626955408,0.0350382053037097,0.0406019862231548,0.0427429483892391,0.0436484504758893,0.043716241056127,0.0421919430447875,0.0400257218085715,0.0398890015647993,0.0403856072706545,0.0402282800827148,0.0385682618089017,0.0379188355787163,0.0370247536526203,0.0368034817762153,0.0365390820065811,0.0365764246107102,0.0368068500548236,0.0371012512870745,0.0375105397123658 };
+		double tempFSW[20] = { 0.155167196972764,0.0318824159462908,0.0207840307943023,0.0156860204676121,0.0151484010032774,0.0148241808166656,0.0148452294993234,0.0150086611721394,0.0147304053357073,0.0142834669769956,0.0139883438843071,0.0140327547345282,0.0139125725116406,0.0138383265799851,0.0135898440363165,0.0133799139325615,0.0131489190273944,0.0129151025736434,0.0127072512869688,0.0125075843940887 };
+		double tempPBFW[20] = { 0.0923800233887172,0.0350467205599741,0.0343554650454656,0.0341334530749161,0.034195718940832,0.0344144357596978,0.0353174796934169,0.036535058659645,0.036725080477406,0.0365803547349116,0.0367091985214758,0.0376146557616668,0.0380872816508573,0.0386988160229885,0.0387988622550015,0.038991447304361,0.0392567551470219,0.0394482954520425,0.0396095419658494,0.0398378354106509 };
+		double tempMSM[20] = { 0.485955631748233,0.494659878090395,0.512734549349802,0.524289952492428,0.527368141799966,0.532928500973403,0.534430857625294,0.53543553143516,0.53130326690968,0.532099215205486,0.531009239572041,0.53636721437894,0.53685816358432,0.541417227221804,0.550525198696868,0.561244867088002,0.573372700887568,0.583627744392575,0.594464286609349,0.604708934888631 };
+
+	
+
+		//LEN from 2028
+		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		if (CurrYear > 2045) { UltCABLArateFSW = 0; } //FSW
+
+		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart-1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW
+		}
+
+	}
+
+}
+
+
+
+
+
+void Int_LENndohBp1() {
+	//LEN duration per group
+	CABLAdur[0] = 1 + 0.5;   //men nonMSM
+	CABLAdur[1] = 1 + 0.5;   //women
+	CABLAdur[2] = 1 + 0.5;   //MSM
+	CABLAdurPreg = 1 + 0.5;  //pregnant women		
+
+
+	if (bl == 0 || bl == 1) {
+		//LEN duration per group
+		CABLAdur[0] = 1 + 0.5;   //men nonMSM
+		CABLAdur[1] = 1 + 0.5;   //women
+		CABLAdur[2] = 1 + 0.5;   //MSM
+		CABLAdurPreg = 1 + 0.5;  //pregnant women	
+
+
+		//parameters by pop and year, these are from 2028-2045	
+		double tempAGYW[19] = {0.193333690819977,0.209016691611884,0.21976281905511,0.230677519844769,0.238244453582254,0.235042875411287,0.230696005806226,0.239009172499309,0.252619772055518,0.263267870559717,0.260789770073263,0.266013882880684,0.267276156947148,0.275088690639931,0.282586267032557,0.290355349073251,0.29928269819117,0.307542093907507,0.314010459445996};
+		double tempFSW[19] = { 0.0405217371060881,0.028274712793081,0.0216435940060257,0.0208007124986462,0.0202791224801466,0.0204799802497822,0.0208391126972375,0.0205051691799352,0.0198684170049841,0.019438947361809,0.0196395860978148,0.019491471167415,0.0195190755704231,0.0192176007993127,0.0189289937951459,0.0185874698284486,0.018197156461126,0.0178521467507275,0.0178417225501305 };
+		double tempPBFW[19] = { 0.0393488123047293,0.0395260038727235,0.040247173324515,0.0410490419490648,0.0419131898577641,0.0438471019658065,0.0460133130741228,0.0466228006825007,0.0467082620493176,0.0472189971786719,0.049116986096759,0.0501195358875413,0.0515548045765612,0.0521184482357466,0.0526987483409176,0.0533365298637804,0.0537919518525623,0.0541622977107246,0.0549580330487144 };
+		double tempMSM[19] = { 0.432144897532075,0.422611565699208,0.420021001168133,0.425972118251644,0.428687781437232,0.422648380073065,0.427844524792483,0.418609492488757,0.409279568747272,0.411896682890547,0.415865368556489,0.406319300835307,0.403315005186876,0.419320535898175,0.428216076479278,0.427782933584661,0.431305099145499,0.436390974466965,0.468899559103469 }; 
+		
+		//LEN from 2028
+		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		if (CurrYear > 2045) { UltCABLArateFSW = 0; } //FSW
+
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW		
+
+		}
+
+
+
+	}
+
+
+
+	if (bl == 3) {
+		//LEN as per planned distribution, 50% of OP budget
+
+		//LEN duration per group
+		CABLAdur[0] = 1 + 0.5;   //men nonMSM
+		CABLAdur[1] = 1 + 0.5;   //women
+		CABLAdur[2] = 1 + 0.5;   //MSM
+		CABLAdurPreg = 1 + 0.5;  //pregnant women	
+
+
+		//parameters by pop and year, these are from 2028-2045	
+		double tempAGYW[19] = {0.241667113524971,0.261270864514855,0.274703523818887,0.288346899805962,0.297805566977818,0.293803594264109,0.288370007257783,0.298761465624136,0.315774715069397,0.329084838199646,0.325987212591579,0.332517353600856,0.334095196183935,0.343860863299914,0.353232833790696,0.362944186341564,0.374103372738963,0.384427617384383,0.392513074307495};
+		double tempFSW[19] = { 0.0506521713826101,0.0353433909913513,0.0270544925075321,0.0260008906233077,0.0253489031001833,0.0255999753122277,0.0260488908715469,0.0256314614749191,0.0248355212562302,0.0242986842022613,0.0245494826222685,0.0243643389592688,0.0243988444630289,0.0240220009991409,0.0236612422439324,0.0232343372855608,0.0227464455764075,0.0223151834384093,0.0220048101599029 };
+		double tempPBFW[19] = { 0.0491860153809116,0.0494075048409043,0.0503089666556437,0.051311302436331,0.0523914873222051,0.0548088774572581,0.0575166413426536,0.0582785008531259,0.058385327561647,0.0590237464733399,0.0613962326209488,0.0626494198594267,0.0644435057207015,0.0651480602946832,0.0658734354261469,0.0666706623297255,0.0672399398157028,0.0677028721384058,0.068697541310893 };
+		double tempMSM[19] = { 0.540181121915093,0.528264457124011,0.525026251460167,0.532465147814555,0.53585972679654,0.528310475091332,0.534805655990604,0.523261865610946,0.51159946093409,0.514870853613184,0.519831710695612,0.507899126044134,0.504143756483595,0.524150669872719,0.535270095599097,0.534728666980826,0.539131373931874,0.545488718083706,0.586124448879337 }; 
+
+
+		//LEN from 2028
+		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		if (CurrYear > 2045) { UltCABLArateFSW = 0; } //FSW
+
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW			
+
+		}
+
+
+		
+	}
+
+	if (bl == 4) {
+		//parameters by pop and year, these are from 2028-2046
+		double tempAGYW[20] = { 0.037695953369426,0.0437977566296371,0.0507524827789435,0.0534286854865489,0.0545605630948616,0.0546453013201587,0.0527399288059844,0.0500321522607144,0.0498612519559991,0.0504820090883182,0.0502853501033935,0.0482103272611272,0.0473985444733953,0.0462809420657754,0.0460043522202692,0.0456738525082263,0.0457205307633878,0.0460085625685295,0.0463765641088431,0.0468881746404573 };
+		double tempFSW[20] = { 0.193958996215955,0.0398530199328636,0.0259800384928778,0.0196075255845151,0.0189355012540967,0.018530226020832,0.0185565368741543,0.0187608264651743,0.0184130066696341,0.0178543337212445,0.0174854298553839,0.0175409434181603,0.0173907156395508,0.0172979082249813,0.0169873050453956,0.0167248924157019,0.0164361487842429,0.0161438782170543,0.015884064108711,0.0156344804926108 };
+		double tempPBFW[20] = { 0.115475029235896,0.0438084006999676,0.042944331306832,0.0426668163436452,0.04274464867604,0.0430180446996222,0.0441468496167712,0.0456688233245562,0.0459063505967575,0.0457254434186395,0.0458864981518447,0.0470183197020836,0.0476091020635716,0.0483735200287356,0.0484985778187519,0.0487393091304512,0.0490709439337773,0.0493103693150531,0.0495119274573117,0.0497972942633136 };
+		double tempMSM[20] = { 0.607444539685292,0.618324847612993,0.640918186687253,0.655362440615535,0.659210177249958,0.666160626216754,0.668038572031618,0.66929441429395,0.6641290836371,0.665124019006857,0.663761549465051,0.670459017973675,0.6710727044804,0.676771534027255,0.688156498371085,0.701556083860002,0.716715876109461,0.729534680490718,0.743080358261686,0.755886168610789 };
+
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW
+		}
+	}
+
+}
+
+
+
+
+
+void Int_LENndohBp2() {
+
+	//LEN duration per group
+	CABLAdur[0] = 1 + 0.5;   //men nonMSM
+	CABLAdur[1] = 1 + 0.5;   //women
+	CABLAdur[2] = 1 + 0.5;   //MSM
+	CABLAdurPreg = 1 + 0.5;  //pregnant women
+
+	if (bl == 0 || bl == 1) {
+		//parameters by pop and year, these are from 2028-2046		
+		double tempAGYW[19] = {0.386667381639953,0.418033383223769,0.439525638110219,0.461355039689539,0.476488907164509,0.470085750822575,0.461392011612452,0.478018344998617,0.505239544111036,0.526535741119433,0.521579540146527,0.532027765761369,0.534552313894296,0.550177381279862,0.565172534065114,0.580710698146503,0.59856539638234,0.615084187815013,0.628020918891992};
+		double tempFSW[19] = { 0.0810434742121762,0.0565494255861621,0.0432871880120514,0.0416014249972923,0.0405582449602932,0.0409599604995643,0.041678225394475,0.0410103383598705,0.0397368340099683,0.0388778947236181,0.0392791721956295,0.03898294233483,0.0390381511408462,0.0384352015986255,0.0378579875902918,0.0371749396568973,0.036394312922252,0.0357042935014549,0.035683445100261 };
+		double tempPBFW[19] = { 0.0786976246094586,0.0790520077454469,0.08049434664903,0.0820980838981296,0.0838263797155282,0.087694203931613,0.0920266261482457,0.0932456013650014,0.0934165240986352,0.0944379943573439,0.0982339721935181,0.100239071775083,0.103109609153122,0.104236896471493,0.105397496681835,0.106673059727561,0.107583903705125,0.108324595421449,0.109916066097429 };
+		double tempMSM[19] = { 0.864289795064149,0.845223131398417,0.840042002336267,0.851944236503288,0.857375562874464,0.845296760146131,0.855689049584966,0.837218984977514,0.818559137494544,0.823793365781094,0.831730737112979,0.812638601670615,0.806630010373752,0.83864107179635,0.856432152958555,0.855565867169322,0.862610198290998,0.87278194893393,0.937799118206939 }; 
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW
+		}
+	}
+
+	if (bl == 3) {
+		//parameters by pop and year, these are from 2028-2046		
+		double tempAGYW[19] = {0.290000536229965,0.313525037417826,0.329644228582664,0.346016279767154,0.357366680373382,0.352564313116931,0.346044008709339,0.358513758748963,0.378929658083277,0.394901805839575,0.391184655109895,0.399020824321027,0.400914235420722,0.412633035959897,0.423879400548835,0.435533023609877,0.448924047286755,0.46131314086126,0.471015689168994};
+		double tempFSW[19] = { 0.0607826056591322,0.0424120691896216,0.0324653910090385,0.0312010687479692,0.0304186837202199,0.0307199703746732,0.0312586690458563,0.0307577537699029,0.0298026255074762,0.0291584210427136,0.0294593791467222,0.0292372067511225,0.0292786133556346,0.0288264011989691,0.0283934906927189,0.0278812047426729,0.027295734691689,0.0267782201260912,0.0264057721918835 };
+		double tempPBFW[19] = { 0.0590232184570939,0.0592890058090852,0.0603707599867725,0.0615735629235972,0.0628697847866461,0.0657706529487097,0.0690199696111843,0.069934201023751,0.0700623930739764,0.0708284957680079,0.0736754791451386,0.075179303831312,0.0773322068648417,0.0781776723536198,0.0790481225113763,0.0800047947956706,0.0806879277788434,0.0812434465660869,0.0824370495730716 };
+		double tempMSM[19] = { 0.648217346298112,0.633917348548813,0.6300315017522,0.638958177377466,0.643031672155848,0.633972570109598,0.641766787188725,0.627914238733136,0.613919353120908,0.61784502433582,0.623798052834734,0.609478951252961,0.604972507780314,0.628980803847263,0.642324114718916,0.641674400376992,0.646957648718249,0.654586461700448,0.703349338655204 }; 
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW
+		}
+	}
+
+
+	if (bl == 4) {
+		//parameters by pop and year, these are from 2028-2046
+		double tempAGYW[20] = { 0.0452351440433112,0.0525573079555645,0.0609029793347322,0.0641144225838587,0.0654726757138339,0.0655743615841905,0.0632879145671813,0.0600385827128573,0.0598335023471989,0.0605784109059818,0.0603424201240722,0.0578523927133526,0.0568782533680744,0.0555371304789304,0.055205222664323,0.0548086230098716,0.0548646369160653,0.0552102750822354,0.0556518769306117,0.0562658095685487 };
+		double tempFSW[20] = { 0.232750795459146,0.0478236239194363,0.0311760461914534,0.0235290307014182,0.0227226015049161,0.0222362712249984,0.0222678442489851,0.0225129917582091,0.022095608003561,0.0214252004654934,0.0209825158264607,0.0210491321017924,0.020868858767461,0.0207574898699776,0.0203847660544747,0.0200698708988423,0.0197233785410915,0.0193726538604651,0.0190608769304532,0.018761376591133 };
+		double tempPBFW[20] = { 0.138570035083076,0.0525700808399611,0.0515331975681984,0.0512001796123742,0.051293578411248,0.0516216536395467,0.0529762195401254,0.0548025879894674,0.0550876207161089,0.0548705321023674,0.0550637977822137,0.0564219836425003,0.057130922476286,0.0580482240344828,0.0581982933825023,0.0584871709565415,0.0588851327205328,0.0591724431780637,0.0594143129487741,0.0597567531159763 };
+		double tempMSM[20] = { 0.72893344762235,0.741989817135592,0.769101824024704,0.786434928738642,0.791052212699949,0.799392751460105,0.801646286437941,0.80315329715274,0.79695490036452,0.798148822808228,0.796513859358061,0.80455082156841,0.80528724537648,0.812125840832707,0.825787798045303,0.841867300632002,0.860059051331353,0.875441616588862,0.891696429914023,0.907063402332947 };
+
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW
+		}
+	}
+
+}
+
+
+void Int_LENndohBp3() {
+
+	//LEN duration per group
+	CABLAdur[0] = 1 + 0.5;   //men nonMSM
+	CABLAdur[1] = 1 + 0.5;   //women
+	CABLAdur[2] = 1 + 0.5;   //MSM
+	CABLAdurPreg = 1 + 0.5;  //pregnant women
+
+	if (bl == 0 || bl == 1) {
+		//parameters by pop and year, these are from 2028-2046
+		double tempAGYW[19] = {0.58000107245993,0.627050074835653,0.659288457165329,0.692032559534308,0.714733360746763,0.705128626233862,0.692088017418678,0.717027517497926,0.757859316166553,0.78980361167915,0.78236931021979,0.798041648642053,0.801828470841444,0.825266071919793,0.847758801097671,0.871066047219754,0.89784809457351,0.92262628172252,0.942031378337987};
+		double tempFSW[19] = { 0.121565211318264,0.0848241383792431,0.0649307820180771,0.0624021374959385,0.0608373674404398,0.0614399407493465,0.0625173380917126,0.0615155075398057,0.0596052510149524,0.0583168420854271,0.0589187582934443,0.058474413502245,0.0585572267112692,0.0576528023979382,0.0567869813854377,0.0557624094853459,0.054591469383378,0.0535564402521824,0.0535251676503915 };
+		double tempPBFW[19] = { 0.118046436914188,0.11857801161817,0.120741519973545,0.123147125847194,0.125739569573292,0.131541305897419,0.138039939222369,0.139868402047502,0.140124786147953,0.141656991536016,0.147350958290277,0.150358607662624,0.154664413729683,0.15635534470724,0.158096245022753,0.160009589591341,0.161375855557687,0.162486893132174,0.164874099146143 };
+		double tempMSM[19] = { 1.29643469259622,1.26783469709763,1.2600630035044,1.27791635475493,1.2860633443117,1.2679451402192,1.28353357437745,1.25582847746627,1.22783870624182,1.23569004867164,1.24759610566947,1.21895790250592,1.20994501556063,1.25796160769453,1.28464822943783,1.28334880075398,1.2939152974365,1.3091729234009,1.40669867731041 }; 
+
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW
+		}
+	}
+
+
+	if (bl == 3) {
+		//parameters by pop and year, these are from 2028-2046
+		double tempAGYW[19] = {0.338333958934959,0.365779210320798,0.384584933346442,0.403685659728346,0.416927793768945,0.411325031969753,0.403718010160896,0.41826605187379,0.442084601097156,0.460718773479504,0.456382097628211,0.465524295041198,0.467733274657509,0.48140520861988,0.494525967306975,0.50812186087819,0.523744721834548,0.538198664338137,0.549518304030493};
+		double tempFSW[19] = { 0.0709130399356542,0.0494807473878918,0.037876289510545,0.0364012468726308,0.0354884643402566,0.0358399654371188,0.0364684472201657,0.0358840460648867,0.0347697297587222,0.0340181578831658,0.0343692756711759,0.0341100745429763,0.0341583822482404,0.0336308013987973,0.0331257391415053,0.0325280721997851,0.0318450238069705,0.031241256813773,0.0308067342238641 };
+		double tempPBFW[19] = { 0.0688604215332763,0.0691705067772661,0.0704325533179012,0.0718358234108634,0.0733480822510872,0.0767324284401614,0.080523297879715,0.0815899011943762,0.0817394585863058,0.0826332450626759,0.0859547256693283,0.0877091878031973,0.090220908008982,0.0912072844125565,0.0922228095966057,0.0933389272616156,0.0941359157419839,0.0947840209937681,0.0961765578352503 };
+		double tempMSM[19] = { 0.75625357068113,0.739570239973615,0.735036752044233,0.745451206940377,0.750203617515156,0.739634665127864,0.748727918386845,0.732566611855325,0.716239245307726,0.720819195058457,0.727764394973856,0.711058776461788,0.705801259077033,0.733810937821807,0.749378133838736,0.748620133773157,0.754783923504624,0.763684205317189,0.820574228431072 }; 
+
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW
+		}
+	}
+
+
+	if (bl == 4) {
+		//parameters by pop and year, these are from 2028-2046 
+		double tempAGYW[20] = { 0.0527743347171964,0.0613168592814919,0.0710534758905209,0.0748001596811685,0.0763847883328062,0.0765034218482222,0.0738359003283782,0.0700450131650002,0.0698057527383988,0.0706748127236455,0.0703994901447509,0.067494458165578,0.0663579622627535,0.0647933188920855,0.0644060931083768,0.0639433935115168,0.0640087430687429,0.0644119875959413,0.0649271897523803,0.0656434444966402 };
+		double tempFSW[20] = { 0.271542594702337,0.055794227906009,0.036372053890029,0.0274505358183212,0.0265097017557354,0.0259423164291648,0.025979151623816,0.026265157051244,0.0257782093374878,0.0249960672097423,0.0244796017975375,0.0245573207854244,0.0243470018953711,0.0242170715149739,0.0237822270635538,0.0234148493819827,0.0230106082979401,0.022601429503876,0.0222376897521954,0.0218882726896552 };
+		double tempPBFW[20] = { 0.161665040930255,0.0613317609799547,0.0601220638295648,0.0597335428811032,0.059842508146456,0.0602252625794711,0.0618055894634797,0.0639363526543787,0.0642688908354604,0.0640156207860954,0.0642410974125826,0.065825647582917,0.0666527428890003,0.0677229280402299,0.0678980089462527,0.0682350327826318,0.0686993215072883,0.0690345170410743,0.0693166984402364,0.0697162119686391 };
+		double tempMSM[20] = { 0.850422355559408,0.865654786658191,0.897285461362154,0.917507416861749,0.922894248149941,0.932624876703455,0.935254000844265,0.93701218001153,0.92978071709194,0.9311736266096,0.929266169251072,0.938642625163145,0.939501786272561,0.947480147638158,0.96341909771952,0.982178517404003,1.00340222655324,1.02134855268701,1.04031250156636,1.0582406360551 };
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW
+		}
+	}
+
+
+}
+
+
+void Int_LENndohMax() {
+
+	//LEN duration per group
+	CABLAdur[0] = 1 + 0.5;   //men nonMSM
+	CABLAdur[1] = 1 + 0.5;   //women
+	CABLAdur[2] = 1 + 0.5;   //MSM
+	CABLAdurPreg = 1 + 0.5;  //pregnant women		
+
+	if (bl == 0 || bl == 1) {
+		double tempAGYW[19] = {0.773334763279906,0.836066766447537,0.879051276220438,0.922710079379078,0.952977814329018,0.940171501645149,0.922784023224904,0.956036689997234,1.01047908822207,1.05307148223887,1.04315908029305,1.06405553152274,1.06910462778859,1.10035476255972,1.13034506813023,1.16142139629301,1.19713079276468,1.23016837563003,1.25604183778398};
+		double tempFSW[19] = { 0.162086948424352,0.113098851172324,0.0865743760241027,0.0832028499945846,0.0811164899205864,0.0819199209991287,0.0833564507889501,0.082020676719741,0.0794736680199366,0.0777557894472362,0.0785583443912591,0.07796588466966,0.0780763022816923,0.076870403197251,0.0757159751805837,0.0743498793137945,0.072788625844504,0.0714085870029098,0.0713668902005219 };
+		double tempPBFW[19] = { 0.157395249218917,0.158104015490894,0.16098869329806,0.164196167796259,0.167652759431056,0.175388407863226,0.184053252296491,0.186491202730003,0.18683304819727,0.188875988714688,0.196467944387036,0.200478143550165,0.206219218306245,0.208473792942986,0.21079499336367,0.213346119455121,0.215167807410249,0.216649190842898,0.219832132194858 };
+		double tempMSM[19] = { 1.7285795901283,1.69044626279683,1.68008400467253,1.70388847300658,1.71475112574893,1.69059352029226,1.71137809916993,1.67443796995503,1.63711827498909,1.64758673156219,1.66346147422596,1.62527720334123,1.6132600207475,1.6772821435927,1.71286430591711,1.71113173433864,1.725220396582,1.74556389786786,1.87559823641388 }; 
+
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW
+		}
+	}
+
+	if (bl == 3) {
+		double tempAGYW[19] = {0.386667381639953,0.418033383223769,0.439525638110219,0.461355039689539,0.476488907164509,0.470085750822575,0.461392011612452,0.478018344998617,0.505239544111036,0.526535741119433,0.521579540146527,0.532027765761369,0.534552313894296,0.550177381279862,0.565172534065114,0.580710698146503,0.59856539638234,0.615084187815013,0.628020918891992};
+		double tempFSW[19] = { 0.0810434742121762,0.0565494255861621,0.0432871880120514,0.0416014249972923,0.0405582449602932,0.0409599604995643,0.041678225394475,0.0410103383598705,0.0397368340099683,0.0388778947236181,0.0392791721956295,0.03898294233483,0.0390381511408462,0.0384352015986255,0.0378579875902918,0.0371749396568973,0.036394312922252,0.0357042935014549,0.0352076962558447 };
+		double tempPBFW[19] = { 0.0786976246094586,0.0790520077454469,0.08049434664903,0.0820980838981296,0.0838263797155282,0.087694203931613,0.0920266261482457,0.0932456013650014,0.0934165240986352,0.0944379943573439,0.0982339721935181,0.100239071775083,0.103109609153122,0.104236896471493,0.105397496681835,0.106673059727561,0.107583903705125,0.108324595421449,0.109916066097429 };
+		double tempMSM[19] = { 0.864289795064149,0.845223131398417,0.840042002336267,0.851944236503288,0.857375562874464,0.845296760146131,0.855689049584966,0.837218984977514,0.818559137494544,0.823793365781094,0.831730737112979,0.812638601670615,0.806630010373752,0.83864107179635,0.856432152958555,0.855565867169322,0.862610198290998,0.87278194893393,0.937799118206939 }; 
+
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW
+		}
+	}
+
+
+	if (bl == 4) {
+
+		double tempAGYW[20] = { 0.0603135253910815,0.0700764106074194,0.0812039724463096,0.0854858967784783,0.0872969009517785,0.087432482112254,0.0843838860895751,0.0800514436171431,0.0797780031295986,0.0807712145413091,0.0804565601654296,0.0771365236178035,0.0758376711574325,0.0740495073052406,0.0736069635524307,0.0730781640131621,0.0731528492214204,0.0736137001096472,0.0742025025741489,0.0750210794247317 };
+		double tempFSW[20] = { 0.310334393945528,0.0637648318925817,0.0415680615886045,0.0313720409352242,0.0302968020065547,0.0296483616333312,0.0296904589986468,0.0300173223442788,0.0294608106714146,0.0285669339539912,0.0279766877686142,0.0280655094690565,0.0278251450232813,0.0276766531599702,0.0271796880726329,0.0267598278651231,0.0262978380547887,0.0258302051472868,0.0254145025739376,0.0250151687881773 };
+		double tempPBFW[20] = { 0.184760046777434,0.0700934411199482,0.0687109300909313,0.0682669061498323,0.068391437881664,0.0688288715193956,0.0706349593868339,0.0730701173192899,0.0734501609548119,0.0731607094698233,0.0734183970429515,0.0752293115233337,0.0761745633017146,0.077397632045977,0.077597724510003,0.077982894608722,0.0785135102940437,0.0788965909040849,0.0792190839316988,0.0796756708213018 };
+		double tempMSM[20] = { 0.971911263496467,0.989319756180789,1.0254690986996,1.04857990498486,1.05473628359993,1.06585700194681,1.06886171525059,1.07087106287032,1.06260653381936,1.06419843041097,1.06201847914408,1.07273442875788,1.07371632716864,1.08283445444361,1.10105039739374,1.122489734176,1.14674540177514,1.16725548878515,1.1889285732187,1.20941786977726 };
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW
+		}
+	}
+
+}
+
+
+
+
+
+void Int_LENOptDefault() {
+
+	//LEN duration per group
+	CABLAdur[0] = 1 + 0.5;   //men nonMSM
+	CABLAdur[1] = 1 + 0.5;   //women
+	CABLAdur[2] = 1 + 0.5;   //MSM
+	CABLAdurPreg = 1 + 0.5;  //pregnant women		
+
+	if (bl == 0 || bl == 1) {
+		if (CurrYear >= 2027) { UltCABLArateFSW = 0.0; } //FSW
+		for (int iy = ICstart; iy < 86; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = 0; //AGYW
+			RR_CABLAstartMSM[iy] = 0; //MSM
+			CABLApregnant[iy] = 0; //PBFW
+		}
+	}
+
+
+
+	if (bl == 3) {  //BL old + GF LEN + 50% OP to LEN (planned dist)	
+		//LEN as per planned distribution, 50% of OP budget
+		//LEN duration per group
+		CABLAdur[0] = 1 + 0.5;   //men nonMSM
+		CABLAdur[1] = 1 + 0.5;   //women
+		CABLAdur[2] = 1 + 0.5;   //MSM
+		CABLAdurPreg = 1 + 0.5;  //pregnant women	
+
+
+		//parameters by pop and year, these are from 2028-2045	
+		double tempAGYW[19] = { 0.193333690819977,0.209016691611884,0.21976281905511,0.230677519844769,0.238244453582254,0.235042875411287,0.230696005806226,0.239009172499309,0.252619772055518,0.263267870559717,0.260789770073263,0.266013882880684,0.267276156947148,0.275088690639931,0.282586267032557,0.290355349073251,0.29928269819117,0.307542093907507,0.314010459445996 };
+		double tempFSW[19] = { 0.0405217371060881,0.028274712793081,0.0216435940060257,0.0208007124986462,0.0202791224801466,0.0204799802497822,0.0208391126972375,0.0205051691799352,0.0198684170049841,0.019438947361809,0.0196395860978148,0.019491471167415,0.0195190755704231,0.0192176007993127,0.0189289937951459,0.0185874698284486,0.018197156461126,0.0178521467507275,0.0176038481279223 };
+		double tempPBFW[19] = { 0.0393488123047293,0.0395260038727235,0.040247173324515,0.0410490419490648,0.0419131898577641,0.0438471019658065,0.0460133130741228,0.0466228006825007,0.0467082620493176,0.0472189971786719,0.049116986096759,0.0501195358875413,0.0515548045765612,0.0521184482357466,0.0526987483409176,0.0533365298637804,0.0537919518525623,0.0541622977107246,0.0549580330487144 };
+		double tempMSM[19] = { 0.432144897532075,0.422611565699208,0.420021001168133,0.425972118251644,0.428687781437232,0.422648380073065,0.427844524792483,0.418609492488757,0.409279568747272,0.411896682890547,0.415865368556489,0.406319300835307,0.403315005186876,0.419320535898175,0.428216076479278,0.427782933584661,0.431305099145499,0.436390974466965,0.468899559103469 };
+		
+		//LEN from 2028
+		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		if (CurrYear > 2045) { UltCABLArateFSW = 0; } //FSW
+
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW			
+		}		   		 
+
+	}
+
+
+	if (bl == 4) {  //BL PEPFAR min + GF LEN + 50% OP to LEN (planned dist)		
+
+		//planned LEN
+
+		//LEN duration per group
+		CABLAdur[0] = 1 + 0.5;   //men nonMSM
+		CABLAdur[1] = 1 + 0.5;   //women
+		CABLAdur[2] = 1 + 0.5;   //MSM
+		CABLAdurPreg = 1 + 0.5;  //pregnant women		
+
+		double tempAGYW[20] = { 0.0301567626955408,0.0350382053037097,0.0406019862231548,0.0427429483892391,0.0436484504758893,0.043716241056127,0.0421919430447875,0.0400257218085715,0.0398890015647993,0.0403856072706545,0.0402282800827148,0.0385682618089017,0.0379188355787163,0.0370247536526203,0.0368034817762153,0.0365390820065811,0.0365764246107102,0.0368068500548236,0.0371012512870745,0.0375105397123658 };
+		double tempFSW[20] = { 0.155167196972764,0.0318824159462908,0.0207840307943023,0.0156860204676121,0.0151484010032774,0.0148241808166656,0.0148452294993234,0.0150086611721394,0.0147304053357073,0.0142834669769956,0.0139883438843071,0.0140327547345282,0.0139125725116406,0.0138383265799851,0.0135898440363165,0.0133799139325615,0.0131489190273944,0.0129151025736434,0.0127072512869688,0.0125075843940887 };
+		double tempPBFW[20] = { 0.0923800233887172,0.0350467205599741,0.0343554650454656,0.0341334530749161,0.034195718940832,0.0344144357596978,0.0353174796934169,0.036535058659645,0.036725080477406,0.0365803547349116,0.0367091985214758,0.0376146557616668,0.0380872816508573,0.0386988160229885,0.0387988622550015,0.038991447304361,0.0392567551470219,0.0394482954520425,0.0396095419658494,0.0398378354106509 };
+		double tempMSM[20] = { 0.485955631748233,0.494659878090395,0.512734549349802,0.524289952492428,0.527368141799966,0.532928500973403,0.534430857625294,0.53543553143516,0.53130326690968,0.532099215205486,0.531009239572041,0.53636721437894,0.53685816358432,0.541417227221804,0.550525198696868,0.561244867088002,0.573372700887568,0.583627744392575,0.594464286609349,0.604708934888631 };
+
+		//from 2028
+		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		if (CurrYear > 2045) { UltCABLArateFSW = 0; } //FSW
+
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][1] = 0; //other women	
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligAGYW[iy] = 0;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW
+		}
+
+		
+	}
+}
+
+
+
+
+//replace 50% of Oral PrEP with LEN from 2028 but optimal dist
+void Int_LENOptBp0() {
+
+	//LEN duration per group
+	CABLAdur[0] = 1 + 0.5;   //men nonMSM
+	CABLAdur[1] = 1 + 0.5;   //women
+	CABLAdur[2] = 1 + 0.5;   //MSM
+	CABLAdurPreg = 1 + 0.5;  //pregnant women		
+
+
+
+	if (bl == 0 || bl == 1) {
+		//parameters by pop and year, these are from 2028-2046 
+		double tempAGYW[19] = {0.0994553468051574,0.101747046222088,0.104215757982838,0.107210136253703,0.109914468533859,0.108263628189527,0.105625807427935,0.109275133705106,0.115543207580925,0.120662842251388,0.119345844227609,0.121584261755729,0.121898162387638,0.125530783992501,0.129367998892905,0.132756509536818,0.136723353466272,0.140873808851676,0.144978647416135};
+		double tempFSW[19] = { 0.0622950417938342,0.0456723298251009,0.0357804315854889,0.035022031788649,0.0343443069506482,0.0346672485666227,0.0354076355368551,0.0348456400085558,0.0337339962409245,0.0329109118362146,0.0331984932183199,0.0329198522462028,0.0329359316141043,0.0323383302267522,0.0316947012309189,0.0310996192334648,0.0304122673920617,0.0296959242876917,0.0289920538381319 };
+		double tempPBFW[19] = { 0.0202081,0.0202648312516553,0.020583742546342,0.0209504008244558,0.0213678796255808,0.0223455226726343,0.0234490663078495,0.0237395584828174,0.023762955145401,0.0240103511620887,0.0249615641753116,0.0254636732777337,0.026189669233133,0.0264543804358291,0.0267344324503311,0.0270511706138964,0.0272748545260381,0.0274528145899694,0.0276599280884912 };
+		double tempMSM[19] = { 0.699507785012515,0.69937653746777,0.691459730338275,0.673058239351949,0.667694026110733,0.662974127824292,0.656442511426448,0.641112162928401,0.632717120433003,0.622975833104534,0.625158559235217,0.622119565277768,0.623751615912639,0.632340412920097,0.644503901340642,0.653964599983161,0.662268751687097,0.67039580240071,0.67756924299319 }; 
+
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart+1; iy < 86; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart]; //PBFW
+		}
+
+
+		//reduction on oral PrEP
+		double OPtempAGYW[19] = { 0.284988658904142,0.311236414844098,0.317339542464181,0.315863546498,0.315782215980871,0.328913599638829,0.328514625126812,0.329079570715253,0.330009489402073,0.330691694218155,0.33012062886437,0.330080428539509,0.32956059816084,0.329344953564536,0.329259114407213,0.329358419630089,0.329584304487113,0.329852934067434,0.344983943853991 };
+		double OPtempFSW[19] = { 0.0253478397946021,0.0230674126675031,0.0225626151103978,0.0226209881009839,0.0225891294921098,0.0216424687100732,0.0216575985693442,0.0216649074160448,0.0216524540305742,0.0216241212266514,0.0216048619810834,0.0215957938516041,0.0215902870185404,0.0215892569290466,0.0215851279666815,0.0215663361022456,0.0215402542379482,0.0215185380922861,0.0205784930375266 };
+		double OPtempPBFW[19] = { 0.0499505679755955,0.0497046925509099,0.049662906890645,0.0496282992186634,0.04959756408911,0.0495813045154604,0.0495861708759823,0.049584753351655,0.0495628389652968,0.0495332888161316,0.0495199651106715,0.0495169635942209,0.0495185872393578,0.0495165930625585,0.0495087237157914,0.0495003095935348,0.0494921224050725,0.0494839044561883,0.0494775358755037 };
+		double OPtempMSM[19] = { 0.389506918510113,0.407699037760727,0.409954006046206,0.405870196604483,0.405074798788771,0.42129431973938,0.42113953807894,0.419877023588626,0.417706709636956,0.415870631875716,0.415824136339286,0.415151785536109,0.414076587601332,0.414032947427478,0.414169473747495,0.41339533589962,0.412180137905985,0.411020874273844,0.42907992055608 };
+		double Optempmen[19] = { 0.0192966358249795,0.0193219654765607,0.0192679003896619,0.0191988906135866,0.0191399052634929,0.0190731714041869,0.0189899668066841,0.0189182042426897,0.0188517013249968,0.0187863291788027,0.0187356529133891,0.0186801543979811,0.0186240694622907,0.0185602443572411,0.0185126017722302,0.0184606744825046,0.0184039101571664,0.0183434210103421,0.0182784598161834 };
+			   
+		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltPrEPrateFSW = OPtempFSW[CurrYear - 2027]; } //FSW
+		if (CurrYear > 2045) { UltPrEPrateFSW = 0; } //FSW
+
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			PrEPeligMSM[iy] = 1;
+			PrEPeligOtherG[iy][1] = 0.02; //other women	
+			PrEPeligOtherG[iy][0] = Optempmen[iy - ICstart - 1]; //other men	
+			PrEPeligAGYW[iy] = 1;
+
+			RR_PrEPstartF20[iy] = OPtempAGYW[iy - ICstart - 1]; //AGYW
+			RR_PrEPstartMSM[iy] = OPtempMSM[iy - ICstart - 1]; //MSM
+			PrEPpregnant[iy] = OPtempPBFW[iy - ICstart - 1]; //PBFW	
+
+		}
+
+
+
+	}
+
+	if (bl == 3) {
+		//LEN duration per group
+		CABLAdur[0] = 1 + 0.5;   //men nonMSM
+		CABLAdur[1] = 1 + 0.5;   //women
+		CABLAdur[2] = 1 + 0.5;   //MSM
+		CABLAdurPreg = 1 + 0.5;  //pregnant women		
+
+		//OPTIMAL distribution but at baseline levels (50% of OP budget)
+		//parameters by pop and year, these are from 2028-2046
+		double tempAGYW[19] = {0.0994553468051574,0.101747046222088,0.104215757982838,0.107210136253703,0.109914468533859,0.108263628189527,0.105625807427935,0.109275133705106,0.115543207580925,0.120662842251388,0.119345844227609,0.121584261755729,0.121898162387638,0.125530783992501,0.129367998892905,0.132756509536818,0.136723353466272,0.140873808851676,0.144978647416135};
+		double tempFSW[19] = { 0.0622950417938342,0.0456723298251009,0.0357804315854889,0.035022031788649,0.0343443069506482,0.0346672485666227,0.0354076355368551,0.0348456400085558,0.0337339962409245,0.0329109118362146,0.0331984932183199,0.0329198522462028,0.0329359316141043,0.0323383302267522,0.0316947012309189,0.0310996192334648,0.0304122673920617,0.0296959242876917,0.0289920538381319 };
+		double tempPBFW[19] = { 0.0202081,0.0202648312516553,0.020583742546342,0.0209504008244558,0.0213678796255808,0.0223455226726343,0.0234490663078495,0.0237395584828174,0.023762955145401,0.0240103511620887,0.0249615641753116,0.0254636732777337,0.026189669233133,0.0264543804358291,0.0267344324503311,0.0270511706138964,0.0272748545260381,0.0274528145899694,0.0276599280884912 };
+		double tempMSM[19] = { 0.699507785012515,0.69937653746777,0.691459730338275,0.673058239351949,0.667694026110733,0.662974127824292,0.656442511426448,0.641112162928401,0.632717120433003,0.622975833104534,0.625158559235217,0.622119565277768,0.623751615912639,0.632340412920097,0.644503901340642,0.653964599983161,0.662268751687097,0.67039580240071,0.67756924299319 }; 
+
+
+		//LEN from 2028
+		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		if (CurrYear > 2045) { UltCABLArateFSW = 0; } //FSW
+
+		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW		
+
+		}
+
+	}
+
+	if (bl == 4) {
+		//parameters by pop and year, these are from 2028-2046 
+		double tempAGYW[20] = {0.017812106105459,0.00934508088305548,0.0107794622143141,0.0113220193640609,0.0115168257858227,0.0115360121524393,0.0111397657086726,0.0105412807710405,0.0105063744954564,0.0106181526057745,0.0105747202839691,0.0101271422857143,0.00995110920311136,0.00970576462378894,0.00965141184695809,0.00959213192672699,0.00957658177111097,0.00962510644920028,0.00971206338160838,0.00983892042383608};
+		double tempFSW[20] = { 0.215672714310037,0.0627770582889866,0.0410344597807658,0.0309824882501539,0.0299719849992815,0.0292668333349972,0.0292265713507195,0.0295459379127665,0.0289396038709799,0.0280609851764829,0.02743509833612,0.0274790743113522,0.0272038380424013,0.027019855131813,0.0264679341182634,0.025979691526204,0.0255468347493794,0.0250750239529682,0.0246045620469374,0.0241395183386667 };
+		double tempPBFW[20] = { 0.104275358685226,0.0483886079646799,0.0478075023097864,0.0475231396673676,0.0476335374368569,0.0478338814902122,0.0491383422485327,0.0506944550293231,0.0508669845944906,0.0506276363970424,0.0507741655698786,0.0520867615826673,0.0525849827729157,0.0534599477008264,0.0535729202299706,0.0538074948935121,0.0541456813480297,0.0543784842598058,0.0545012818048219,0.0547208375952977 };
+		double tempMSM[20] = { 0.494288436177298,0.535313338561408,0.559121942940725,0.578162229766842,0.575590281223495,0.580982735276084,0.584131575068615,0.581925442529126,0.574717214551089,0.568788545840433,0.563164925408182,0.566756035231037,0.566611738246284,0.570155348245332,0.576322294639041,0.584150352323886,0.593852693793884,0.602889580872401,0.613984446378868,0.629307669420556 }; 
+		
+		if (CurrYear >= (ICstart + 1985 - 1)) { UltCABLArateFSW = tempFSW[CurrYear - 2026]; } //FSW
+		for (int iy = ICstart; iy < 86; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart]; //PBFW
+		}
+	}
+
+}
+
+
+
+void Int_LENOptBp1() {
+
+
+	//LEN duration per group
+	CABLAdur[0] = 1 + 0.5;   //men nonMSM
+	CABLAdur[1] = 1 + 0.5;   //women
+	CABLAdur[2] = 1 + 0.5;   //MSM
+	CABLAdurPreg = 1 + 0.5;  //pregnant women		
+
+	if (bl == 0 || bl == 1) {
+		//parameters by pop and year, these are from 2028-2046
+		double tempAGYW[19] = {0.0994553468051574,0.101747046222088,0.104215757982838,0.107210136253703,0.109914468533859,0.108263628189527,0.105625807427935,0.109275133705106,0.115543207580925,0.120662842251388,0.119345844227609,0.121584261755729,0.121898162387638,0.125530783992501,0.129367998892905,0.132756509536818,0.136723353466272,0.140873808851676,0.144978647416135};
+		double tempFSW[19] = { 0.0622950417938342,0.0456723298251009,0.0357804315854889,0.035022031788649,0.0343443069506482,0.0346672485666227,0.0354076355368551,0.0348456400085558,0.0337339962409245,0.0329109118362146,0.0331984932183199,0.0329198522462028,0.0329359316141043,0.0323383302267522,0.0316947012309189,0.0310996192334648,0.0304122673920617,0.0296959242876917,0.0289920538381319 };
+		double tempPBFW[19] = { 0.0202081,0.0202648312516553,0.020583742546342,0.0209504008244558,0.0213678796255808,0.0223455226726343,0.0234490663078495,0.0237395584828174,0.023762955145401,0.0240103511620887,0.0249615641753116,0.0254636732777337,0.026189669233133,0.0264543804358291,0.0267344324503311,0.0270511706138964,0.0272748545260381,0.0274528145899694,0.0276599280884912 };
+		double tempMSM[19] = { 0.699507785012515,0.69937653746777,0.691459730338275,0.673058239351949,0.667694026110733,0.662974127824292,0.656442511426448,0.641112162928401,0.632717120433003,0.622975833104534,0.625158559235217,0.622119565277768,0.623751615912639,0.632340412920097,0.644503901340642,0.653964599983161,0.662268751687097,0.67039580240071,0.67756924299319 }; 
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart]; //PBFW
+		}
+	}
+
+	if (bl == 3) {
+		//parameters by pop and year, these are from 2028-2046	
+		double tempAGYW[19] = {0.124319183506447,0.12718380777761,0.130269697478548,0.134012670317129,0.137393085667324,0.135329535236909,0.132032259284919,0.136593917131383,0.144429009476156,0.150828552814235,0.149182305284512,0.151980327194661,0.152372702984548,0.156913479990626,0.161709998616132,0.165945636921023,0.17090419183284,0.176092261064595,0.181223309270168};
+		double tempFSW[19] = { 0.0778688022422928,0.0570904122813761,0.0447255394818611,0.0437775397358112,0.0429303836883103,0.0433340607082784,0.0442595444210688,0.0435570500106947,0.0421674953011556,0.0411386397952683,0.0414981165228999,0.0411498153077534,0.0411699145176304,0.0404229127834403,0.0396183765386486,0.0388745240418311,0.0380153342400772,0.0371199053596146,0.0362400672976649 };
+		double tempPBFW[19] = { 0.025260125,0.0253310390645691,0.0257296781829275,0.0261880010305697,0.026709849531976,0.0279319033407928,0.0293113328848118,0.0296744481035217,0.0297036939317513,0.0300129389526109,0.0312019552191395,0.0318295915971672,0.0327370865414163,0.0330679755447864,0.0334180405629139,0.0338139632673706,0.0340935681575476,0.0343160182374617,0.034574910110614 };
+		double tempMSM[19] = { 0.874384731265644,0.874220671834713,0.864324662922843,0.841322799189937,0.834617532638416,0.828717659780364,0.82055313928306,0.801390203660501,0.790896400541254,0.778719791380667,0.781448199044022,0.77764945659721,0.779689519890799,0.790425516150122,0.805629876675803,0.817455749978951,0.827835939608871,0.837994753000887,0.846961553741487 }; 
+
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart]; //PBFW
+		}
+	}
+
+	if (bl == 4) {
+		//parameters by pop and year, these are from 2028-2046 
+		double tempAGYW[20] = { 0.0222651326318237,0.0116813511038194,0.0134743277678926,0.0141525242050761,0.0143960322322783,0.0144200151905491,0.0139247071358408,0.0131766009638007,0.0131329681193205,0.0132726907572181,0.0132184003549613,0.0126589278571429,0.0124388865038892,0.0121322057797362,0.0120642648086976,0.0119901649084087,0.0119707272138887,0.0120313830615004,0.0121400792270105,0.0122986505297951 };
+		double tempFSW[20] = { 0.269590892887546,0.0784713228612333,0.0512930747259572,0.0387281103126923,0.0374649812491018,0.0365835416687465,0.0365332141883994,0.0369324223909581,0.0361745048387249,0.0350762314706037,0.03429387292015,0.0343488428891902,0.0340047975530016,0.0337748189147663,0.0330849176478293,0.0324746144077549,0.0319335434367242,0.0313437799412103,0.0307557025586718,0.0301743979233333 };
+		double tempPBFW[20] = { 0.130344198356533,0.0604857599558499,0.059759377887233,0.0594039245842095,0.0595419217960711,0.0597923518627652,0.0614229278106659,0.0633680687866539,0.0635837307431133,0.0632845454963029,0.0634677069623483,0.0651084519783341,0.0657312284661446,0.066824934626033,0.0669661502874633,0.0672593686168901,0.0676821016850371,0.0679731053247573,0.0681266022560273,0.0684010469941221 };
+		double tempMSM[20] = { 0.617860545221623,0.669141673201759,0.698902428675906,0.722702787208552,0.719487851529369,0.726228419095105,0.730164468835768,0.727406803161407,0.718396518188861,0.710985682300541,0.703956156760227,0.708445044038796,0.708264672807855,0.712694185306665,0.720402868298801,0.730187940404858,0.742315867242355,0.753611976090502,0.767480557973585,0.786634586775695 };
+	
+		if (CurrYear >= (ICstart + 1985 - 1)) { UltCABLArateFSW = tempFSW[CurrYear - 2026]; } //FSW
+		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart]; //PBFW
+		}
+	}
+
+}
+void Int_LENOptBp2() {
+	//LEN duration per group
+	CABLAdur[0] = 1 + 0.5;   //men nonMSM
+	CABLAdur[1] = 1 + 0.5;   //women
+	CABLAdur[2] = 1 + 0.5;   //MSM
+	CABLAdurPreg = 1 + 0.5;  //pregnant women		
+
+	if (bl == 0 || bl == 1) {
+		//parameters by pop and year, these are from 2028-2046 
+		double tempAGYW[19] = {0.198910693610315,0.203494092444175,0.208431515965676,0.214420272507407,0.219828937067718,0.216527256379054,0.21125161485587,0.218550267410213,0.23108641516185,0.241325684502775,0.238691688455219,0.243168523511458,0.243796324775277,0.251061567985002,0.25873599778581,0.265513019073636,0.273446706932544,0.281747617703352,0.289957294832269};
+		double tempFSW[19] = { 0.124590083587668,0.0913446596502018,0.0715608631709777,0.0700440635772979,0.0686886139012964,0.0693344971332455,0.0708152710737101,0.0696912800171115,0.0674679924818489,0.0658218236724292,0.0663969864366399,0.0658397044924055,0.0658718632282086,0.0646766604535045,0.0633894024618378,0.0621992384669297,0.0608245347841235,0.0593918485753834,0.0579841076762638 };
+		double tempPBFW[19] = { 0.0404162,0.0405296625033106,0.0411674850926839,0.0419008016489115,0.0427357592511615,0.0446910453452685,0.0468981326156989,0.0474791169656348,0.0475259102908021,0.0480207023241775,0.0499231283506231,0.0509273465554675,0.052379338466266,0.0529087608716583,0.0534688649006623,0.0541023412277929,0.0545497090520761,0.0549056291799388,0.0553198561769823 };
+		double tempMSM[19] = { 1.39901557002503,1.39875307493554,1.38291946067655,1.3461164787039,1.33538805222147,1.32594825564858,1.3128850228529,1.2822243258568,1.26543424086601,1.24595166620907,1.25031711847043,1.24423913055554,1.24750323182528,1.26468082584019,1.28900780268128,1.30792919996632,1.32453750337419,1.34079160480142,1.35513848598638 }; 
+
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2026]; } //FSW
+		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart]; //PBFW
+		}
+	}
+
+	if (bl == 3) {
+		//parameters by pop and year, these are from 2028-2046 
+		double tempAGYW[19] = { 0.149183020207736,0.152620569333132,0.156323636974257,0.160815204380555,0.164871702800788,0.16239544228429,0.158438711141902,0.16391270055766,0.173314811371387,0.180994263377082,0.179018766341414,0.182376392633593,0.182847243581458,0.188296175988751,0.194051998339358,0.199134764305227,0.205085030199408,0.211310713277514,0.217467971124202 };
+		double tempFSW[19] = { 0.0934425626907513,0.0685084947376513,0.0536706473782333,0.0525330476829734,0.0515164604259723,0.0520008728499341,0.0531114533052826,0.0522684600128336,0.0506009943613867,0.0493663677543219,0.0497977398274799,0.0493797783693041,0.0494038974211565,0.0485074953401283,0.0475420518463784,0.0466494288501973,0.0456184010880926,0.0445438864315376,0.0434880807571978 };
+		double tempPBFW[19] = { 0.03031215,0.0303972468774829,0.030875613819513,0.0314256012366836,0.0320518194383711,0.0335182840089514,0.0351735994617742,0.0356093377242261,0.0356444327181016,0.0360155267431331,0.0374423462629673,0.0381955099166006,0.0392845038496995,0.0396815706537437,0.0401016486754967,0.0405767559208447,0.0409122817890571,0.0411792218849541,0.0414898921327368 };
+		double tempMSM[19] = { 1.04926167751877,1.04906480620166,1.03718959550741,1.00958735902792,1.0015410391661,0.994461191736437,0.984663767139672,0.961668244392601,0.949075680649505,0.9344637496568,0.937737838852826,0.933179347916651,0.935627423868959,0.948510619380146,0.966755852010963,0.980946899974741,0.993403127530645,1.00559370360106,1.01635386448978 }; 
+
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart]; //PBFW
+		}
+	}
+
+
+	if (bl == 4) {
+		//parameters by pop and year, these are from 2028-2046 
+		double tempAGYW[20] = { 0.0267181591581885,0.0140176213245832,0.0161691933214711,0.0169830290460913,0.017275238678734,0.017304018228659,0.016709648563009,0.0158119211565608,0.0157595617431846,0.0159272289086617,0.0158620804259536,0.0151907134285714,0.014926663804667,0.0145586469356834,0.0144771177704371,0.0143881978900905,0.0143648726566664,0.0144376596738004,0.0145680950724126,0.0147583806357541 };
+		double tempFSW[20] = { 0.323509071465055,0.09416558743348,0.0615516896711487,0.0464737323752308,0.0449579774989222,0.0439002500024958,0.0438398570260792,0.0443189068691498,0.0434094058064698,0.0420914777647244,0.04115264750418,0.0412186114670283,0.040805757063602,0.0405297826977195,0.0397019011773951,0.0389695372893059,0.0383202521240691,0.0376125359294524,0.0369068430704062,0.036209277508 };
+		double tempPBFW[20] = { 0.15641303802784,0.0725829119470199,0.0717112534646796,0.0712847095010514,0.0714503061552853,0.0717508222353182,0.073707513372799,0.0760416825439847,0.0763004768917359,0.0759414545955635,0.076161248354818,0.0781301423740009,0.0788774741593736,0.0801899215512396,0.0803593803449559,0.0807112423402681,0.0812185220220445,0.0815677263897087,0.0817519227072328,0.0820812563929465 };
+		double tempMSM[20] = { 0.741432654265948,0.802970007842111,0.838682914411088,0.867243344650263,0.863385421835242,0.871474102914127,0.876197362602922,0.872888163793689,0.862075821826633,0.853182818760649,0.844747388112273,0.850134052846555,0.849917607369426,0.855233022367998,0.864483441958561,0.876225528485829,0.890779040690825,0.904334371308602,0.920976669568302,0.943961504130834 };
+
+		if (CurrYear >= (ICstart + 1985 - 1)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart]; //PBFW
+		}
+	}
+
+
+}
+void Int_LENOptBp3() {
+	//LEN duration per group
+	CABLAdur[0] = 1 + 0.5;   //men nonMSM
+	CABLAdur[1] = 1 + 0.5;   //women
+	CABLAdur[2] = 1 + 0.5;   //MSM
+	CABLAdurPreg = 1 + 0.5;  //pregnant women	
+
+	if (bl == 0 || bl == 1) {
+		//parameters by pop and year, these are from 2028-2046 
+		double tempAGYW[19] = {0.298366040415472,0.305241138666263,0.312647273948514,0.32163040876111,0.329743405601577,0.324790884568581,0.316877422283805,0.327825401115319,0.346629622742775,0.361988526754163,0.358037532682828,0.364752785267187,0.365694487162915,0.376592351977503,0.388103996678716,0.398269528610454,0.410170060398816,0.422621426555027,0.434935942248404};
+		double tempFSW[19] = { 0.186885125381503,0.137016989475303,0.107341294756467,0.105066095365947,0.103032920851945,0.104001745699868,0.106222906610565,0.104536920025667,0.101201988722773,0.0987327355086438,0.0995954796549598,0.0987595567386083,0.0988077948423129,0.0970149906802567,0.0950841036927567,0.0932988577003945,0.0912368021761852,0.0890877728630751,0.0869761615143957 };
+		double tempPBFW[19] = { 0.0606243,0.0607944937549658,0.0617512276390259,0.0628512024733673,0.0641036388767423,0.0670365680179028,0.0703471989235484,0.0712186754484522,0.0712888654362031,0.0720310534862662,0.0748846925259347,0.0763910198332012,0.0785690076993991,0.0793631413074874,0.0802032973509934,0.0811535118416893,0.0818245635781142,0.0823584437699082,0.0829797842654735 };
+		double tempMSM[19] = { 2.09852335503755,2.09812961240331,2.07437919101482,2.01917471805585,2.0030820783322,1.98892238347287,1.96932753427934,1.9233364887852,1.89815136129901,1.8689274993136,1.87547567770565,1.8663586958333,1.87125484773792,1.89702123876029,1.93351170402193,1.96189379994948,1.98680625506129,2.01118740720213,2.03270772897957 }; 
+
+		if (CurrYear >= (ICstart + 1985 - 1)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart]; //PBFW
+		}
+	}
+
+	if (bl == 3) {
+		//parameters by pop and year, these are from 2028-2046
+		double tempAGYW[19] = {0.174046856909025,0.178057330888653,0.182377576469967,0.187617738443981,0.192350319934253,0.189461349331672,0.184845162998886,0.191231483983936,0.202200613266619,0.211159973939928,0.208855227398316,0.212772458072526,0.213321784178367,0.219678871986877,0.226393998062584,0.232323891689432,0.239265868565976,0.246529165490433,0.253712632978235};
+		double tempFSW[19] = { 0.10901632313921,0.0799265771939266,0.0626157552746055,0.0612885556301357,0.0601025371636344,0.0606676849915898,0.0619633621894964,0.0609798700149726,0.0590344934216178,0.0575940957133756,0.0580973631320599,0.0576097414308548,0.0576378803246825,0.0565920778968164,0.0554657271541081,0.0544243336585635,0.053221467936108,0.0519678675034605,0.0507360942167308 };
+		double tempPBFW[19] = { 0.035364175,0.0354634546903967,0.0360215494560985,0.0366632014427976,0.0373937893447663,0.03910466467711,0.0410358660387365,0.0415442273449304,0.0415851715044518,0.0420181145336553,0.0436827373067952,0.044561428236034,0.0458319211579828,0.046295165762701,0.0467852567880795,0.0473395485743188,0.0477309954205666,0.0480424255324464,0.0484048741548596 };
+		double tempMSM[19] = { 1.2241386237719,1.2239089405686,1.21005452809198,1.17785191886591,1.16846454569378,1.16020472369251,1.14877439499628,1.1219462851247,1.10725496075776,1.09020770793293,1.09402747866163,1.08870923923609,1.09156532784712,1.10659572261017,1.12788182734612,1.14443804997053,1.15897031545242,1.17319265420124,1.18574617523808 }; 
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart-1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW
+		}
+	}
+
+	if (bl == 4) {
+		//parameters by pop and year, these are from 2028-2046 
+		double tempAGYW[20] = { 0.0311711856845532,0.0163538915453471,0.0188640588750496,0.0198135338871065,0.0201544451251897,0.0201880212667688,0.0194945899901771,0.018447241349321,0.0183861553670487,0.0185817670601053,0.0185057604969459,0.017722499,0.0174144411054449,0.0169850880916306,0.0168899707321766,0.0167862308717722,0.0167590180994442,0.0168439362861005,0.0169961109178147,0.0172181107417131 };
+		double tempFSW[20] = { 0.377427250042564,0.109859852005727,0.0718103046163401,0.0542193544377693,0.0524509737487425,0.0512169583362451,0.0511464998637591,0.0517053913473414,0.0506443067742148,0.0491067240588451,0.04801142208821,0.0480883800448663,0.0476067165742023,0.0472847464806728,0.046318884706961,0.0454644601708569,0.0447069608114139,0.0438812919176944,0.0430579835821405,0.0422441570926667 };
+		double tempPBFW[20] = { 0.182481877699146,0.0846800639381898,0.0836631290421262,0.0831654944178933,0.0833586905144995,0.0837092926078713,0.0859920989349322,0.0887152963013154,0.0890172230403586,0.0885983636948241,0.0888547897472876,0.0911518327696677,0.0920237198526025,0.0935549084764462,0.0937526104024486,0.0941631160636461,0.094754942359052,0.0951623474546602,0.0953772431584383,0.0957614657917709 };
+		double tempMSM[20] = { 0.865004763310272,0.936798342482463,0.978463400146269,1.01178390209197,1.00728299214112,1.01671978673315,1.02223025637008,1.01836952442597,1.00575512546441,0.995379955220758,0.985538619464318,0.991823061654314,0.991570541930997,0.997771859429331,1.00856401561832,1.0222631165668,1.0392422141393,1.0550567665267,1.07447278116302,1.10128842148597 };
+		
+		if (CurrYear >= (ICstart + 1985-1)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart]; //PBFW
+		}
+	}
+
+
+
+}
+void Int_LENOptMax() {
+	//LEN duration per group
+	CABLAdur[0] = 1 + 0.5;   //men nonMSM
+	CABLAdur[1] = 1 + 0.5;   //women
+	CABLAdur[2] = 1 + 0.5;   //MSM
+	CABLAdurPreg = 1 + 0.5;  //pregnant women		
+
+
+	if (bl == 0 || bl == 1) {
+		//parameters by pop and year, these are from 2028-2046 
+		double tempAGYW[19] = {0.39782138722063,0.406988184888351,0.416863031931352,0.428840545014814,0.439657874135436,0.433054512758107,0.42250322971174,0.437100534820426,0.4621728303237,0.482651369005551,0.477383376910437,0.486337047022916,0.487592649550553,0.502123135970003,0.517471995571621,0.531026038147272,0.546893413865087,0.563495235406703,0.579914589664538};
+		double tempFSW[19] = { 0.249180167175337,0.182689319300404,0.143121726341955,0.140088127154596,0.137377227802593,0.138668994266491,0.14163054214742,0.139382560034223,0.134935984963698,0.131643647344858,0.13279397287328,0.131679408984811,0.131743726456417,0.129353320907009,0.126778804923676,0.124398476933859,0.121649069568247,0.118783697150767,0.115968215352528 };
+		double tempPBFW[19] = { 0.0808324,0.0810593250066211,0.0823349701853679,0.0838016032978231,0.085471518502323,0.0893820906905371,0.0937962652313978,0.0949582339312696,0.0950518205816042,0.0960414046483549,0.0998462567012462,0.101854693110935,0.104758676932532,0.105817521743317,0.106937729801325,0.108204682455586,0.109099418104152,0.109811258359878,0.110639712353965 };
+		double tempMSM[19] = { 2.79803114005006,2.79750614987108,2.7658389213531,2.6922329574078,2.67077610444293,2.65189651129717,2.62577004570579,2.5644486517136,2.53086848173201,2.49190333241813,2.50063423694087,2.48847826111107,2.49500646365056,2.52936165168039,2.57801560536257,2.61585839993264,2.64907500674839,2.68158320960284,2.71027697197276 }; 
+
+
+		if (CurrYear >= (ICstart + 1985 - 1)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart]; //PBFW
+		}
+	}
+
+	if (bl == 3) {
+		//parameters by pop and year, these are from 2028-2046 
+		double tempAGYW[19] = {0.198910693610315,0.203494092444175,0.208431515965676,0.214420272507407,0.219828937067718,0.216527256379054,0.21125161485587,0.218550267410213,0.23108641516185,0.241325684502775,0.238691688455219,0.243168523511458,0.243796324775277,0.251061567985002,0.25873599778581,0.265513019073636,0.273446706932544,0.281747617703352,0.289957294832269};
+		double tempFSW[19] = { 0.124590083587668,0.0913446596502018,0.0715608631709777,0.0700440635772979,0.0686886139012964,0.0693344971332455,0.0708152710737101,0.0696912800171115,0.0674679924818489,0.0658218236724292,0.0663969864366399,0.0658397044924055,0.0658718632282086,0.0646766604535045,0.0633894024618378,0.0621992384669297,0.0608245347841235,0.0593918485753834,0.0579841076762638 };
+		double tempPBFW[19] = { 0.0404162,0.0405296625033106,0.0411674850926839,0.0419008016489115,0.0427357592511615,0.0446910453452685,0.0468981326156989,0.0474791169656348,0.0475259102908021,0.0480207023241775,0.0499231283506231,0.0509273465554675,0.052379338466266,0.0529087608716583,0.0534688649006623,0.0541023412277929,0.0545497090520761,0.0549056291799388,0.0553198561769824 };
+		double tempMSM[19] = { 1.39901557002503,1.39875307493554,1.38291946067655,1.3461164787039,1.33538805222147,1.32594825564858,1.3128850228529,1.2822243258568,1.26543424086601,1.24595166620907,1.25031711847043,1.24423913055554,1.24750323182528,1.26468082584019,1.28900780268128,1.30792919996632,1.32453750337419,1.34079160480142,1.35513848598638 }; 
+
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart-1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart-1]; //PBFW
+		}
+	}
+
+
+	if (bl == 4) {
+		//parameters by pop and year, these are from 2028-2046 
+		double tempAGYW[20] = { 0.035624212210918,0.018690161766111,0.0215589244286281,0.0226440387281217,0.0230336515716454,0.0230720243048786,0.0222795314173453,0.0210825615420811,0.0210127489909128,0.0212363052115489,0.0211494405679381,0.0202542845714286,0.0199022184062227,0.0194115292475779,0.0193028236939162,0.019184263853454,0.0191531635422219,0.0192502128984006,0.0194241267632168,0.0196778408476722 };
+		double tempFSW[20] = { 0.431345428620073,0.125554116577973,0.0820689195615316,0.0619649765003077,0.0599439699985629,0.0585336666699943,0.058453142701439,0.059091875825533,0.0578792077419598,0.0561219703529659,0.05487019667224,0.0549581486227043,0.0544076760848026,0.054039710263626,0.0529358682365268,0.0519593830524079,0.0510936694987588,0.0501500479059365,0.0492091240938749,0.0482790366773334 };
+		double tempPBFW[20] = { 0.208550717370453,0.0967772159293598,0.0956150046195728,0.0950462793347352,0.0952670748737137,0.0956677629804243,0.0982766844970654,0.101388910058646,0.101733969188981,0.101255272794085,0.101548331139757,0.104173523165335,0.105169965545831,0.106919895401653,0.107145840459941,0.107614989787024,0.108291362696059,0.108756968519612,0.109002563609644,0.109441675190595 };
+		double tempMSM[20] = { 0.988576872354597,1.07062667712282,1.11824388588145,1.15632445953368,1.15118056244699,1.16196547055217,1.16826315013723,1.16385088505825,1.14943442910218,1.13757709168087,1.12632985081636,1.13351207046207,1.13322347649257,1.14031069649066,1.15264458927808,1.16830070464777,1.18770538758777,1.2057791617448,1.22796889275774,1.25861533884111 };
+
+		if (CurrYear >= (ICstart + 1985)) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
+		for (int iy = ICstart; iy < ICstart + 20; iy++) {
+			CABLAeligMSM[iy] = 1;
+			CABLAeligOtherG[iy][0] = 0; //other men	
+			CABLAeligOtherG[iy][1] = 0.02; //other women	
+			CABLAeligAGYW[iy] = 1;
+
+			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
+			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
+			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW
+		}
+	}
+
+
+}
+
+
+void Int_CABLADefault() {
+	//4-8m + extra CAB protection
+	CABdur = "4-8m";
+	CABLAdur[0] = 0.33333 + 0.25; //men nonMSM
+	CABLAdur[1] = 0.33333 + 0.25; //women
+	CABLAdur[2] = 0.66667 + 0.25;   //MSM
+	if (CurrYear >= ICstart - 1) {
+		UltCABLArateFSW = 0.0;
+	}
+}
+void Int_CABLAMinMedium() {
+	//4-8m +  extra CAB protection from long acting
+	CABdur = "4-8m";
+	CABLAdur[0] = 0.33333 + 0.25; //men nonMSM
+	CABLAdur[1] = 0.33333 + 0.25; //women
+	CABLAdur[2] = 0.66667 + 0.25;   //MSM
+	if (CurrYear >= ICstart - 1) {
+		UltCABLArateFSW = 0.0833;
+	}
+}
+
+
+
+
+//decomission this for now
+void Int_CABLAMinHigh() {
+	//4-8m  + extra CAB protection from long acting
+	CABdur = "4-8m";
+	CABLAdur[0] = 0.33333 + 0.25; //men nonMSM
+	CABLAdur[1] = 0.33333 + 0.25; //women
+	CABLAdur[2] = 0.66667 + 0.25;   //MSM
+
+	if (CurrYear >= ICstart - 1) {
+		UltCABLArateFSW = 0.2778;
+	}
+}
+//decomission this for now
+void Int_CABLAMaxMedium() {
+	//8-16m + extra CAB protection from long acting
+	CABdur = "8-16m";
+	CABLAdur[0] = 0.666667 + 0.25; //men nonMSM
+	CABLAdur[1] = 0.666667 + 0.25; //women
+	CABLAdur[2] = 1.333333 + 0.25;   //MSM
+	if (CurrYear >= ICstart - 1) {
+		UltCABLArateFSW = 0.0926;
+	}
+}
+
+void Int_CABLAMaxHigh() {
+	//8-16m + extra CAB protection from long acting
+	CABdur = "8-16m";
+	CABLAdur[0] = 0.666667 + 0.25; //men nonMSM
+	CABLAdur[1] = 0.666667 + 0.25; //women
+	CABLAdur[2] = 1.333333 + 0.25;   //MSM
+	if (CurrYear >= ICstart - 1) {
+		UltCABLArateFSW = 0.1667;
+	}
+}
+
+
+
+
+
+void Int_CABLAPregDefault() {
+	for (int iy = ICstart; iy < 86; iy++) {
+		CABLApregnant[iy] = 0;
+	}
+}
+void Int_CABLAPregBp1() {
+	CABLApregnant[ICstart - 1] = 0.045;
+	CABLApregnant[ICstart + 1 - 1] = 0.09;
+	for (int iy = ICstart + 2 - 1; iy < 86; iy++) {
+		CABLApregnant[iy] = 0.135;
+	}
+}
+void Int_CABLAPregBp2() {
+	CABLApregnant[ICstart - 1] = 0.09;
+	CABLApregnant[ICstart + 1 - 1] = 0.18;
+	for (int iy = ICstart + 2 - 1; iy < 86; iy++) {
+		CABLApregnant[iy] = 0.27;
+	}
+}
+void Int_CABLAPregBp3() {
+	CABLApregnant[ICstart - 1] = 0.135;
+	CABLApregnant[ICstart + 1 - 1] = 0.27;
+	for (int iy = ICstart + 2 - 1; iy < 86; iy++) {
+		CABLApregnant[iy] = 0.405;
+	}
+}
+void Int_CABLAPregMax() {
+	CABLApregnant[ICstart - 1] = 0.18;
+	CABLApregnant[ICstart + 1 - 1] = 0.36;
+	for (int iy = ICstart + 2 - 1; iy < 86; iy++) {
+		CABLApregnant[iy] = 0.54;
+	}
+}
+
+
+void Int_TestAdolDefault() {
+	AdolHCTMultiplier = 1; //the same irrespective of LastHCT
+	LastAdolTest = 54;
+
+}
+
+void Int_TestAdolBp1() {
+	LastAdolTest = 55;
+
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastHCT == 59) { AdolHCTMultiplier = 1.3; }
+		if (LastHCT == 60) { AdolHCTMultiplier = 1.2875; }
+		if (LastHCT == 61) { AdolHCTMultiplier = 1.275; }
+		if (LastHCT == 62) { AdolHCTMultiplier = 1.2625; }
+		if (LastHCT == 63) { AdolHCTMultiplier = 1.25; }
+		if (LastHCT == 64) { AdolHCTMultiplier = 1.24; }
+		if (LastHCT == 65) { AdolHCTMultiplier = 1.23; }
+	}
+
+	if (bl == 2 || bl == 4) {
+		if (LastHCT == 59) { AdolHCTMultiplier = 1.35; }
+		if (LastHCT == 60) { AdolHCTMultiplier = 1.325; }
+		if (LastHCT == 61) { AdolHCTMultiplier = 1.3; }
+		if (LastHCT == 62) { AdolHCTMultiplier = 1.2875; }
+		if (LastHCT == 63) { AdolHCTMultiplier = 1.2625; }
+		if (LastHCT == 64) { AdolHCTMultiplier = 1.25; }
+		if (LastHCT == 65) { AdolHCTMultiplier = 1.235; }
+
+	}
+
+}
+
+void Int_TestAdolBp2() {
+	LastAdolTest = 56;
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastHCT == 59) { AdolHCTMultiplier = 1.6; }
+		if (LastHCT == 60) { AdolHCTMultiplier = 1.575; }
+		if (LastHCT == 61) { AdolHCTMultiplier = 1.55; }
+		if (LastHCT == 62) { AdolHCTMultiplier = 1.525; }
+		if (LastHCT == 63) { AdolHCTMultiplier = 1.5; }
+		if (LastHCT == 64) { AdolHCTMultiplier = 1.48; }
+		if (LastHCT == 65) { AdolHCTMultiplier = 1.46; }
+	}
+
+	if (bl == 2 || bl == 4) {
+		if (LastHCT == 59) { AdolHCTMultiplier = 1.7; }
+		if (LastHCT == 60) { AdolHCTMultiplier = 1.65; }
+		if (LastHCT == 61) { AdolHCTMultiplier = 1.6; }
+		if (LastHCT == 62) { AdolHCTMultiplier = 1.575; }
+		if (LastHCT == 63) { AdolHCTMultiplier = 1.525; }
+		if (LastHCT == 64) { AdolHCTMultiplier = 1.5; }
+		if (LastHCT == 65) { AdolHCTMultiplier = 1.47; }
+	}
+
+}
+void Int_TestAdolBp3() {
+	LastAdolTest = 57;
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastHCT == 59) { AdolHCTMultiplier = 1.9; }
+		if (LastHCT == 60) { AdolHCTMultiplier = 1.8625; }
+		if (LastHCT == 61) { AdolHCTMultiplier = 1.825; }
+		if (LastHCT == 62) { AdolHCTMultiplier = 1.7875; }
+		if (LastHCT == 63) { AdolHCTMultiplier = 1.75; }
+		if (LastHCT == 64) { AdolHCTMultiplier = 1.72; }
+		if (LastHCT == 65) { AdolHCTMultiplier = 1.69; }
+	}
+	if (bl == 2 || bl == 4) {
+		if (LastHCT == 59) { AdolHCTMultiplier = 2.05; }
+		if (LastHCT == 60) { AdolHCTMultiplier = 1.975; }
+		if (LastHCT == 61) { AdolHCTMultiplier = 1.9; }
+		if (LastHCT == 62) { AdolHCTMultiplier = 1.8625; }
+		if (LastHCT == 63) { AdolHCTMultiplier = 1.7875; }
+		if (LastHCT == 64) { AdolHCTMultiplier = 1.75; }
+		if (LastHCT == 65) { AdolHCTMultiplier = 1.705; }
+	}
+
+}
+
+
+void Int_TestAdolMax() {
+	LastAdolTest = 58;
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastHCT == 59) { AdolHCTMultiplier = 2.2; }
+		if (LastHCT == 60) { AdolHCTMultiplier = 2.15; }
+		if (LastHCT == 61) { AdolHCTMultiplier = 2.1; }
+		if (LastHCT == 62) { AdolHCTMultiplier = 2.05; }
+		if (LastHCT == 63) { AdolHCTMultiplier = 2; }
+		if (LastHCT == 64) { AdolHCTMultiplier = 1.96; }
+		if (LastHCT == 65) { AdolHCTMultiplier = 1.92; }
+
+	}
+	if (bl == 2 || bl == 4) {
+		if (LastHCT == 59) { AdolHCTMultiplier = 2.4; }
+		if (LastHCT == 60) { AdolHCTMultiplier = 2.3; }
+		if (LastHCT == 61) { AdolHCTMultiplier = 2.2; }
+		if (LastHCT == 62) { AdolHCTMultiplier = 2.15; }
+		if (LastHCT == 63) { AdolHCTMultiplier = 2.05; }
+		if (LastHCT == 64) { AdolHCTMultiplier = 2; }
+		if (LastHCT == 65) { AdolHCTMultiplier = 1.94; }
+	}
+}
+
+
+
+void Int_HCTBm2() {
+	double h;
+	LastHCT = 59;
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastSTpack == 73) { h = 0.36904; }
+		if (LastSTpack == 74) { h = 0.36545; }
+		if (LastSTpack == 75) { h = 0.36549; }
+		if (LastSTpack == 76) { h = 0.36554; }
+		if (LastSTpack == 77) { h = 0.36559; }
+	}
+
+	if (bl == 2 || bl == 4) {
+		if (LastSTpack == 73) { h = 0.3353010347462; }
+		if (LastSTpack == 74) { h = 0.332509866320266; }
+		if (LastSTpack == 75) { h = 0.332909826122849; }
+		if (LastSTpack == 76) { h = 0.33330978765447; }
+		if (LastSTpack == 77) { h = 0.333709748345332; }
+
+	}
+
+
+	for (int iy = ICstart; iy < 86; iy++) {
+		HCT1stTimeF25init[iy] = h;
+	}
+
+}
+
+void Int_HCTBm1() {
+	LastHCT = 60;
+	double h;
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastSTpack == 73) { h = 0.36904; }
+		if (LastSTpack == 74) { h = 0.36545; }
+		if (LastSTpack == 75) { h = 0.36549; }
+		if (LastSTpack == 76) { h = 0.36554; }
+		if (LastSTpack == 77) { h = 0.36559; }
+
+	}
+	if (bl == 2 || bl == 4) {
+		if (LastSTpack == 73) { h = 0.347924195621833; }
+		if (LastSTpack == 74) { h = 0.345133027195899; }
+		if (LastSTpack == 75) { h = 0.345532986998483; }
+		if (LastSTpack == 76) { h = 0.345932948530104; }
+		if (LastSTpack == 77) { h = 0.346332909220965; }
+
+
+	}
+	for (int iy = ICstart; iy < 86; iy++) {
+		HCT1stTimeF25init[iy] = h;
+	}
+
+}
+
+
+
+
+void Int_HCTDefault() {
+	double h;
+	LastHCT = 61;
+
+
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastSTpack == 73) { h = 0.38304; }
+		if (LastSTpack == 74) { h = 0.37945; }
+		if (LastSTpack == 75) { h = 0.37949; }
+		if (LastSTpack == 76) { h = 0.37954; }
+		if (LastSTpack == 77) { h = 0.37959; }
+
+	}
+
+	if (bl == 2 || bl == 4) {
+		if (LastSTpack == 73) { h = 0.360547356497466; }
+		if (LastSTpack == 74) { h = 0.357756188071532; }
+		if (LastSTpack == 75) { h = 0.358156147874116; }
+		if (LastSTpack == 76) { h = 0.358556109405737; }
+		if (LastSTpack == 77) { h = 0.358956070096599; }
+
+	}
+
+
+	HCT1stTimeF25init[ICstart - 1] = 0.2881;
+	for (int iy = ICstart + 1; iy < 86; iy++) {
+		HCT1stTimeF25init[iy] = h;
+	}
+
+}
+
+void Int_HCTBp1() {
+	LastHCT = 62;
+
+
+	double h;
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastSTpack == 73) { h = 0.39004; }
+		if (LastSTpack == 74) { h = 0.38645; }
+		if (LastSTpack == 75) { h = 0.38649; }
+		if (LastSTpack == 76) { h = 0.38654; }
+		if (LastSTpack == 77) { h = 0.38659; }
+
+
+	}
+
+	if (bl == 2 || bl == 4) {
+		if (LastSTpack == 73) { h = 0.3731705173731; }
+		if (LastSTpack == 74) { h = 0.370379348947166; }
+		if (LastSTpack == 75) { h = 0.37077930874975; }
+		if (LastSTpack == 76) { h = 0.371179270281371; }
+		if (LastSTpack == 77) { h = 0.371579230972232; }
+
+	}
+	for (int iy = ICstart; iy < 86; iy++) {
+		HCT1stTimeF25init[iy] = h;
+	}
+
+}
+
+void Int_HCTBp2() {
+	LastHCT = 63;
+
+	double h;
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastSTpack == 73) { h = 0.39704; }
+		if (LastSTpack == 74) { h = 0.39345; }
+		if (LastSTpack == 75) { h = 0.39349; }
+		if (LastSTpack == 76) { h = 0.39354; }
+		if (LastSTpack == 77) { h = 0.39359; }
+
+
+	}
+
+	if (bl == 2 || bl == 4) {
+		if (LastSTpack == 73) { h = 0.385793678248733; }
+		if (LastSTpack == 74) { h = 0.383002509822799; }
+		if (LastSTpack == 75) { h = 0.383402469625383; }
+		if (LastSTpack == 76) { h = 0.383802431157004; }
+		if (LastSTpack == 77) { h = 0.384202391847866; }
+
+	}
+	for (int iy = ICstart; iy < 86; iy++) {
+		HCT1stTimeF25init[iy] = h;
+	}
+
+}
+
+void Int_HCTBp3() {
+
+	LastHCT = 64;
+	double h;
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastSTpack == 73) { h = 0.40404; }
+		if (LastSTpack == 74) { h = 0.40045; }
+		if (LastSTpack == 75) { h = 0.40049; }
+		if (LastSTpack == 76) { h = 0.40054; }
+		if (LastSTpack == 77) { h = 0.40059; }
+	}
+
+	if (bl == 2 || bl == 4) {
+		if (LastSTpack == 73) { h = 0.398416839124367; }
+		if (LastSTpack == 74) { h = 0.395625670698433; }
+		if (LastSTpack == 75) { h = 0.396025630501017; }
+		if (LastSTpack == 76) { h = 0.396425592032637; }
+		if (LastSTpack == 77) { h = 0.396825552723499; }
+	}
+
+	for (int iy = ICstart; iy < 86; iy++) {
+		HCT1stTimeF25init[iy] = h;
+	}
+
+}
+
+void Int_HCTMax() {
+	LastHCT = 65;
+
+	double h;
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastSTpack == 73) { h = 0.41104; }
+		if (LastSTpack == 74) { h = 0.40745; }
+		if (LastSTpack == 75) { h = 0.40749; }
+		if (LastSTpack == 76) { h = 0.40754; }
+		if (LastSTpack == 77) { h = 0.40759; }
+	}
+
+	if (bl == 2 || bl == 4) {
+		if (LastSTpack == 73) { h = 0.41104; }
+		if (LastSTpack == 74) { h = 0.408248831574066; }
+		if (LastSTpack == 75) { h = 0.40864879137665; }
+		if (LastSTpack == 76) { h = 0.409048752908271; }
+		if (LastSTpack == 77) { h = 0.409448713599132; }
+	}
+
+	for (int iy = ICstart; iy < 86; iy++) {
+		HCT1stTimeF25init[iy] = h;
+	}
+}
+
+
+
+void Int_ARTuniversalBm2() {
+	UTTretention = 0;
+	if (bl == 0 || bl == 1) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 0.70;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+	if (bl == 3) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 0.70;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+
+}
+
+void Int_ARTuniversalBm1() {
+	UTTretention = 0;
+
+	if (bl == 0 || bl == 1) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 0.82;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+	if (bl == 3) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 0.82;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+
+}
+
+void Int_ARTuniversalDefault() {
+	UTTretention = 0;
+	for (int i = 0; i < 22; i++) {
+		RR_ARTinit[i] = 1;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+	}
+
+}
+
+
+
+void Int_ARTuniversalBp1() {
+	UTTretention = 1;
+	RetIntCost = 291719404; //this will replace default costs imported
+
+
+	if (bl == 0 || bl == 1) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 1.22;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+	if (bl == 3) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 1.22;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+}
+
+
+void Int_ARTuniversalBp2() {
+	UTTretention = 1;
+	RetIntCost = 583438808; //this will replace default costs imported
+	
+	if (bl == 0 || bl == 1) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 1.44;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+	if (bl == 3) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 1.44;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+}
+
+void Int_ARTuniversalBp3() {
+	UTTretention = 1;
+	RetIntCost = 875158212; //this will replace default costs imported
+	
+
+	if (bl == 0 || bl == 1) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 1.74;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+	if (bl == 3) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 1.74;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+}
+
+void Int_ARTuniversalBp4() {
+	UTTretention = 1;
+	RetIntCost = 1166877617; //this will replace default costs imported
+
+
+	if (bl == 0 || bl == 1) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 2.10;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+	if (bl == 3) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 2.10;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+}
+
+
+void Int_ARTuniversalBp5() {
+	UTTretention = 1;
+	RetIntCost = 1458597021; //this will replace default costs imported	
+
+
+	if (bl == 0 || bl == 1) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 2.58;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+	if (bl == 3) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 2.58;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+
+}
+
+void Int_ARTuniversalBp6() {
+	UTTretention = 1;
+	RetIntCost = 1750316425; //this will replace default costs imported
+	
+
+	if (bl == 0 || bl == 1) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 3.26;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+	if (bl == 3) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 3.26;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+}
+
+void Int_ARTuniversalMax() {
+	UTTretention = 1;
+	RetIntCost = 2042035829; //same as from importcosts.csv is applied, but wanted to be consistent
+
+
+	if (bl == 0 || bl == 1) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 4.28;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+	if (bl == 3) {
+		for (int i = 0; i < 22; i++) {
+			RR_ARTinit[i] = 4.28;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
+		}
+	}
+}
+
+
+
+void Int_STpackDefault() {
+	double h;
+	LastSTpack = 73;
+
+	if (bl == 2 || bl == 4) {
+		if (LastHCT == 59) { h = 0.3353010347462; }
+		if (LastHCT == 60) { h = 0.347924195621833; }
+		if (LastHCT == 61) { h = 0.360547356497466; }
+		if (LastHCT == 62) { h = 0.3731705173731; }
+		if (LastHCT == 63) { h = 0.385793678248733; }
+		if (LastHCT == 64) { h = 0.398416839124367; }
+		if (LastHCT == 65) { h = 0.41104; }
+
+	}
+
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastHCT == 59) { h = 0.36904; }
+		if (LastHCT == 60) { h = 0.37604; }
+		if (LastHCT == 61) { h = 0.38304; }
+		if (LastHCT == 62) { h = 0.39004; }
+		if (LastHCT == 63) { h = 0.39704; }
+		if (LastHCT == 64) { h = 0.40404; }
+		if (LastHCT == 65) { h = 0.41104; }
+	}
+
+	TotSTestprimaryPHC.out[CurrSim - 1][2023 - 1985] = 400;
+	TotSTestprimaryPHC.out[CurrSim - 1][2024 - 1985] = 600;
+	for (int i = 2025 - 1985; i < 86; i++) {
+		TotSTestprimaryPHC.out[CurrSim - 1][i] = -7344780.6 + 3707.4*(1985 + i); //linear regression based on the change above
+	}
+
+	for (int iy = ICstart - 1; iy < 86; iy++) {
+		HCT1stTimeF25init[iy] = h;
+	}
+	if (CurrYear >= (ICstart + 1985)) {
+		//baseline HIVST pack where majority (60%) of tests are going to PHC (200k), total distributed=333,333 at baseline	
+		SelfTestUptakeUlt[0] = 0.000673041069773436; //fixed
+		SelfTestUptakeUlt[1] = 0.000164730065841953; //taxi
+		SelfTestUptakeUlt[2] = 0.0183840957930371; //anc
+		SelfTestUptakeUlt[3] = 0.00161757047874691; //index
+		SelfTestUptakeUlt[4] = 0.0072141665070482; //work	
+	}
+
+
+}
+
+void Int_STpackBp1() {
+	double h;
+	LastSTpack = 74;
+
+	if (bl == 2 || bl == 4) {
+		if (LastHCT == 59) { h = 0.332509866320266; }
+		if (LastHCT == 60) { h = 0.345133027195899; }
+		if (LastHCT == 61) { h = 0.357756188071532; }
+		if (LastHCT == 62) { h = 0.370379348947166; }
+		if (LastHCT == 63) { h = 0.383002509822799; }
+		if (LastHCT == 64) { h = 0.395625670698433; }
+		if (LastHCT == 65) { h = 0.408248831574066; }
+
+	}
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastHCT == 59) { h = 0.36545; }
+		if (LastHCT == 60) { h = 0.37245; }
+		if (LastHCT == 61) { h = 0.37945; }
+		if (LastHCT == 62) { h = 0.38645; }
+		if (LastHCT == 63) { h = 0.39345; }
+		if (LastHCT == 64) { h = 0.40045; }
+		if (LastHCT == 65) { h = 0.40745; }
+	}
+
+	for (int iy = ICstart - 1; iy < 86; iy++) {
+		HCT1stTimeF25init[iy] = h;
+	}
+	TotSTestprimaryPHC.out[CurrSim - 1][ICstart + 1] = 62500 / 2;
+	for (int i = ICstart + 2; i < 86; i++) {
+		TotSTestprimaryPHC.out[CurrSim - 1][i] = 62500;
+	}
+	for (int i = 2025 - 1985; i < 86; i++) {
+		TotSTestprimaryPHC.out[CurrSim - 1][i] = -2448260.2 + 1235.8*(1985 + i); //linear regression based on the change above
+	}
+
+	if (CurrYear >= (ICstart + 1985)) {
+		SelfTestUptakeUlt[0] = 0; //fixed
+		SelfTestUptakeUlt[1] = 0.000617737746907324; //taxi
+		SelfTestUptakeUlt[2] = 0; //anc
+		SelfTestUptakeUlt[3] = 0.0606588929530091; //index
+		SelfTestUptakeUlt[4] = 0; //work
+	}
+
+
+
+}
+
+void Int_STpackBp2() {
+	double h;
+	LastSTpack = 75;
+
+	if (bl == 2 || bl == 4) {
+		if (LastHCT == 59) { h = 0.332909826122849; }
+		if (LastHCT == 60) { h = 0.345532986998483; }
+		if (LastHCT == 61) { h = 0.358156147874116; }
+		if (LastHCT == 62) { h = 0.37077930874975; }
+		if (LastHCT == 63) { h = 0.383402469625383; }
+		if (LastHCT == 64) { h = 0.396025630501017; }
+		if (LastHCT == 65) { h = 0.40864879137665; }
+
+	}
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastHCT == 59) { h = 0.36549; }
+		if (LastHCT == 60) { h = 0.37249; }
+		if (LastHCT == 61) { h = 0.37949; }
+		if (LastHCT == 62) { h = 0.38649; }
+		if (LastHCT == 63) { h = 0.39349; }
+		if (LastHCT == 64) { h = 0.40049; }
+		if (LastHCT == 65) { h = 0.40749; }
+
+	}
+
+	for (int iy = ICstart - 1; iy < 86; iy++) {
+		HCT1stTimeF25init[iy] = h;
+	}
+	TotSTestprimaryPHC.out[CurrSim - 1][ICstart + 1] = 83333 / 2;
+	for (int i = ICstart + 2; i < 86; i++) {
+		TotSTestprimaryPHC.out[CurrSim - 1][i] = 83333;
+	}
+	for (int i = 2025 - 1985; i < 86; i++) {
+		TotSTestprimaryPHC.out[CurrSim - 1][i] = -3338536.636 + 1685.181818*(1985 + i); //linear regression based on the change above
+	}
+	if (CurrYear >= (ICstart + 1985)) {
+		SelfTestUptakeUlt[0] = 0; //fixed
+		SelfTestUptakeUlt[1] = 0.000823650329209765; //taxi
+		SelfTestUptakeUlt[2] = 0; //anc
+		SelfTestUptakeUlt[3] = 0.0808785239373455; //index
+		SelfTestUptakeUlt[4] = 0; //work
+	}
+
+
+
+}
+
+void Int_STpackBp3() {
+	double h;
+	LastSTpack = 76;
+
+	if (bl == 2 || bl == 4) {
+		if (LastHCT == 59) { h = 0.33330978765447; }
+		if (LastHCT == 60) { h = 0.345932948530104; }
+		if (LastHCT == 61) { h = 0.358556109405737; }
+		if (LastHCT == 62) { h = 0.371179270281371; }
+		if (LastHCT == 63) { h = 0.383802431157004; }
+		if (LastHCT == 64) { h = 0.396425592032637; }
+		if (LastHCT == 65) { h = 0.409048752908271; }
+
+	}
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastHCT == 59) { h = 0.36554; }
+		if (LastHCT == 60) { h = 0.37254; }
+		if (LastHCT == 61) { h = 0.37954; }
+		if (LastHCT == 62) { h = 0.38654; }
+		if (LastHCT == 63) { h = 0.39354; }
+		if (LastHCT == 64) { h = 0.40054; }
+		if (LastHCT == 65) { h = 0.40754; }
+	}
+
+	for (int iy = ICstart - 1; iy < 86; iy++) {
+		HCT1stTimeF25init[iy] = h;
+	}
+	TotSTestprimaryPHC.out[CurrSim - 1][ICstart + 1] = 104167 / 2;
+	for (int i = ICstart + 2; i < 86; i++) {
+		TotSTestprimaryPHC.out[CurrSim - 1][i] = 104167;
+	}
+
+	for (int i = 2025 - 1985; i < 86; i++) {
+		TotSTestprimaryPHC.out[CurrSim - 1][i] = -4080433.667 + 2059.666667*(1985 + i); //linear regression based on the change above
+	}
+	if (CurrYear >= (ICstart + 1985)) {
+		SelfTestUptakeUlt[0] = 0; //fixed
+		SelfTestUptakeUlt[1] = 0.00102956291151221; //taxi
+		SelfTestUptakeUlt[2] = 0; //anc
+		SelfTestUptakeUlt[3] = 0.101098154921682; //index
+		SelfTestUptakeUlt[4] = 0; //work
+	}
+
+
+
+}
+
+
+void Int_STpackMax() {
+	double h;
+	LastSTpack = 77;
+
+	if (bl == 2 || bl == 4) {
+		if (LastHCT == 59) { h = 0.333709748345332; }
+		if (LastHCT == 60) { h = 0.346332909220965; }
+		if (LastHCT == 61) { h = 0.358956070096599; }
+		if (LastHCT == 62) { h = 0.371579230972232; }
+		if (LastHCT == 63) { h = 0.384202391847866; }
+		if (LastHCT == 64) { h = 0.396825552723499; }
+		if (LastHCT == 65) { h = 0.409448713599132; }
+
+	}
+	if (bl == 0 || bl == 1 || bl == 3) {
+		if (LastHCT == 59) { h = 0.36559; }
+		if (LastHCT == 60) { h = 0.37259; }
+		if (LastHCT == 61) { h = 0.37959; }
+		if (LastHCT == 62) { h = 0.38659; }
+		if (LastHCT == 63) { h = 0.39359; }
+		if (LastHCT == 64) { h = 0.40059; }
+		if (LastHCT == 65) { h = 0.40759; }
+	}
+
+
+	for (int iy = ICstart - 1; iy < 86; iy++) {
+		HCT1stTimeF25init[iy] = h;
+	}
+	TotSTestprimaryPHC.out[CurrSim - 1][ICstart + 1] = 125000 / 2;
+	for (int i = ICstart + 2; i < 86; i++) {
+		TotSTestprimaryPHC.out[CurrSim - 1][i] = 125000;
+	}
+	for (int i = 2025 - 1985; i < 86; i++) {
+		TotSTestprimaryPHC.out[CurrSim - 1][i] = -4896520.4 + 2471.6*(1985 + i); //linear regression based on the change above
+	}
+
+	if (CurrYear >= (ICstart + 1985)) {
+		SelfTestUptakeUlt[0] = 0; //fixed
+		SelfTestUptakeUlt[1] = 0.00123547549381465; //taxi
+		SelfTestUptakeUlt[2] = 0; //anc
+		SelfTestUptakeUlt[3] = 0.121317785906018; //index
+		SelfTestUptakeUlt[4] = 0; //work
+	}
+
+
+}
+
+
+void Int_POCVL_Inactive() {
+	PropWithPOCVL = 0.0;
+}
+void Int_POCVL_Active() {  //only assume 20% is feasible
+	PropWithPOCVL = 0.2;
+}
+
+void Int_UU_Inactive() {
+	PropMessaging = 0.0;
+}
+void Int_UU_Active() {
+	PropMessaging = 0.95;
+}
+
+void Int_MensClinics_Inactive() {
+	PropInClinics = 0.0;
+}
+void Int_MensClinics_Active() {
+	PropInClinics = 0.95;
+}
+
+void Int_PeerNav_Inactive() {
+	PropWithPN = 0.0;
+}
+void Int_PeerNav_Active() {
+	PropWithPN = 0.95;
+}
+
+
+
+
+
+
+void RecordOutputOpt() {
+	// Write prevalence outputs to text files
+	CondomUsageAdjFactor.RecordSampleOpt("CondomUsageAdjFactor.txt"); //LJ
+
+
+	PrevFSW.RecordSampleOpt("PrevFSW.txt");
+	NewHIVatBirth.RecordSampleOpt("NewHIVatBirth.txt");
+	NewHIVafterBirth.RecordSampleOpt("NewHIVafterBirth.txt");
+	NewHIVinANCandBF.RecordSampleOpt("NewHIVinANCandBF.txt");
+	TotalNewHIV.RecordSampleOpt("TotalNewHIV.txt");
+
+
+	// Write ART/disease stage outputs to text files
+	AdultsUnder200.RecordSampleOpt("AdultsUnder200.txt");
+	Adults200to349.RecordSampleOpt("Adults200to349.txt");
+	Adults350to499.RecordSampleOpt("Adults350to499.txt");
+	AdultsOver500.RecordSampleOpt("AdultsOver500.txt");
+	StartingART0.RecordSampleOpt("StartingART0.txt");
+	StartingART1.RecordSampleOpt("StartingART1.txt");
+	StartingART2to4.RecordSampleOpt("StartingART2to4.txt");
+	StartingART5to14.RecordSampleOpt("StartingART5to14.txt");
+	StartingART15to24M.RecordSampleOpt("StartingART15to24M.txt");
+	StartingART25to34M.RecordSampleOpt("StartingART25to34M.txt");
+	StartingART35to44M.RecordSampleOpt("StartingART35to44M.txt");
+	StartingART45M.RecordSampleOpt("StartingART45M.txt");
+	StartingART15to24F.RecordSampleOpt("StartingART15to24F.txt");
+	StartingART25to34F.RecordSampleOpt("StartingART25to34F.txt");
+	StartingART35to44F.RecordSampleOpt("StartingART35to44F.txt");
+	StartingART45F.RecordSampleOpt("StartingART45F.txt");
+	StartingARTtot.RecordSampleOpt("StartingARTtot.txt");
+	NewARTunder200.RecordSampleOpt("NewARTunder200.txt");
+	NewART200to349.RecordSampleOpt("NewART200to349.txt");
+	NewART350to499.RecordSampleOpt("NewART350to499.txt");
+	NewARTover500.RecordSampleOpt("NewARTover500.txt");
+	TotalART15F.RecordSampleOpt("TotalART15F.txt");
+	TotalART15M.RecordSampleOpt("TotalART15M.txt");
+	TotalARTunder15.RecordSampleOpt("TotalARTunder15.txt");
+
+	TotalART15F2L.RecordSampleOpt("TotalART15F2L.txt");
+	TotalART15M2L.RecordSampleOpt("TotalART15M2L.txt");
+
+	TotUnmet15F.RecordSampleOpt("TotUnmet15F.txt");
+	TotUnmet15M.RecordSampleOpt("TotUnmet15M.txt");
+	TotUnmetUnder15.RecordSampleOpt("TotUnmetUnder15.txt");
+	TotNewNeed15F.RecordSampleOpt("TotNewNeed15F.txt");
+	TotNewNeed15M.RecordSampleOpt("TotNewNeed15M.txt");
+	VLsuppressed.RecordSampleOpt("VLsuppressed.txt");
+
+	VLsuppressed1000.RecordSampleOpt("VLsuppressed1000.txt");
+	VLsuppressed1000P.RecordSampleOpt("VLsuppressed1000P.txt");
+	ARTerror.RecordSampleOpt("ARTerror.txt");
+	AdultRootM.RecordSampleOpt("AdultRootM.txt");
+	AdultRootF.RecordSampleOpt("AdultRootF.txt");
+	AgeDbnOnART_M.RecordSampleOpt("AgeDbnOnART_M.txt");
+	AgeDbnOnART_F.RecordSampleOpt("AgeDbnOnART_F.txt");
+
+	// Write other outputs to text files
+
+	PrevTested05.RecordSampleOpt("PrevTested05.txt");
+	PrevTested08.RecordSampleOpt("PrevTested08.txt");
+	PrevTested09.RecordSampleOpt("PrevTested09.txt");
+	PrevTested12.RecordSampleOpt("PrevTested12.txt");
+	PrevTested16.RecordSampleOpt("PrevTested16.txt");
+	PrevTested17.RecordSampleOpt("PrevTested17.txt");
+	AdultsEverTested.RecordSampleOpt("AdultsEverTested.txt");
+	//TestingBias.RecordSampleOpt("TestingBias.txt");
+	TotalHIVtests.RecordSampleOpt("TotalHIVtests.txt");
+	HIVtestsPos.RecordSampleOpt("HIVtestsPos.txt");
+	TotalHIVtestsU15.RecordSampleOpt("TotalHIVtestsU15.txt");
+	HIVtestsPosU15.RecordSampleOpt("HIVtestsPosU15.txt");
+	FalseNegPropn.RecordSampleOpt("FalseNegPropn.txt");
+	FirstHIVtestsPos.RecordSampleOpt("FirstHIVtestsPos.txt");
+	TotSTestFixedPoint.RecordSampleOpt("TotSTestFixedPoint.txt");
+	TotSTestTaxi.RecordSampleOpt("TotSTestTaxi.txt");
+	TotSTestANC.RecordSampleOpt("TotSTestANC.txt");
+	TotSTestIndex.RecordSampleOpt("TotSTestIndex.txt");
+	TotSTestWork1.RecordSampleOpt("TotSTestWork1.txt");
+	TotSTestWork2.RecordSampleOpt("TotSTestWork2.txt");
+	PosSTestFixedPoint.RecordSampleOpt("PosSTestFixedPoint.txt");
+	PosSTestTaxi.RecordSampleOpt("PosSTestTaxi.txt");
+	PosSTestANC.RecordSampleOpt("PosSTestANC.txt");
+	PosSTestIndex.RecordSampleOpt("PosSTestIndex.txt");
+	PosSTestWork1.RecordSampleOpt("PosSTestWork1.txt");
+	PosSTestWork2.RecordSampleOpt("PosSTestWork2.txt");
+	STtoARTfixedPoint.RecordSampleOpt("STtoARTfixedPoint.txt");
+	STtoARTtaxi.RecordSampleOpt("STtoARTtaxi.txt");
+	STtoART_ANC.RecordSampleOpt("STtoART_ANC.txt");
+	STtoARTindex.RecordSampleOpt("STtoARTindex.txt");
+	STtoARTwork1.RecordSampleOpt("STtoARTwork1.txt");
+	STtoARTwork2.RecordSampleOpt("STtoARTwork2.txt");
+	STuptakeByYr.RecordSampleOpt("STuptakeByYr.txt");
+	HIVtestUptakeF25.RecordSampleOpt("HIVtestUptakeF25.txt");
+	OItestingRate.RecordSampleOpt("OItestingRate.txt");
+	ProbTestedNextYr.RecordSampleOpt("ProbTestedNextYr.txt");
+
+
+
+	DiagnosedHIV_M.RecordSampleOpt("DiagnosedHIV_M.txt");
+	DiagnosedHIV_F.RecordSampleOpt("DiagnosedHIV_F.txt");
+	UndiagnosedHIV_M.RecordSampleOpt("UndiagnosedHIV_M.txt");
+	UndiagnosedHIV_F.RecordSampleOpt("UndiagnosedHIV_F.txt");
+	UndiagnosedHIV_U15.RecordSampleOpt("UndiagnosedHIV_U15.txt");
+	DiagnosedHIV_U15.RecordSampleOpt("DiagnosedHIV_U15.txt");
+
+	Undiagnosed2012.RecordSampleOpt("Undiagnosed2012.txt");
+	DiagnosedUntreated2012.RecordSampleOpt("DiagnosedUntreated2012.txt");
+	Treated2012.RecordSampleOpt("Treated2012.txt");
+	UntreatedByCD4_2012.RecordSampleOpt("UntreatedByCD4_2012.txt");
+	PaedCascade2018.RecordSampleOpt("PaedCascade2018.txt");
+	OutRRdiagDeathsPIP.RecordSampleOpt("OutRRdiagDeathsPIP.txt");
+	NewAIDSdiagTrend.RecordSampleOpt("NewAIDSdiagTrend.txt");
+	NewAIDSdiagAge.RecordSampleOpt("NewAIDSdiagAge.txt");
+	MSMpropn18to24.RecordSampleOpt("MSMpropn18to24.txt");
+	MarriedPropn1996.RecordSampleOpt("MarriedPropn1996.txt");
+	MarriedPropn2001.RecordSampleOpt("MarriedPropn2001.txt");
+	MarriedPropn2007.RecordSampleOpt("MarriedPropn2007.txt");
+	MarriedPropn2016.RecordSampleOpt("MarriedPropn2016.txt");
+
+	// Investment case outputs
+	NonAIDSdeaths.RecordSampleOpt("NonAIDSdeaths.txt");
+	NonAIDSdeathsHIVpos.RecordSampleOpt("NonAIDSdeathsHIVpos.txt");
+	AIDSdeathsART.RecordSampleOpt("AIDSdeathsART.txt");
+	LYlostAIDS.RecordSampleOpt("LYlostAIDS.txt");
+	//LYlostAIDSTB.RecordSampleOpt("LYlostAIDSTB.txt");
+	DALY_HIV.RecordSampleOpt("DALY_HIV.txt");
+	DALY_HIVpaed.RecordSampleOpt("DALY_HIVpaed.txt");
+	TotBirths.RecordSampleOpt("TotBirths.txt");
+	MalesOver15.RecordSampleOpt("MalesOver15.txt");
+	FemalesOver15.RecordSampleOpt("FemalesOver15.txt");	
+	MarriedM50.RecordSampleOpt("MarriedM50.txt");
+	MarriedF50.RecordSampleOpt("MarriedF50.txt");
+	TotInfants.RecordSampleOpt("TotInfants.txt");
+	Children1to2.RecordSampleOpt("Children1to2.txt");
+	Children3to5.RecordSampleOpt("Children3to5.txt");
+	Children6to13.RecordSampleOpt("Children6to13.txt");
+	Adolesc15to19.RecordSampleOpt("Adolesc15to19.txt");
+	Children6to18.RecordSampleOpt("Children6to18.txt");
+	Total15to24.RecordSampleOpt("Total15to24.txt");
+	TotPaedHIV.RecordSampleOpt("TotPaedHIV.txt");
+	Prev15to24M.RecordSampleOpt("Prev15to24M.txt");
+	Prev15to24F.RecordSampleOpt("Prev15to24F.txt");
+	Prev15to49M.RecordSampleOpt("Prev15to49M.txt");
+	Prev15to49F.RecordSampleOpt("Prev15to49F.txt");
+	NewARTunder200F.RecordSampleOpt("NewARTunder200F.txt");
+	NewART200to349F.RecordSampleOpt("NewART200to349F.txt");
+	NewART350to499F.RecordSampleOpt("NewART350to499F.txt");
+	NewARTover500F.RecordSampleOpt("NewARTover500F.txt");
+	StartingART1to2.RecordSampleOpt("StartingART1to2.txt");
+	StartingART3to5.RecordSampleOpt("StartingART3to5.txt");
+	StartingART6to13.RecordSampleOpt("StartingART6to13.txt");
+	TotLateUnder15.RecordSampleOpt("TotLateUnder15.txt");
+	TotEarlyInfants.RecordSampleOpt("TotEarlyInfants.txt");
+	TotEarly1to4.RecordSampleOpt("TotEarly1to4.txt");
+	PreARTunder200M.RecordSampleOpt("PreARTunder200M.txt");
+	PreART200to349M.RecordSampleOpt("PreART200to349M.txt");
+	PreART350to499M.RecordSampleOpt("PreART350to499M.txt");
+	PreARTover500M.RecordSampleOpt("PreARTover500M.txt");
+	PreARTunder200F.RecordSampleOpt("PreARTunder200F.txt");
+	PreART200to349F.RecordSampleOpt("PreART200to349F.txt");
+	PreART350to499F.RecordSampleOpt("PreART350to499F.txt");
+	PreARTover500F.RecordSampleOpt("PreARTover500F.txt");
+	DiscontinuedART_M.RecordSampleOpt("DiscontinuedART_M.txt");
+	DiscontinuedART_F.RecordSampleOpt("DiscontinuedART_F.txt");
+	TotNewNeed500M.RecordSampleOpt("TotNewNeed500M.txt");
+	TotNewNeed500F.RecordSampleOpt("TotNewNeed500F.txt");
+	TotSexActs.RecordSampleOpt("TotSexActs.txt");
+	TotProtSexActs.RecordSampleOpt("TotProtSexActs.txt");
+	TotProtSexActs18.RecordSampleOpt("TotProtSexActs18.txt");
+	MMC10to14.RecordSampleOpt("MMC10to14.txt");
+	MMC15to19.RecordSampleOpt("MMC15to19.txt");
+	MMC20to24.RecordSampleOpt("MMC20to24.txt");
+	MMC25to49.RecordSampleOpt("MMC25to49.txt");
+	MMCover50.RecordSampleOpt("MMCover50.txt");
+	Circumcised15to49.RecordSampleOpt("Circumcised15to49.txt");
+	AdultsEverTestedM.RecordSampleOpt("AdultsEverTestedM.txt");
+	AdultsEverTestedF.RecordSampleOpt("AdultsEverTestedF.txt");
+	BirthsDiagHIV.RecordSampleOpt("BirthsDiagHIV.txt");
+	BirthsOver500.RecordSampleOpt("BirthsOver500.txt");
+	Births350to499.RecordSampleOpt("Births350to499.txt");
+	Births200to349.RecordSampleOpt("Births200to349.txt");
+	BirthsUnder200.RecordSampleOpt("BirthsUnder200.txt");
+	TotSexWorkers.RecordSampleOpt("TotSexWorkers.txt");
+	SWsexActs.RecordSampleOpt("SWsexActs.txt");
+	SWsexActsProt.RecordSampleOpt("SWsexActsProt.txt");
+
+	MenOnPrEP.RecordSampleOpt("MenOnPrEP.txt");
+	MSMonPrEP.RecordSampleOpt("MSMonPrEP.txt");
+
+	WomenOnPrEP.RecordSampleOpt("WomenOnPrEP.txt");
+	FSWonPrEP.RecordSampleOpt("FSWonPrEP.txt");
+	TotOnPrEP.RecordSampleOpt("TotOnPrEP.txt");
+	TotOnCABLA.RecordSampleOpt("TotOnCABLA.txt");
+	TotOnCABLA_M.RecordSampleOpt("TotOnCABLA_M.txt"); //LJ
+	TotOnCABLA_F.RecordSampleOpt("TotOnCABLA_F.txt"); //LJ
+
+
+	NewPrEPinAGYW.RecordSampleOpt("NewPrEPinAGYW.txt");
+	NewPrEPinFSW.RecordSampleOpt("NewPrEPinFSW.txt");
+	NewPrEPinMSM.RecordSampleOpt("NewPrEPinMSM.txt");
+
+	NewPrEP_M.RecordSampleOpt("NewPrEP_M.txt");
+	NewPrEP_F.RecordSampleOpt("NewPrEP_F.txt");
+
+	PrEPcoverageAllF.RecordSampleOpt("PrEPcoverageAllF.txt");
+	PrEPcoverageAGYW.RecordSampleOpt("PrEPcoverageAGYW.txt");
+	PrEPcoverageFSW.RecordSampleOpt("PrEPcoverageFSW.txt");
+	PrEPcoverageMSM.RecordSampleOpt("PrEPcoverageMSM.txt");
+
+	NewCABLAinAGYW.RecordSampleOpt("NewCABLAinAGYW.txt");
+	NewCABLAinFSW.RecordSampleOpt("NewCABLAinFSW.txt");
+	NewCABLAinMSM.RecordSampleOpt("NewCABLAinMSM.txt");
+
+	TotSexWorkers.RecordSampleOpt("TotSexWorkers.txt");
+	TotalHIVtests15_19.RecordSampleOpt("TotalHIVtests15_19.txt");
+
+	Total15_19.RecordSampleOpt("Total15_19.txt");
+
+
+}
+
+
+
+
+
+
+void PostOutputArray::RecordSampleOpt(char* filout) {
+	int i, c;
+	for (i = 0; i < ResampleSize; i++) {
+		if (i == 0 && CountInt[i] == 0) {
+			ofstream file(filout); //create new file if first simulation and baseline intervention and first optimisation set
+			if (reduceCountInt[i] == 0) {
+				file << setw(6) << right << CountInt[i] << "	" << setw(6) << right << i << "	" << setw(6) << right << SampleID[i];
+				for (c = 0; c < columns; c++) {
+					file << "	" << setw(10) << right << std::fixed << std::setprecision(20) << out[i][c];
+				}
+				file << endl;
+			}
+			file.close();
+		}
+		else {
+			std::fstream file;
+			file.open(filout, std::fstream::app); //file gets opened, not created new, so we can just append
+			if (reduceCountInt[i] == 0) {
+				file << setw(6) << right << CountInt[i] << "	" << setw(6) << right << i << "	" << setw(6) << right << SampleID[i];
+				for (c = 0; c < columns; c++) {
+					file << "	" << setw(10) << right << std::fixed << std::setprecision(20) << out[i][c];
+				}
+				file << endl;
+			}
+			file.close();
+		}
+	}
+}
+

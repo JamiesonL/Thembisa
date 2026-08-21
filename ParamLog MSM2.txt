@@ -1,0 +1,18 @@
+target	year	ptest	LENinit
+FSW target: 36000 | MSM target: 9360 | year: 2027 | parm: 0.0305569 | LENinit: 9875.14
+FSW target: 36000 | MSM target: 9360 | year: 2028 | parm: 0.0194282 | LENinit: 9378.53
+FSW target: 36000 | MSM target: 18720 | year: 2027 | parm: 0.0611137 | LENinit: 19678.1
+FSW target: 36000 | MSM target: 18720 | year: 2028 | parm: 0.0390664 | LENinit: 18792.8
+FSW target: 36000 | MSM target: 28080 | year: 2027 | parm: 0.0866706 | LENinit: 27822.4
+FSW target: 36000 | MSM target: 28080 | year: 2028 | parm: 0.0588618 | LENinit: 28216.8
+FSW target: 36000 | MSM target: 37440 | year: 2027 | parm: 0.117227 | LENinit: 37495.8
+FSW target: 36000 | MSM target: 37440 | year: 2028 | parm: 0.0788986 | LENinit: 37689.5
+FSW target: 36000 | MSM target: 46800 | year: 2027 | parm: 0.147784 | LENinit: 47100.2
+FSW target: 36000 | MSM target: 46800 | year: 2028 | parm: 0.0991408 | LENinit: 47192.8
+FSW target: 36000 | MSM target: 56160 | year: 2027 | parm: 0.178341 | LENinit: 56636.7
+FSW target: 36000 | MSM target: 56160 | year: 2028 | parm: 0.119587 | LENinit: 56724.9
+FSW target: 36000 | MSM target: 65520 | year: 2027 | parm: 0.208898 | LENinit: 66106.4
+FSW target: 36000 | MSM target: 65520 | year: 2028 | parm: 0.140236 | LENinit: 66284.4
+FSW target: 36000 | MSM target: 74880 | year: 2027 | parm: 0.239455 | LENinit: 75510.3
+FSW target: 36000 | MSM target: 74880 | year: 2028 | parm: 0.161085 | LENinit: 75869.5
+FSW target: 36000 | MSM target: 84240 | year: 2027 | parm: 0.270012 | LENinit: 84849.4

@@ -1,15 +1,15 @@
 HighRiskPropn[2]				
-0.4463	0.3188
+0.4300	0.3071
 PartnerRate20F	
 3.3	
 RRpartnerLow[2]	
-0.1696	0.3032
+0.1569	0.2332
 RRpartnerMarried[2]	
 0.2754	0.1666
 GammaMeanF, GammaSDF	
-37.72	20.98
+36.60	20.15
 IncreaseGammaMeanF
-0.826
+0.873
 DebutMedian[2]	
 17.5	16.5
 DebutLow[2]	
@@ -21,7 +21,7 @@ MeanAgeDif, SDageDif
 MeanAgeDifLT, SDageDifLT	
 6	5
 Assortativeness	
-0.8605						
+0.6371						
 ClientsPA				
 750							
 FSWcontactAge21				
@@ -45,9 +45,9 @@ ORcondomFSW
 InitCondom
 0.051
 CondomBias
-0.626
+0.816
 CondomAdjProv
-1.013
+0.948
 RRcondomContracep
 0.344
 IncrCondomBCC
@@ -59,7 +59,7 @@ MedianCondomBCC
 ShapeCondomBCC
 6.79
 VCTcondom
-0.317
+0.474
 VCT_FSWentry 0.157
 0.37
 ARTcondom
@@ -69,15 +69,15 @@ HIVeffectSex[4]
 HIVeffectFSWentry[4]
 0.00	0.12	0.35	0.60
 InitFSWprev
-0.000577	0.001000
+0.000588	0.001000
 TransmST[2]
-0.006372	0.013054
+0.006337	0.01482
 TransmLT[2]	
-0.000617	0.001264
+0.001123	0.002625
 TransmFSW[2]	
-0.006372	0.001108
+0.006337	0.000868
 RRclientToFSW1985 	
-9.69			
+12.1	
 EctopyEffect
 0.00	0.15
 RelInfecRiskST[2][2][2]
@@ -103,25 +103,27 @@ VLeffectInfectivity
 VLdifPer100CD4
 0.12	0.18
 ORsuppressionIeDEA
-1.066			
+1.161			
 ORsuppressionCD4 in males
-1.95	1.74	1.49	1.00
-3.78	3.38	2.89	1.94
+2.42	2.12	1.65	1.00
+4.03	3.52	2.74	1.66
 ORsuppressionCD4 in females
-2.38	2.12	1.82	1.22
-4.63	4.13	3.53	2.38
+2.95	2.58	2.01	1.22
+4.91	4.29	3.34	2.02
+ORsuppressionPWID
+0.24
 CondomEfficacy			
 0.9			
 InfToVirulenceRatio			
 0.1			
 CD4decline[3]			
-0.2863	0.4581	0.3054
+0.3168	0.5068	0.3379
 CD4duration[0]			
 0.25			
 RRmort200to350			
 0.13			
 CD4mort[1]			
-0.2481					
+0.2745					
 OIincidence[6]
 0.05	0.05	0.12	0.27	0.90	0.10
 WHO4incidence[5]
@@ -133,21 +135,21 @@ RR_ARTinitiation[5]
 Haemodilution[4]
 0.29	0.29	0.55	0.26
 RRper10yr
-1.142		
+1.147		
 RRperCalYr		
 0.9982		
 RRuntreatedMortF		
-0.958		
+0.917		
 MinMort[3]		
 0.31	0.39	0.61
 RednLogMort[3]		
-5.35	5.35	5.35
+4.98	4.98	4.98
 IeDEAbias		
 1.000	0.800	
 ProvARTmortAdj
-0.804
+0.773
 ARTinterruptionRate
-0.082
+0.136
 RRinterruptionM
 1.20
 ARTinterruption20mult
@@ -155,11 +157,13 @@ ARTinterruption20mult
 ARTresumptionMin
 0.40	0.50
 RR_ARTstartM
-0.781
+0.666
 RR_ARTstart1stMo, RR_ART1stMo2011
 10.0	5.99
 COVIDimpactARTstart
 0.28	
+USAIDexitImpact
+0.25
 UltARTdelay[2]				
 36.00	18.00			
 MinARTdelay[2]				
@@ -238,13 +242,13 @@ MedianCirc
 ShapeCirc				
 2.74				
 MCefficacy				
-0.6				
+0.60	0.46				
 MMCdataYear				
-2023				
+2024				
 UltMMCprob				
-0.181				
+0.192				
 UltMMCyear				
-2024	
+2025	
 VMMCdataAdj
 1.00			
 PrEPefficacy[2]
@@ -262,17 +266,17 @@ PrEPdur[2]
 PrEPdurPreg
 0.50
 PrEPdataYr 
-2023
-UltPrEPrateFSW
-0.035
-OR_PrEPlowPreg 
-0.329
-CABLAefficacy[2]
-0.96	0.96
-CABLAefficacyMSM
-0.95
-CABLAefficacyPreg
-0.96
+2024	
+UltPrEPrateFSW	
+0.062	
+OR_PrEPlowPreg 	
+0.329	
+CABLAefficacy[2]	
+0.99	0.99
+CABLAefficacyMSM	
+0.99	
+CABLAefficacyPreg	
+0.99	
 CondomRednCABLA[2]
 0.10	0.10
 CABLAdur[2]
@@ -280,9 +284,9 @@ CABLAdur[2]
 CABLAdurPreg
 2.25
 CABLAdataYr
-2025
+2026
 UltCABLArateFSW
-0.00
+0.03
 MicrobicideEff				
 0.40				
 CondomRednVM				
@@ -294,13 +298,15 @@ VMdur
 RecencyBiasANC
 0.04
 RRfertHIV
-1.136
+1.219
 RRfertCD4
-1.91	1.00	0.99	0.90	0.66
+2.09	1.00	0.99	0.90	0.66
 RRfertDiag
-0.768
+0.821
 RRfertART
 1.35
+RRfertVertHIV
+0.25
 RR_ARTeffectAge
 1.00
 RR_ARTeffect2020
@@ -320,10 +326,26 @@ ChangeAgeDifMSM
 SDageDifMSM
 5.00
 MtoM_ST
-0.0228
+0.0241
 InitMSMprevRatio
 3.00
 RR_HIV_TGW
 1.50
 PropnTGW
 0.10
+InitPWIDpropnM
+0.00026
+StartInjDrugs
+0.00048
+RR_IDfem
+0.25	0.15
+GammaMeanInj, GammaSDinj	
+29.5	7.5
+RRinjDrug2000	
+0.15	
+StopInjDrugs	
+0.14	
+BaseTransmNS	
+0.00247	
+MonthlyInj	
+74.3	
