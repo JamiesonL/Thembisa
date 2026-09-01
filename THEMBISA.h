@@ -3006,13 +3006,13 @@ double CurrSeTB_PHCdXCR[2];
 double seDCXR = 0.83;
 
 // Variables
-string costingl[100]; //labels for imported costs
-double costing[100];  //values for imported costs
-int cc;
+//string costingl[100]; //labels for imported costs
+//double costing[100];  //values for imported costs
+//int cc;
 
-string costpopl[100]; //labels for cost population, to export
+//string costpopl[100]; //labels for cost population, to export
 
-double costpop[100][86]; //values for cost population, to export, array denote types and year //MK changed it to double
+//double costpop[100][86]; //values for cost population, to export, array denote types and year //MK changed it to double
 double BaselineCost[86];
 double BaselineImpactNewTB[86];
 
@@ -3042,8 +3042,8 @@ int ILTFU_indi; //indicator to activate intervention to reduce ILTFU
 
 //******************************************************************************************Parameters
 int Optimise = 0; //0=no optimisation, 1=optimisation for HIV/TB IC, 2= for calibrating/identifying parameter values
-const int intercount = 96; //How many additional interventions to run
-const int maxinter = 96; //use to make sure arrays are large enough for additional testing
+const int intercount = 96 + 56; //How many additional interventions to run //MK added +56 slack for TB levers (14 scenarios x ~4 levels avg)
+const int maxinter = 96 + 56; //use to make sure arrays are large enough for additional testing
 
 const int ICstart = 2027 - 1985;  //should be 2027 for HIV IC
 const int timehorizon = 52;  //NB should be 20 years.
@@ -3160,6 +3160,14 @@ double DALYforICER[ResampleSize]; //DALY for ICER
 long long HIVforICER[ResampleSize]; //HIV infections for ICER&&
 long long baselinecost[ResampleSize]; //Baseline TotalCost
 double baselineEff[ResampleSize]; //Effectiveness measure for baseline - changed from long long to double 20 jan 16
+
+// TB ICER outputs
+double TBLYLforICER[ResampleSize];     // TB life-years lost
+double TBDALYforICER[ResampleSize];    // TB DALYs, summed over the investment-case horizon
+long long TBCasesforICER[ResampleSize];// TB cases averted proxy (NewActiveTBadult)
+double CombinedLYLforICER[ResampleSize];  // = LYLforICER + TBLYLforICER  (HIV/TB joint LYL)
+double CombinedDALYforICER[ResampleSize]; // = DALYforICER + TBDALYforICER 
+
 
 int UTTretention = 0;
 double RetIntCost = 0;

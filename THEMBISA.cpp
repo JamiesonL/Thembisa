@@ -27019,12 +27019,24 @@ void CalcEffect() {
 		LYLforICER[iy] = 0; //Reset values to zero, because we will loop through years and add them up
 		DALYforICER[iy] = 0;
 		HIVforICER[iy] = 0;
+		TBLYLforICER[iy] = 0;  // TB outcomes 
+		TBDALYforICER[iy] = 0; 
+		TBCasesforICER[iy] = 0;
+
 		for (int ly = ICstart; ly <= (ICstart + timehorizon - 1); ly++) {
 			LYLforICER[iy] = LYLforICER[iy] + round(LYlostAIDS.out[iy][ly - 1] * 1000) / 1000;
 			DALYforICER[iy] = DALYforICER[iy] + round(DALY_HIV.out[iy][ly - 1] * 1000) / 1000 + round(DALY_HIVpaed.out[iy][ly - 1] * 1000) / 1000;
 			HIVforICER[iy] = HIVforICER[iy] + round(TotalNewHIV.out[iy][ly - 1] * 1000) / 1000;
 
+			// TB outcomes 
+            TBLYLforICER[iy]   += round(AdultLYlostTB.out[iy][ly - 1] * 1000) / 1000;
+            TBDALYforICER[iy]  += round(AdultTBDALYs.out[iy][ly - 1] * 1000) / 1000;
+            TBCasesforICER[iy] += round(NewActiveTBadult.out[iy][ly - 1] * 1000) / 1000;
 		}
+		
+		//combined TB-HIV ICERs
+		//CombinedLYLforICER[iy]  = LYLforICER[iy]  + TBLYLforICER[iy];
+        //CombinedDALYforICER[iy] = DALYforICER[iy] + TBDALYforICER[iy];
 	}
 }
 
@@ -27123,7 +27135,6 @@ void SetupCosts()
 	}
 	file.close();
 }
-
 
 
 void SaveParmNormal() {
@@ -27348,12 +27359,9 @@ void RecordParameters(int chosen) {
 	}
 	p++;
 
-
 	filepar.close();
 
-
 }
-
 
 
 void CalcCostModel()
@@ -27416,8 +27424,6 @@ void CalcCostModel()
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(DiagnosedHIV_F.out[CurrSim - 1][ly]);
 		cc++;
-
-
 
 		costpopl[cc] = "Total men diagnosed";
 		costpop[cc][ly] = 0;
@@ -27526,9 +27532,6 @@ void CalcCostModel()
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(VLsuppressed.out[CurrSim - 1][ly] * 1000);
 		cc++;
-
-
-
 
 
 		costpopl[cc] = "Mens clinics (non-ART cost)"; //this will account for cost not related to ART (that is accounted elsewhere)
@@ -27646,15 +27649,12 @@ void CalcCostModel()
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(NewCABLAinPWID.out[CurrSim - 1][ly]);
 		cc++;
-
 			
 	costpopl[cc] = "LAPrEP Total"; //STOCK 
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(NewCABLAinFSW.out[CurrSim - 1][ly] + NewCABLAinNonFSW.out[CurrSim - 1][ly] +
 			NewCABLAinMSM.out[CurrSim - 1][ly] + NewCABLAinNonMSM.out[CurrSim - 1][ly] + NewCABLAinPWID.out[CurrSim - 1][ly]);
 		cc++;
-
-
 
 		costpopl[cc] = "Women using the vaginal ring"; //STOCK 
 		costpop[cc][ly] = 0;
@@ -27696,7 +27696,6 @@ void CalcCostModel()
 		costpop[cc][ly] = round(TotBirthsHIV.out[CurrSim - 1][ly - 1] * PCRbirth[ly] + TotBirthsHIV.out[CurrSim - 1][ly - 1] * PCR6week[ly] + 
 			TotBirthsHIV.out[CurrSim - 1][ly - 1] * PCR6month[ly]);
 		cc++;
-
 
 
 		costpopl[cc] = "Combination prevention package service provision through outreach to CSW"; //STOCK
@@ -27805,7 +27804,6 @@ void CalcCostModel()
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = HIVSTcount;
 		cc++;		
-
 
 		long long TestPregNeg = round((round(TotBirths.out[CurrSim - 1][ly - 1]) - round(TotBirthsHIV.out[CurrSim - 1][ly - 1]))*CovPregWomenTest.out[CurrSim - 1][ly]); //used later
 		//long long TestPregPos = round(round(TotBirthDiagnosed.out[CurrSim - 1][ly - 1])* CovPregWomenTest.out[CurrSim - 1][ly]); //used later
@@ -27949,7 +27947,6 @@ void CalcCostModel()
 		totalHCT[ly] += costpop[cc][ly];
 		cc++;
 
-
 		costpopl[cc] = "Rapid HIV tests in U15 (negative)"; //STOCK
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(TotalHIVtestsU15.out[CurrSim - 1][ly] * (1 - HIVtestsPosU15.out[CurrSim - 1][ly]));
@@ -27964,8 +27961,6 @@ void CalcCostModel()
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = (TotalHIVtests15_19.out[CurrSim - 1][ly] / Total15_19.out[CurrSim - 1][ly]) * 1000;
 		cc++;
-
-
 
 		//proportion = number of sexual offences in RSA in 2016/17 [n=49,660] divide by the total population in same year [N=56,910,995]
 		costpopl[cc] = "Post-Exposure Prophylaxis (PEP)"; //STOCK
@@ -28253,6 +28248,7 @@ void CalcCostModel()
 		cc++;
 
 		costpopl[cc] = "Number of TB contacts";
+		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round((TBindexCasesLastYr * HHcontactsPerCase));
 		cc++;
 
@@ -28599,7 +28595,6 @@ void CalcCostModel()
 				//if (col >= 5) { 
 				if (Optimise == 1) { CostforICER[CurrSim - 1][RunIntervention] = CostforICER[CurrSim - 1][RunIntervention] + totalcost[row][col]; }
 				if (Optimise == 0) { TotalCost[CurrSim - 1] = TotalCost[CurrSim - 1] + totalcost[row][col]; }
-			
 			}
 		}
 
