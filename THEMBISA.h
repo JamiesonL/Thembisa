@@ -640,6 +640,8 @@ double TBadultMortOnRx1[86][2]; ///< TB deaths in 1st line treated adults, by ye
 double TBadultMortOnRx2[86][2]; ///< TB deaths in 2nd line treated adults, by year and sex
 double TBadultRxBy5yr[86][16][2]; ///< True TB Rx initiations by year, age group and sex
 double TBdeathsAdultHIV[86]; ///< Number of TB deaths in adults living with HIV
+double TBdeathsAdultHIV_M[86][81]; // Number of TB deaths in adults living with HIV by year and age //lj
+double TBdeathsAdultHIV_F[86][81]; // Number of TB deaths in adults living with HIV by year and age  //lj
 double TBsymptomScreened[86]; ///< % of symptomatic TB patients screened microbiologically
 							  ///< if specifically seeking Rx for TB or TB-like symptoms
 double TBsymptomScreened2[86]; ///< % of patients with TB/TB-like symptoms screened micro-
@@ -2953,6 +2955,40 @@ OutputByAge FemTBdeathsAS(16, 56);
 OutputByAge MaleTBtreatAS(16, 56);
 OutputByAge FemTBtreatAS(16, 56);
 
+
+//************************************************************** ADDITIONAL OUTPUTS FOR TB-IC ****************************************************************************
+//******************************************************************************************************************************************************
+//Additional outputs MK added 
+//PostOutputArray TotLabDiagAllTBscreening(56); // Added from LJ
+PostOutputArray TotRxInitAllTBscreening(56); // Added by MK
+PostOutputArray Diagnosed_LinkedIN(56); 
+PostOutputArray PropnSymptomCheck1(56);
+PostOutputArray PropnSymptomCheck2(56); 
+
+PostOutputArray NumberTBContacts(56);
+
+PostOutputArray TotalScreensTargettedD2D(56); 
+PostOutputArray Total_dCXRscreensD2DPort(56); 
+PostOutputArray TotTSwabScreensPHC(56); 									   
+PostOutputArray DiagnosedDrugSuscTest(56); // to be able to cost those follow-up for 
+										   // drug susceptibility 
+PostOutputArray LinkedToTreatment(56); 
+PostOutputArray FollowupTreat(56); // those diagnosed and started on treatment 
+
+//IPT
+//added by MK
+PostOutputArray TPTdenominator(56); //MK-added
+PostOutputArray NumberPreviousTB(56); //MK-added 
+PostOutputArray IPTforPLHIV(56); 
+PostOutputArray TPT3HPforPLHIV(56);
+PostOutputArray IPTforHH(56);
+PostOutputArray TPT3HPforHH(56);
+
+//DALY
+PostOutputArray AdultYLdisabilityTB(56);//MK - Years Lived with Disability 
+//PostOutputArray AdultYLdisabilityTB(56);//MK - Years Lived with Disability 
+PostOutputArray AdultTBDALYs(56); //MK - DALYS 
+
 //DALY additional for post-TB
 PostOutputArray PostTB_HIVneg(56);
 PostOutputArray PostTB_HIVpos(56);
@@ -2962,6 +2998,10 @@ PostOutputArray AdultPostTBDALYs(56);
 PostOutputArray AdultEpisodePostTBDALYS(56);
 
 PostOutputArray LYlostAIDSTB(65); //LJam
+PostOutputArray AdultLYlostTB_HIVpos(65); //LJam
+PostOutputArray AdultLYlostTB_HIVneg(65); 
+
+
 
 // ****** TB-IC COST-MODEL *******
 //NB: Nov 2024. In void RunSample() ensure that for running the for TB-IC, ReadAllFiles() is called at each re-sample.
@@ -3025,12 +3065,12 @@ int TBOptCounter = 0; //global counter
 int TBOptCounterMax = 0;
 double TBOptmiseParms[ROWS_TBOpt][COLS_TBOpt];
 
-double unitcost2[100]; //used in output of total costs
-string totalcostl[100];//labels for total cost, to export
-string unitlabel[100];//units for cost, to export
+//double unitcost2[100]; //used in output of total costs
+//string totalcostl[100];//labels for total cost, to export
+//string unitlabel[100];//units for cost, to export
 
-long long totalcost[100][54]; //values for total cost, to export, array denote types and year
-long long TotalCost[ResampleSize]; //Totalcost over 20 years
+//long long totalcost[100][54]; //values for total cost, to export, array denote types and year
+//long long TotalCost[ResampleSize]; //Totalcost over 20 years
 
 int ILTFU_indi; //indicator to activate intervention to reduce ILTFU
 //double Diagnosed_LinkedIN[100][86];

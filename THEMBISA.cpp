@@ -27369,6 +27369,10 @@ void CalcCostModel()
 	//loop through years for given CurrSim, to calculate each of the study populations and costs
 	long long totalHCT[86]; //for additional outputs, to be added up
 
+	//Additional TB variables 
+	double RxChildTB = 33400; // figures extracted from WHO website 
+	double RxMonitorSmearTest2 = 4;
+	
 	//flagcount = 0;
 
 	//cost populations taking into account stock/flow movements, so we are only calculating populations from 1986 onwards, hence ly starts from = 1
