@@ -275,7 +275,7 @@ double PrEPefficacyMSM; ///< Oral PrEP efficacy in MSM
 double PrEPefficacyPreg; ///< PrEP efficacy in pregnant women
 double CondomRednPrEP[2]; ///< Reduction in condom use if using oral PrEP (M, F)
 double FreqHCTinPrEP[2]; ///< Frequency of HIV testing (per annum) if receiving PrEP
-double PrEPdur[2]; ///< Average duration of retention in oral PrEP programme (years)
+double PrEPdur[3]; ///< Average duration of retention in oral PrEP programme (years)
 double PrEPdurPreg; ///< Average duration of oral PrEP in pregnant/breastfeeding women
 double PrEPdataYr; ///< Last year for which we have data on number initiating PrEP
 double UltPrEPrateFSW; ///< Monthly rate at which FSWs start oral PrEP after PrEPdataYr
@@ -287,7 +287,7 @@ double CABLAefficacy[2]; ///< CAB-LA efficacy in heterosexual M and F
 double CABLAefficacyMSM; ///< CAB-LA efficacy in MSM
 double CABLAefficacyPreg; ///< CAB-LA efficacy in pregnant women
 double CondomRednCABLA[2]; ///< Reduction in condom use if using CAB-LA (M, F)
-double CABLAdur[2]; ///< Average duration of protection from CAB-LA (years)
+double CABLAdur[3]; ///< Average duration of protection from CAB-LA (years)
 double CABLAdurPreg; ///< Ave duration of CAB-LA protection if pregnant/breastfeeding 
 double CABLAdataYr; ///< Last year for which we have data on number initiating CAB-LA
 double UltCABLArateFSW; ///< Monthly rate at which FSWs start CAB-LA after PrEPdataYr
