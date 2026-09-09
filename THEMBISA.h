@@ -1484,7 +1484,7 @@ double RandPrior[MCMCdim]; ///< Random numbers used to sample from prior in curr
 double Cholesky1[MCMCdim][MCMCdim];
 double Covariance[MCMCdim][MCMCdim]; ///< The covariance matrix for the MCMC parameters
 const int InitSample = 10000;
-const int ResampleSize = 2; // MK edit 
+const int ResampleSize = 1; // MK edit 
 int SampleID[ResampleSize];
 int CurrSim;
 double temp[ResampleSize][41]; ///< Previously local to the SampleInput function in OutputArray class
@@ -3093,9 +3093,6 @@ double pvtsector = 0.058; //proportion of population getting HIV testing and car
 //int Zero2030 = 0; //indicator to run analysis where several interventions get reduced to 0%
 
 double PropMessaging = 0.0; //U=U messaging, assumed baseline coverage 0%
-double AttritionRR = 0.71; //Men's clinics attrition
-double PropInClinics = 0.0; // Men's clinics proportion- ultimate
-double prop_menclinics = 0.0; //- running coverage for scale up
 
 double RetentionOR_PN = 1.78; //Peer Nav
 double PropWithPN = 0.0;   //Peer Nav coverage- ultimate
@@ -3106,9 +3103,6 @@ double PropWithPOCVL = 0.0; //POC VL coverage- ultimate
 double prop_pocvl = 0.0;  //POC VL - running coverage for scale up
 double RetentionRR_POCVL = 1.06; //POC VL retention impact
 
-double prop_acc = 0.0;  //should be 0 or 1 applying to all
-double PropAcc = 0.0; //Accelerator 2 improve retention coverage
-double RetentionRR_Acc = 1.0; //Accelerator 2 retention improvement
 
 
 

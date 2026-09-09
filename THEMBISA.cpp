@@ -6775,10 +6775,19 @@ void CalcInterruptions()
 	double CurrInterruption, CurrInterruptionPaed, temp, PaedRatio;
 
 	iy = CurrYear - StartYear;
-
-
-
-
+	double TempYear = (double)CurrYear;        
+	prop_peernav = PropWithPN;                   
+	prop_pocvl = PropWithPOCVL;     
+	if (CurrYear > 2030) { TempYear = 2030; }	          
+	if (CurrYear < ICstart + 1985) {              	
+		prop_peernav = 0.0;
+		prop_pocvl = 0.0;
+	}
+	else {		
+		prop_peernav *= (TempYear - (ICstart + 1985 - 1)) / (2030 - (ICstart + 1985 - 1));
+		prop_pocvl *= (TempYear - (ICstart + 1985 - 1)) / (2030 - (ICstart + 1985 - 1));
+	}
+	double NewRet;
 
 	// Age and sex multipliers to interruption rates
 	if (iy == 0){
@@ -6812,6 +6821,17 @@ void CalcInterruptions()
 				OnARTbyIntDur[id][ig][ia] = (CurrInterruption * AgeAdjInterrupt[ia][ig] * exp(-(CurrInterruption * 
 					AgeAdjInterrupt[ia][ig] + ARTresumptionRate[ig]) * id) + ARTresumptionRate[ig]) /
 					(CurrInterruption * AgeAdjInterrupt[ia][ig] + ARTresumptionRate[ig]);
+
+				//Peer navigator impact in those ages 10+ 
+				//NewRet = (RetentionOR_PN * OnARTbyIntDur[id][ig][ia] / (1 - OnARTbyIntDur[id][ig][ia])) /
+				//	(1 + (RetentionOR_PN * OnARTbyIntDur[id][ig][ia] / (1 - OnARTbyIntDur[id][ig][ia])));
+				//OnARTbyIntDur[id][ig][ia] = (1.0 - prop_peernav) * OnARTbyIntDur[id][ig][ia] + prop_peernav * NewRet;
+
+				//POC VL impact in those ages 10+
+				//NewRet = OnARTbyIntDur[id][ig][ia] * RetentionRR_POCVL;
+				//if (NewRet > 1.0) { NewRet = 1.0; }
+				//OnARTbyIntDur[id][ig][ia] = (1.0 - prop_pocvl) * OnARTbyIntDur[id][ig][ia] + prop_pocvl * NewRet;
+
 			}
 			OnARThalfIntDur[0][ig][ia] = (CurrInterruption * AgeAdjInterrupt[ia][ig] * exp(-(CurrInterruption * 
 				AgeAdjInterrupt[ia][ig] + ARTresumptionRate[ig]) * 0.25) + ARTresumptionRate[ig]) /
@@ -6827,6 +6847,21 @@ void CalcInterruptions()
 					RestartRateByIntDur[id][ig][ia] = (1.0 - OnARTbyIntDur[id][ig][ia]) * ARTresumptionRate[ig] / 12.0;
 				}
 			}
+
+			/*
+			for (id = 0; id < 6; id++) {
+				//Peer Navigator impact 
+				NewRet = (RetentionOR_PN * OnARThalfIntDur[id][ig][ia] / (1 - OnARThalfIntDur[id][ig][ia])) /
+					(1 + (RetentionOR_PN * OnARThalfIntDur[id][ig][ia] / (1 - OnARThalfIntDur[id][ig][ia])));
+				if (NewRet > 1.0) { NewRet = 1.0; }
+				OnARThalfIntDur[id][ig][ia] = (1.0 - prop_peernav) * OnARThalfIntDur[id][ig][ia] + prop_peernav * NewRet;
+
+				//POC VL impact
+				NewRet = OnARThalfIntDur[id][ig][ia] * RetentionRR_POCVL;
+				if (NewRet > 1.0) { NewRet = 1.0; }
+				OnARThalfIntDur[id][ig][ia] = (1.0 - prop_pocvl) * OnARThalfIntDur[id][ig][ia] + prop_pocvl * NewRet;
+
+			}*/
 		}
 	}
 
@@ -8963,6 +8998,18 @@ void UpdateTestingRates()
 		TestingRateSE[ia][1][0] = Temp * VCTmale * RetestAdj;
 		TestingRateSE[ia][0][1] = TempF + TempF2;
 		TestingRateSE[ia][1][1] = TempF * RetestAdj + TempF2;
+
+		//increase testing rates due to U=U messaging
+		if (CurrYear > ICstart + 1985 - 1) {                    
+			int TempYear = CurrYear;
+			if (TempYear > 2030) { TempYear = 2030; }
+			double TempPropMessaging = PropMessaging * ((double)TempYear - (ICstart + 1985 - 1)) / (2030 - (ICstart + 1985 - 1));
+			if (ia > 4) {
+				TestingRateSE[ia][0][0] *= (1.0 + 0.89 * TempPropMessaging);
+				TestingRateSE[ia][1][0] *= (1.0 + 0.89 * TempPropMessaging);
+			}
+		}
+
 		// Calculate index testing (new in version 4.5)
 		ib = ia - 3;
 		if (ib < 0){ ib = 0; }
@@ -23149,9 +23196,9 @@ void RunSample()
 	PrevFSW15to24.RecordSample("PrevFSW15to24.txt");
 	PrevFSW25plus.RecordSample("PrevFSW25plus.txt");
 	NegFSW.RecordSample("NegFSW.txt");
-	PrevClients.RecordSample("PrevClients.txt");
+	PrevClients.RecordSample("PrevClients.txt");*/
 	TotalHIV.RecordSample("TotalHIV.txt");
-	Prev15to24.RecordSample("Prev15to24.txt");
+	/*Prev15to24.RecordSample("Prev15to24.txt");
 	Prev15to49.RecordSample("Prev15to49.txt");
 	Prev25plus.RecordSample("Prev25plus.txt");
 	Prev0to14.RecordSample("Prev0to14.txt");
@@ -26405,460 +26452,26 @@ void SetSQ() {
 	PropWithPOCVL = 0.0;
 	PropWithPN = 0.0;
 	PropMessaging = 0.0;
-	PropInClinics = 0.0;	
-
-	AdolHCTMultiplierPM = 1;
-
+	
 	for (int i = 0; i < 93; i++) {
 		RR_ARTinit[i] = 1;		//1= no change to ART coverage; 7.5 gets to 95% ART coverage
 		for (int g = 0; g < 2; g++) {
 			RR_ARTinitSex[i][g] = RR_ARTinit[i];
 		}
 	}
+
+	//PrEP duration by default: 6m for MSM, 3m for other populations
 	PrEPdur[0] = 0.25; //men nonMSM
 	PrEPdur[1] = 0.25; //women
 	PrEPdur[2] = 0.5;   //MSM
 	PrEPdurPreg = 0.25;   //pregnant women
-
-	//we model LEN, not CAB and assuming 12m duration for all
-	LENmodel = 1;
-	CABmodel = 0;
-	LENdur = "12m";
-
-
-	for (int iy = 0; iy < 93; iy++) {
-		CABLAeligMSM[iy] = 0;
-		CABLAeligOtherG[iy][1] = 0; //other women	
-		CABLAeligOtherG[iy][0] = 0; //other men	
-		CABLAeligAGYW[iy] = 0;	
-
-		RR_CABLAstartF20[iy] = 0.0;
-		RR_CABLAstartMSM[iy] = 0.0;
-		CABLApregnant[iy] = 0; //PBFW
-
-
-	}
-
-	bl = -1;   //0=old baseline, 1=baseline+LEN GF, 2=PEPFAR minimum scenario, 3=BL old + GF LEN + 50% OP to LEN planned, 4=PM + GF LEN + 50% OP to LEN planned
-
-
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	//                                          Specific baseline changes
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	//old baseline
-	if (bl == 0) {
-		//baseline HIVST pack where majority (60%) of tests are going to PHC (200k), total distributed=333,333 at baseline
-		SelfTestUptakeUlt[0] = 0.000673041069773436; //fixed
-		SelfTestUptakeUlt[1] = 0.000164730065841953; //taxi
-		SelfTestUptakeUlt[2] = 0.0183840957930371; //anc
-		SelfTestUptakeUlt[3] = 0.00161757047874691; //index
-		SelfTestUptakeUlt[4] = 0.0072141665070482; //work
-
-		//200kHIVST
-		TotSTestprimaryPHC.out[CurrSim - 1][2023 - 1985] = 400;
-		TotSTestprimaryPHC.out[CurrSim - 1][2024 - 1985] = 600;
-		for (int i = 2025 - 1985; i < 93; i++) {
-			TotSTestprimaryPHC.out[CurrSim - 1][i] = -7344780.6 + 3707.4*(1985 + i); //linear regression based on the change above
-		}
-		//HTS increase for 200k HIVST
-		for (int iy = 2025 - 1985; iy < 93; iy++) {
-			HCT1stTimeF25init[iy] = 0.38304; //default 0.3793
-		}
-	}
-
-	//old baseline + GF LEN 500k-py for 26/27
-	if (bl == 1) {
-
-		/////////////////////////////////////////////////HIVST
-		//baseline HIVST pack where majority (60%) of tests are going to PHC (200k), total distributed=333,333 at baseline
-		SelfTestUptakeUlt[0] = 0.000673041069773436; //fixed
-		SelfTestUptakeUlt[1] = 0.000164730065841953; //taxi
-		SelfTestUptakeUlt[2] = 0.0183840957930371; //anc
-		SelfTestUptakeUlt[3] = 0.00161757047874691; //index
-		SelfTestUptakeUlt[4] = 0.0072141665070482; //work
-
-		//200k HIVST
-		TotSTestprimaryPHC.out[CurrSim - 1][2023 - 1985] = 400;
-		TotSTestprimaryPHC.out[CurrSim - 1][2024 - 1985] = 600;
-		for (int i = 2025 - 1985; i < 93; i++) {
-			TotSTestprimaryPHC.out[CurrSim - 1][i] = -7344780.6 + 3707.4*(1985 + i); //linear regression based on the change above
-		}
-		//HTS increase for 200k HIVST
-		for (int iy = 2025 - 1985; iy < 93; iy++) {
-			HCT1stTimeF25init[iy] = 0.38304; //default 0.3793
-		}
-
-		///////////////////////////////////////////////LEN assumptions
-		LENmodel = 1;
-		CABmodel = 0;
-		LENdur = "12m";
-
-		//LEN duration per group
-		CABLAdur[0] = 1 + 0.5;   //men nonMSM
-		CABLAdur[1] = 1 + 0.5;   //women
-		CABLAdur[2] = 1 + 0.5;   //MSM
-		CABLAdurPreg = 1 + 0.5;  //pregnant women		
-
-		//initialize all values to zero
-		for (int iy = (2025 - 1985); iy < 93; iy++) {
-			RR_CABLAstartF20[iy] = 0.0;
-			RR_CABLAstartMSM[iy] = 0.0;
-
-			CABLApregnant[iy] = 0.0;
-			CABLAeligAGYW[iy] = 0;
-			CABLAeligOtherG[iy][0] = 0.0; //other men
-			CABLAeligOtherG[iy][1] = 0.0; //other women
-			CABLAeligMSM[iy] = 0;
-		}
-
-		//GF LEN 
-		CABLAeligMSM[2026 - 1985] = 1;
-		CABLAeligMSM[2027 - 1985] = 1;
-		CABLAeligOtherG[2026 - 1985][1] = 0.02; //other women
-		CABLAeligOtherG[2027 - 1985][1] = 0.02; //other women	
-		CABLAeligAGYW[2026 - 1985] = 1;
-		CABLAeligAGYW[2027 - 1985] = 1;
-
-		//rates - override
-		if (CurrYear == 2025) { UltCABLArateFSW = 0.17; } //FSW
-		if (CurrYear == 2026) { UltCABLArateFSW = 0.09; }
-		if (CurrYear >= 2027) { UltCABLArateFSW = 0; }
-
-		RR_CABLAstartF20[2026 - 1985] = 0.1848; //AGYW
-		RR_CABLAstartF20[2027 - 1985] = 0.1738;			
-
-		RR_CABLAstartMSM[2026 - 1985] = 0.500; //MSM
-		RR_CABLAstartMSM[2027 - 1985] = 0.490;
-
-		CABLApregnant[2026 - 1985] = 0.054; //PBFW
-		CABLApregnant[2027 - 1985] = 0.054;			
-
-	}
-
-
-	//PEPFAR minimum impact baseline
-	if (bl == 2) {
-		//HTS down 6% but 200k HIVST in PHC remain in circulation (bought by government)
-		for (int iy = 2025 - 1985; iy < 93; iy++) {
-			HCT1stTimeF25init[iy] = 0.3605473564975; //default 0.3793 | pepfarmin:0.356542 without 200kHIVST | pepfarmin: 0.3605473564975 with 200kHIVST
-		}
-
-		//baseline HIVST pack where majority (60%) of tests are going to PHC (200k), total distributed=333,333 at baseline
-		SelfTestUptakeUlt[0] = 0.000673041069773436; //fixed
-		SelfTestUptakeUlt[1] = 0.000164730065841953; //taxi
-		SelfTestUptakeUlt[2] = 0.0183840957930371; //anc
-		SelfTestUptakeUlt[3] = 0.00161757047874691; //index
-		SelfTestUptakeUlt[4] = 0.0072141665070482; //work
-
-		//200kHIVST
-		TotSTestprimaryPHC.out[CurrSim - 1][2023 - 1985] = 400;
-		TotSTestprimaryPHC.out[CurrSim - 1][2024 - 1985] = 600;
-		for (int i = 2025 - 1985; i < 93; i++) {
-			TotSTestprimaryPHC.out[CurrSim - 1][i] = -7344780.6 + 3707.4*(1985 + i); //linear regression based on the change above
-		}
-
-		//Pregnant women tested
-		for (int iy = 2025 - 1985; iy < 93; iy++) {
-			PregnantWomenTested[iy] = 0.92; //0.98 default
-		}
-
-
-
-		//MMC down 45%
-		for (int iy = 2025 - 1985 - 1; iy < 93; iy++) {
-			RR_MMCpromo10[iy] = 0.55;   //default 1
-			RR_MMCpromo15[iy] = 0.3245; //default 0.59
-			RR_MMCpromo20[iy] = 0.1485; //default 0.27
-			RR_MMCpromo25[iy] = 0.077;  //default 0.14
-			RR_MMCpromo50[iy] = 0.0066; //default 0.012
-		}
-		//oral PrEP down 20%
-		//if (CurrYear >= 2024) { UltPrEPrateFSW = 0.028; }  //default 0.035
-		if (CurrYear >= 2025) { UltPrEPrateFSW = 0.028; }  //default 0.035
-
-		for (int iy = 2025 - 1985; iy < 93; iy++) {
-			PrEPpregnant[iy] = 0.07688; //0.0961 default
-		}
-
-
-		//ART reduction by 14%, no recovery (PEPFAR minimum scenario)
-		RR_ARTinityr = 2025;
-
-		RR_ARTinit[0] = 0; //2025
-		RR_ARTinit[1] = 0;
-		RR_ARTinit[2] = 0.12;
-		RR_ARTinit[3] = 0.24;
-		RR_ARTinit[4] = 0.24;
-		RR_ARTinit[5] = 0.28; //2030
-		RR_ARTinit[6] = 0.28;
-		RR_ARTinit[7] = 0.32;
-		RR_ARTinit[8] = 0.32;
-		RR_ARTinit[9] = 0.32;
-		RR_ARTinit[10] = 0.32; //2035
-		RR_ARTinit[11] = 0.32;
-		RR_ARTinit[12] = 0.32;
-		RR_ARTinit[13] = 0.31;
-		RR_ARTinit[14] = 0.31;
-		RR_ARTinit[15] = 0.31; //2040
-		RR_ARTinit[16] = 0.31;
-		RR_ARTinit[17] = 0.31;
-		RR_ARTinit[18] = 0.31;
-		RR_ARTinit[19] = 0.31;
-		RR_ARTinit[20] = 0.31; //2045*/
-		RR_ARTinit[21] = 0.31; //2045*/
-
-		
-		for (int i = 22; i < 93; i++) {  //addd for prevention advocacy work, 50 year time horizon
-			RR_ARTinit[i] = 0.31;
-		}
-
-		for (int i = 0; i < 93; i++) {  //addd for prevention advocacy work, 50 year time horizon
-			for (int g = 0; g < 2; g++) {
-				RR_ARTinitSex[i][g] = RR_ARTinit[i];
-			}
-		}
-
-
 	
-
-	}
-
-
-	if (bl == 3) {  //BL old + GF LEN + 50% OP to LEN (planned dist)
-		//baseline HIVST pack where majority (60%) of tests are going to PHC (200k), total distributed=333,333 at baseline
-		if (CurrYear >= (ICstart + 1985)) {
-			SelfTestUptakeUlt[0] = 0.000673041069773436; //fixed
-			SelfTestUptakeUlt[1] = 0.000164730065841953; //taxi
-			SelfTestUptakeUlt[2] = 0.0183840957930371; //anc
-			SelfTestUptakeUlt[3] = 0.00161757047874691; //index
-			SelfTestUptakeUlt[4] = 0.0072141665070482; //work
-		}
-
-		//200kHIVST
-		TotSTestprimaryPHC.out[CurrSim - 1][2023 - 1985] = 400;
-		TotSTestprimaryPHC.out[CurrSim - 1][2024 - 1985] = 600;
-		for (int i = 2025 - 1985; i < 93; i++) {
-			TotSTestprimaryPHC.out[CurrSim - 1][i] = -7344780.6 + 3707.4*(1985 + i); //linear regression based on the change above
-		}
-		//HTS increase for 200k HIVST
-		for (int iy = 2025 - 1985; iy < 93; iy++) {
-			HCT1stTimeF25init[iy] = 0.38304; //default 0.3793
-		}
-
-		//LEN as per planned distribution, 50% of OP budget
-
-		//LEN duration per group
-		CABLAdur[0] = 1 + 0.5;   //men nonMSM
-		CABLAdur[1] = 1 + 0.5;   //women
-		CABLAdur[2] = 1 + 0.5;   //MSM
-		CABLAdurPreg = 1 + 0.5;  //pregnant women	
-
-
-		//parameters by pop and year, these are from 2028-2045	
-		double tempAGYW[19] = {0.193333690819977,0.209016691611884,0.21976281905511,0.230677519844769,0.238244453582254,0.235042875411287,0.230696005806226,0.239009172499309,0.252619772055518,0.263267870559717,0.260789770073263,0.266013882880684,0.267276156947148,0.275088690639931,0.282586267032557,0.290355349073251,0.29928269819117,0.307542093907507,0.314010459445996};
-		double tempFSW[19] = { 0.0405217371060881,0.028274712793081,0.0216435940060257,0.0208007124986462,0.0202791224801466,0.0204799802497822,0.0208391126972375,0.0205051691799352,0.0198684170049841,0.019438947361809,0.0196395860978148,0.019491471167415,0.0195190755704231,0.0192176007993127,0.0189289937951459,0.0185874698284486,0.018197156461126,0.0178521467507275,0.0176038481279223 };
-		double tempPBFW[19] = { 0.0393488123047293,0.0395260038727235,0.040247173324515,0.0410490419490648,0.0419131898577641,0.0438471019658065,0.0460133130741228,0.0466228006825007,0.0467082620493176,0.0472189971786719,0.049116986096759,0.0501195358875413,0.0515548045765612,0.0521184482357466,0.0526987483409176,0.0533365298637804,0.0537919518525623,0.0541622977107246,0.0549580330487144 };
-		double tempMSM[19] = { 0.432144897532075,0.422611565699208,0.420021001168133,0.425972118251644,0.428687781437232,0.422648380073065,0.427844524792483,0.418609492488757,0.409279568747272,0.411896682890547,0.415865368556489,0.406319300835307,0.403315005186876,0.419320535898175,0.428216076479278,0.427782933584661,0.431305099145499,0.436390974466965,0.468899559103469 }; 
-			   
-		//GF LEN donation for 2026 and 2027		
-		
-		if (CurrYear == 2025) { UltCABLArateFSW = 0.17; }
-		CABLAeligMSM[2026 - 1985] = 1;
-		CABLAeligOtherG[2026 - 1985][1] = 0.02; //other women		
-		CABLAeligAGYW[2026 - 1985] = 1;
-		RR_CABLAstartF20[2026 - 1985] = 0.1848; //AGYW
-		RR_CABLAstartMSM[2026 - 1985] = 0.500; //MSM
-		CABLApregnant[2026 - 1985] = 0.054; //PBFW			
-		
-		//2027
-		CABLAeligMSM[2027 - 1985] = 1;	
-		CABLAeligOtherG[2027 - 1985][1] = 0.02; //other women	
-		CABLAeligAGYW[2027 - 1985] = 1;
-		if (CurrYear == 2026) { UltCABLArateFSW = 0.09; }
-		RR_CABLAstartF20[2027 - 1985] = 0.1738;
-		RR_CABLAstartMSM[2027 - 1985] = 0.490;
-		CABLApregnant[2027 - 1985] = 0.054;		
-		
-		
-		//LEN from 2028
-		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltCABLArateFSW = tempFSW[CurrYear - 2027]; } //FSW
-		if (CurrYear > 2045) { UltCABLArateFSW = 0; } //FSW
-
-		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
-			CABLAeligMSM[iy] = 1;
-			CABLAeligOtherG[iy][1] = 0.02; //other women	
-			CABLAeligOtherG[iy][0] = 0; //other men	
-			CABLAeligAGYW[iy] = 1;
-
-			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart - 1]; //AGYW
-			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart - 1]; //MSM
-			CABLApregnant[iy] = tempPBFW[iy - ICstart - 1]; //PBFW			
-			
-		}
-
-
-		//reduction on oral PrEP
-		double OPtempAGYW[19] = {0.284988658904142,0.311236414844098,0.317339542464181,0.315863546498,0.315782215980871,0.328913599638829,0.328514625126812,0.329079570715253,0.330009489402073,0.330691694218155,0.33012062886437,0.330080428539509,0.32956059816084,0.329344953564536,0.329259114407213,0.329358419630089,0.329584304487113,0.329852934067434,0.344983943853991};
-		double OPtempFSW[19] = { 0.0253478397946021,0.0230674126675031,0.0225626151103978,0.0226209881009839,0.0225891294921098,0.0216424687100732,0.0216575985693442,0.0216649074160448,0.0216524540305742,0.0216241212266514,0.0216048619810834,0.0215957938516041,0.0215902870185404,0.0215892569290466,0.0215851279666815,0.0215663361022456,0.0215402542379482,0.0215185380922861,0.0205784930375266 };
-		double OPtempPBFW[19] = { 0.0499505679755955,0.0497046925509099,0.049662906890645,0.0496282992186634,0.04959756408911,0.0495813045154604,0.0495861708759823,0.049584753351655,0.0495628389652968,0.0495332888161316,0.0495199651106715,0.0495169635942209,0.0495185872393578,0.0495165930625585,0.0495087237157914,0.0495003095935348,0.0494921224050725,0.0494839044561883,0.0494775358755037 };
-		double OPtempMSM[19] = { 0.389506918510113,0.407699037760727,0.409954006046206,0.405870196604483,0.405074798788771,0.42129431973938,0.42113953807894,0.419877023588626,0.417706709636956,0.415870631875716,0.415824136339286,0.415151785536109,0.414076587601332,0.414032947427478,0.414169473747495,0.41339533589962,0.412180137905985,0.411020874273844,0.42907992055608 };
-		double Optempmen[19] = { 0.0192966358249795,0.0193219654765607,0.0192679003896619,0.0191988906135866,0.0191399052634929,0.0190731714041869,0.0189899668066841,0.0189182042426897,0.0188517013249968,0.0187863291788027,0.0187356529133891,0.0186801543979811,0.0186240694622907,0.0185602443572411,0.0185126017722302,0.0184606744825046,0.0184039101571664,0.0183434210103421,0.0182784598161834 }; 
-
-
-
-		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltPrEPrateFSW = OPtempFSW[CurrYear - 2027]; } //FSW
-		if (CurrYear > 2045) { UltPrEPrateFSW = 0; } //FSW
-
-		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
-			PrEPeligMSM[iy] = 1;
-			PrEPeligOtherG[iy][1] = 0.02; //other women	
-			PrEPeligOtherG[iy][0] = Optempmen[iy - ICstart - 1]; //other men	
-			PrEPeligAGYW[iy] = 1;
-
-			RR_PrEPstartF20[iy] = OPtempAGYW[iy - ICstart -1]; //AGYW
-			RR_PrEPstartMSM[iy] = OPtempMSM[iy - ICstart - 1]; //MSM
-			PrEPpregnant[iy] = OPtempPBFW[iy - ICstart - 1]; //PBFW	
-			
-		}
-	}
-
-	 
-	if (bl == 4) {  //BL PEPFAR min + GF LEN + 50% OP to LEN (planned dist)
-
-		if (CurrYear >= (ICstart + 1985)) {
-			//baseline HIVST pack where majority (60%) of tests are going to PHC (200k), total distributed=333,333 at baseline
-			SelfTestUptakeUlt[0] = 0.000673041069773436; //fixed
-			SelfTestUptakeUlt[1] = 0.000164730065841953; //taxi
-			SelfTestUptakeUlt[2] = 0.0183840957930371; //anc
-			SelfTestUptakeUlt[3] = 0.00161757047874691; //index
-			SelfTestUptakeUlt[4] = 0.0072141665070482; //work
-		}
-
-	
-		//HTS down 6% but 200k HIVST in PHC remain in circulation (bought by government)
-		for (int iy = 2025 - 1985; iy < 93; iy++) {
-			HCT1stTimeF25init[iy] = 0.3605473564975; //default 0.3793 | pepfarmin:0.356542 without 200kHIVST | pepfarmin: 0.3605473564975 with 200kHIVST
-		}
-		//200kHIVST
-		TotSTestprimaryPHC.out[CurrSim - 1][2023 - 1985] = 400;
-		TotSTestprimaryPHC.out[CurrSim - 1][2024 - 1985] = 600;
-		for (int i = 2025 - 1985; i < 93; i++) {
-			TotSTestprimaryPHC.out[CurrSim - 1][i] = -7344780.6 + 3707.4*(1985 + i); //linear regression based on the change above
-		}
-
-		//MMC down 45%
-		for (int iy = 2025 - 1985 - 1; iy < 93; iy++) {
-			RR_MMCpromo10[iy] = 0.55;   //default 1
-			RR_MMCpromo15[iy] = 0.3245; //default 0.59
-			RR_MMCpromo20[iy] = 0.1485; //default 0.27
-			RR_MMCpromo25[iy] = 0.077;  //default 0.14
-			RR_MMCpromo50[iy] = 0.0066; //default 0.012
-		}
-		//oral PrEP down 20%
-		if (CurrYear > 2025) { UltPrEPrateFSW = 0.028; }  //default 0.035
-
-		//ART reduction by 14%, no recovery (PEPFAR minimum scenario)
-		RR_ARTinityr = 2024;
-
-		RR_ARTinit[0] = 0; //2025
-		RR_ARTinit[1] = 0;
-		RR_ARTinit[2] = 0.12;
-		RR_ARTinit[3] = 0.24;
-		RR_ARTinit[4] = 0.24;
-		RR_ARTinit[5] = 0.28; //2030
-		RR_ARTinit[6] = 0.28;
-		RR_ARTinit[7] = 0.32;
-		RR_ARTinit[8] = 0.32;
-		RR_ARTinit[9] = 0.32;
-		RR_ARTinit[10] = 0.32; //2035
-		RR_ARTinit[11] = 0.32;
-		RR_ARTinit[12] = 0.32;
-		RR_ARTinit[13] = 0.31;
-		RR_ARTinit[14] = 0.31;
-		RR_ARTinit[15] = 0.31; //2040
-		RR_ARTinit[16] = 0.31;
-		RR_ARTinit[17] = 0.31;
-		RR_ARTinit[18] = 0.31;
-		RR_ARTinit[19] = 0.31;
-		RR_ARTinit[20] = 0.31; //2045
-		RR_ARTinit[21] = 0.31; //2046
-
-
-		for (int i = 0; i < 22; i++) {  //addd for prevention advocacy work, 50 year time horizon
-			for (int g = 0; g < 2; g++) {
-				RR_ARTinitSex[i][g] = RR_ARTinit[i];
-			}
-		}
-		//planned LEN
-
-		//LEN duration per group
-		CABLAdur[0] = 1 + 0.5;   //men nonMSM
-		CABLAdur[1] = 1 + 0.5;   //women
-		CABLAdur[2] = 1 + 0.5;   //MSM
-		CABLAdurPreg = 1 + 0.5;  //pregnant women		
-
-		//these are not accurate as it is assuming old baseline
-		double tempAGYW[19] = { 0.193333690819977,0.209016691611884,0.21976281905511,0.230677519844769,0.238244453582254,0.235042875411287,0.230696005806226,0.239009172499309,0.252619772055518,0.263267870559717,0.260789770073263,0.266013882880684,0.267276156947148,0.275088690639931,0.282586267032557,0.290355349073251,0.29928269819117,0.307542093907507,0.314010459445996 };
-		double tempFSW[19] = { 0.0405217371060881,0.028274712793081,0.0216435940060257,0.0208007124986462,0.0202791224801466,0.0204799802497822,0.0208391126972375,0.0205051691799352,0.0198684170049841,0.019438947361809,0.0196395860978148,0.019491471167415,0.0195190755704231,0.0192176007993127,0.0189289937951459,0.0185874698284486,0.018197156461126,0.0178521467507275,0.0176038481279223 };
-		double tempPBFW[19] = { 0.0393488123047293,0.0395260038727235,0.040247173324515,0.0410490419490648,0.0419131898577641,0.0438471019658065,0.0460133130741228,0.0466228006825007,0.0467082620493176,0.0472189971786719,0.049116986096759,0.0501195358875413,0.0515548045765612,0.0521184482357466,0.0526987483409176,0.0533365298637804,0.0537919518525623,0.0541622977107246,0.0549580330487144 };
-		double tempMSM[19] = { 0.432144897532075,0.422611565699208,0.420021001168133,0.425972118251644,0.428687781437232,0.422648380073065,0.427844524792483,0.418609492488757,0.409279568747272,0.411896682890547,0.415865368556489,0.406319300835307,0.403315005186876,0.419320535898175,0.428216076479278,0.427782933584661,0.431305099145499,0.436390974466965,0.468899559103469 };
-
-		//GF LEN donation for 2026
-		if (CurrYear == 2025) { UltCABLArateFSW = 0.17; }
-		CABLAeligMSM[2026 - 1985] = 1;
-		CABLAeligOtherG[2026 - 1985][1] = 1; //other women		
-		CABLAeligAGYW[2026 - 1985] = 1;
-		RR_CABLAstartF20[2026 - 1985] = 0.033; //AGYW
-		RR_CABLAstartMSM[2026 - 1985] = 0.500; //MSM
-		CABLApregnant[2026 - 1985] = 0.054; //PBFW
-
-		//LEN from 2027
-		if (CurrYear >= (ICstart + 1985 - 1) && CurrYear <= 2045) { UltCABLArateFSW = tempFSW[CurrYear - 2026]; } //FSW
-		if (CurrYear > 2045) { UltCABLArateFSW = 0; } //FSW
-
-		for (int iy = ICstart; iy < 93; iy++) {
-			CABLAeligMSM[iy] = 1;
-			CABLAeligOtherG[iy][1] = 0.02; //other women	
-			CABLAeligOtherG[iy][0] = 0; //other men	
-			CABLAeligAGYW[iy] = 1;
-
-			RR_CABLAstartF20[iy] = tempAGYW[iy - ICstart]; //AGYW
-			RR_CABLAstartMSM[iy] = tempMSM[iy - ICstart]; //MSM
-			CABLApregnant[iy] = tempPBFW[iy - ICstart]; //PBFW
-		}
-
-
-		//reduction on oral PrEP
-		double OPtempAGYW[20] = { 0.0449185192751223,0.0481178367014518,0.0544895334188093,0.0564432781088772,0.0566843713535195,0.0558987985266399,0.054457650338534,0.0526313924303909,0.0509679626045153,0.0494243959504602,0.0478599418926793,0.0462366948058533,0.0448368236589839,0.0434493675769212,0.0421389773553893,0.041031059634061,0.0402858650219301,0.0397371094869155,0.0393845065715682,0.0392643120191439 };
-		double OPtempFSW[20] = { 0.0191644134188622,0.0197646801582181,0.0172740686067107,0.0163777021421273,0.0159967094490055,0.015810718502553,0.015728560409162,0.0157066488899985,0.0156758429808126,0.0156053345507765,0.0155263656255683,0.0154824997262143,0.0154522388551283,0.0154242800227396,0.0153846080197642,0.0153372834284121,0.0152891722212207,0.0152395503720741,0.0151930957425228,0.0151454090843067 };
-		double OPtempPBFW[20] = { 0.0675726924964318,0.0675898124727655,0.0683893167552858,0.0692712750779918,0.070091624754363,0.0709633905036695,0.0718549245565968,0.0727343575764936,0.0735913067970215,0.0744751437555695,0.0753981773490508,0.0762720447189409,0.0771967942881696,0.0781687506574088,0.0791318676361985,0.0801119487658186,0.0811189847570118,0.0821529889944375,0.0832090901690509,0.0842335722938514 };
-		double OPtempMSM[20] = { 0.384785359225636,0.386335542401396,0.405959799473164,0.412988658519685,0.418225174633974,0.423078699386503,0.423321588738059,0.422547624675325,0.423331001176747,0.422343947224196,0.421597122234241,0.421790623036649,0.421952625,0.422071476923077,0.42240702668585,0.42286780623608,0.423395795567867,0.423992889215102,0.424570648514851,0.425847248901099 };
-
-		double OPtempmen[20] = { 0.113642603689901,0.111954409416022,0.11158211261834,0.112569445029346,0.114528791099048,0.117204563455895,0.120620048735977,0.124705976616963,0.128857089723576,0.133273228783492,0.138027313987846,0.142846313297448,0.147260649497728,0.151838543236189,  0.156577391139001,0.160921597598497,0.16400367310262,0.166405607891529,0.168022335028178,0.169039266703699 };
-
-		if (CurrYear >= (ICstart + 1985 - 1) && CurrYear <= 2045) { UltPrEPrateFSW = OPtempFSW[CurrYear - 2026]; } //FSW
-		if (CurrYear > 2045) { UltPrEPrateFSW = 0; } //FSW
-
-		for (int iy = ICstart; iy < 93; iy++) {
-			PrEPeligMSM[iy] = 1;
-			PrEPeligOtherG[iy][1] = 0.02; //other women	
-			PrEPeligOtherG[iy][0] = OPtempmen[iy - ICstart];; //other men	
-			PrEPeligAGYW[iy] = 1;
-
-			RR_PrEPstartF20[iy] = OPtempAGYW[iy - ICstart]; //AGYW
-			RR_PrEPstartMSM[iy] = OPtempMSM[iy - ICstart]; //MSM
-			PrEPpregnant[iy] = OPtempPBFW[iy - ICstart]; //PBFW					
-
-		}
-	}
 }
 
 void SimInvestmentCase() {
 	LastCondomMultiplier = 1;
 
-	//SetSQ();	
+	SetSQ();	
 	CABLAdur[0] = 1 + 0.5;   //men nonMSM
 	CABLAdur[1] = 1 + 0.5;   //women
 	CABLAdur[2] = 1 + 0.5;   //MSM
@@ -27538,11 +27151,6 @@ void CalcCostModel()
 		cc++;
 
 
-		costpopl[cc] = "Mens clinics (non-ART cost)"; //this will account for cost not related to ART (that is accounted elsewhere)
-		costpop[cc][ly] = 0;
-		costpop[cc][ly] = round(TotalART15M.out[CurrSim - 1][ly] * prop_menclinics);
-		cc++;
-
 		costpopl[cc] = "ART clients with Peer Navigators"; //this will account for cost not related to ART (that is accounted elsewhere)
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round((TotalART10to14.out[CurrSim - 1][ly] + TotalART15M.out[CurrSim - 1][ly] + TotalART15F.out[CurrSim - 1][ly])
@@ -27654,7 +27262,7 @@ void CalcCostModel()
 		costpop[cc][ly] = round(NewCABLAinPWID.out[CurrSim - 1][ly]);
 		cc++;
 			
-	costpopl[cc] = "LAPrEP Total"; //STOCK 
+		costpopl[cc] = "LAPrEP Total"; //STOCK 
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(NewCABLAinFSW.out[CurrSim - 1][ly] + NewCABLAinNonFSW.out[CurrSim - 1][ly] +
 			NewCABLAinMSM.out[CurrSim - 1][ly] + NewCABLAinNonMSM.out[CurrSim - 1][ly] + NewCABLAinPWID.out[CurrSim - 1][ly]);
@@ -34046,10 +33654,10 @@ void Int_UU_Active() {
 }
 
 void Int_MensClinics_Inactive() {
-	PropInClinics = 0.0;
+	//PropInClinics = 0.0;
 }
 void Int_MensClinics_Active() {
-	PropInClinics = 0.95;
+	//PropInClinics = 0.95;
 }
 
 void Int_PeerNav_Inactive() {
