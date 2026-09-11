@@ -35,7 +35,7 @@ string ProvID = "NW"; ///< Choose from EC, FS, GT, KZ, LM, MP, NC, NW, WC
 const int UseBrassLogit = 0; ///< 1 if using Brass relational logit to get non-HIV mort over 1996-2018
 int PrEPorVM = 0; ///< 1 if allowing for PrEP or vaginal microbicides. Keep set to 0 as default; it
 				  ///< will automatically get recalculated if there is PrEP/VM rollout.
-const int IncludeTB = 1; ///< 1 if including TB simulations // MK edits
+const int IncludeTB = 1;//< 1 if including TB simulations // MK edits
 const int IncludeDR_TB = 0; ///< 1 if including drug-resisant (DR) TB 
 const int FixedTBscreening = 0; ///< 1 = fix the rates of TB screening at the values generated in
 								///< the uncertainty analysis (only valid if FixedUncertainty = 1)
@@ -1484,7 +1484,7 @@ double RandPrior[MCMCdim]; ///< Random numbers used to sample from prior in curr
 double Cholesky1[MCMCdim][MCMCdim];
 double Covariance[MCMCdim][MCMCdim]; ///< The covariance matrix for the MCMC parameters
 const int InitSample = 10000;
-const int ResampleSize = 1; // MK edit 
+const int ResampleSize = 18; // MK edit 
 int SampleID[ResampleSize];
 int CurrSim;
 double temp[ResampleSize][41]; ///< Previously local to the SampleInput function in OutputArray class
@@ -3444,12 +3444,10 @@ double RR_ARTinit[93]; //reduce ART initation rates in adults, annual by sex
 double RR_ARTinitSex[93][2]; //reduce ART initation rates in adults, annual by sex
 
 
-
 //double RR_ARTinitP[21]; //reduce ART initation rates in children, annual
-int RR_ARTinityr = 2026; //starting point where RR are applied
+int RR_ARTinityr = ICstart + 1985; //starting point where RR are applied
 
 PostOutputArray PrEPcoverageNonMSM(92);
-
 PostOutputArray CABLAcoverageMSM(67);
 PostOutputArray CABLAcoverageNonMSM(67);
 PostOutputArray CABLAcoverageFSW(67);

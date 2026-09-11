@@ -9763,6 +9763,14 @@ void SetARTinitiation()
 		else{
 			SetAdultARTinitiation2();
 		}
+
+		//Change CurrARTinitiation to modify for HIV IC or other analyses, assuming the same adjustment for males and females	
+		for (int r = 0; r < 93; r++) {
+			if (CurrYear == (RR_ARTinityr + r)) {
+				CurrARTinitiation[0] = CurrARTinitiation[0] * RR_ARTinit[r];
+				CurrARTinitiation[1] = CurrARTinitiation[1] * RR_ARTinit[r];
+			}
+		}
 	}
 	else{
 		CurrARTinitiation[0] = RateARTstartF[CurrYear - StartYear] * RR_ARTstartM;
@@ -9826,6 +9834,15 @@ void SetARTinitiation()
 	else{
 		PaedARTinitiation = RateARTstartC[CurrYear - StartYear];
 	}
+	//Change CurrARTinitiation to modify for HIV IC or other analyses	
+	for (int r = 0; r < 93; r++) {
+		if (CurrYear == (RR_ARTinityr + r)) {
+			PaedARTinitiation = PaedARTinitiation * RR_ARTinit[r];
+		}
+	}
+
+
+
 	ARTinitByStage[0][2] = 0.0;
 	ARTinitByStage[4][2] = PaedARTinitiation;
 	for (is = 1; is < 4; is++){
@@ -26468,10 +26485,45 @@ void SetSQ() {
 	
 }
 
-void SimInvestmentCase() {
-	LastCondomMultiplier = 1;
 
-	SetSQ();	
+
+
+
+
+void SimInvestmentCase() {
+	SetSQ();
+
+
+	double p;
+	if (CurrSim == 1) { p = 1;}
+	if (CurrSim == 2) { p = 1.23684210526316;}
+	if (CurrSim == 3) { p = 1.47368421052632;}
+	if (CurrSim == 4) { p = 1.71052631578947;}
+	if (CurrSim == 5) { p = 1.94736842105263;}
+	if (CurrSim == 6) { p = 2.18421052631579;}
+	if (CurrSim == 7) { p = 2.42105263157895;}
+	if (CurrSim == 8) { p = 2.65789473684211;}
+	if (CurrSim == 9) { p = 2.89473684210526;}
+	if (CurrSim == 10) { p = 3.13157894736842;}
+	if (CurrSim == 11) { p = 3.36842105263158;}
+	if (CurrSim == 12) { p = 3.60526315789474;}
+	if (CurrSim == 13) { p = 3.8421052631579;}
+	if (CurrSim == 14) { p = 4.07894736842105;}
+	if (CurrSim == 15) { p = 4.31578947368421;}
+	if (CurrSim == 16) { p = 4.55263157894737;}
+	if (CurrSim == 17) { p = 4.78947368421053;}
+	if (CurrSim == 18) { p = 5.02631578947368;}
+	
+	for (int i = 0; i < 93; i++) {
+		RR_ARTinit[i] = p;		//1= no change to ART coverage		
+	}
+
+
+
+
+
+
+	/*
 	CABLAdur[0] = 1 + 0.5;   //men nonMSM
 	CABLAdur[1] = 1 + 0.5;   //women
 	CABLAdur[2] = 1 + 0.5;   //MSM
@@ -26564,7 +26616,7 @@ int FSWindex = CurrSim, PWIDindex = CurrSim;
 
 	RR_CABLAstartPWID[2027-1985]=temp[FSWindex][0][PWIDindex];//PWID
 	RR_CABLAstartPWID[2028-1985]=temp[FSWindex][1][PWIDindex];//PWID	
-
+	*/
 
 	/*
 	double temp[2][9] = {
