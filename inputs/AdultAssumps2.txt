@@ -280,9 +280,9 @@ CABLAefficacyPreg
 CondomRednCABLA[2]
 0.10	0.10
 CABLAdur[2]
-0.50    0.50    1.00
+1.00    1.00    1.00
 CABLAdurPreg
-2.25
+1.00
 CABLAdataYr
 2026
 UltCABLArateFSW

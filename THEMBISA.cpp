@@ -26481,11 +26481,8 @@ void SetSQ() {
 	PrEPdur[0] = 0.25; //men nonMSM
 	PrEPdur[1] = 0.25; //women
 	PrEPdur[2] = 0.5;   //MSM
-	PrEPdurPreg = 0.25;   //pregnant women
-	
+	PrEPdurPreg = 0.25;   //pregnant women	
 }
-
-
 
 
 
@@ -26495,24 +26492,8 @@ void SimInvestmentCase() {
 
 
 	double p;
-	if (CurrSim == 1) { p = 1;}
-	if (CurrSim == 2) { p = 1.23684210526316;}
-	if (CurrSim == 3) { p = 1.47368421052632;}
-	if (CurrSim == 4) { p = 1.71052631578947;}
-	if (CurrSim == 5) { p = 1.94736842105263;}
-	if (CurrSim == 6) { p = 2.18421052631579;}
-	if (CurrSim == 7) { p = 2.42105263157895;}
-	if (CurrSim == 8) { p = 2.65789473684211;}
-	if (CurrSim == 9) { p = 2.89473684210526;}
-	if (CurrSim == 10) { p = 3.13157894736842;}
-	if (CurrSim == 11) { p = 3.36842105263158;}
-	if (CurrSim == 12) { p = 3.60526315789474;}
-	if (CurrSim == 13) { p = 3.8421052631579;}
-	if (CurrSim == 14) { p = 4.07894736842105;}
-	if (CurrSim == 15) { p = 4.31578947368421;}
-	if (CurrSim == 16) { p = 4.55263157894737;}
-	if (CurrSim == 17) { p = 4.78947368421053;}
-	if (CurrSim == 18) { p = 5.02631578947368;}
+	p= CurrSim;
+	p=1+(9*(p-1))/38;
 	
 	for (int i = 0; i < 93; i++) {
 		RR_ARTinit[i] = p;		//1= no change to ART coverage		

@@ -30,8 +30,8 @@ const int PropnalImmART = 1; ///< 1 if immediate ART start is proportional to la
 const int ExcludeInterrupters = 1; ///< 1 = exclude temporary ART interrupters when calculating
 								   ///< numbers currently on ART
 const int UseNumbersTests = 1; ///< 1 = calculate rates of testing from numbers of HIV tests
-const int ProvModel = 0; ///< 1 if modelling a province, 0 for national model
-string ProvID = "NW"; ///< Choose from EC, FS, GT, KZ, LM, MP, NC, NW, WC
+const int ProvModel = 1; ///< 1 if modelling a province, 0 for national model | remember to set CalibHCTprevP=0, CalibHCTtotP=0 for provincial
+string ProvID = "GT"; ///< Choose from EC, FS, GT, KZ, LM, MP, NC, NW, WC
 const int UseBrassLogit = 0; ///< 1 if using Brass relational logit to get non-HIV mort over 1996-2018
 int PrEPorVM = 0; ///< 1 if allowing for PrEP or vaginal microbicides. Keep set to 0 as default; it
 				  ///< will automatically get recalculated if there is PrEP/VM rollout.
@@ -56,8 +56,8 @@ const int CalibCD4ANC = 0; ///< 1 = calibrate to CD4 distributions in antenatal 
 const int CalibHCT_HH = 1; ///< 1 = calibrate to propn ever tested in HSRC surveys
 const int CalibHCT_ANC = 0; ///< 1 = calibrate to propn ever tested in antenatal surveys
 const int CalibHCTprev = 1; ///< 1 = calibrate to HIV prevalence in adults receiving HCT
-const int CalibHCTprevP = 1; ///< 1 = calibrate to HIV prevalence in children receiving HCT
-const int CalibHCTtotP = 0; ///< 1 = calibrate to recorded number of kids receiving HCT
+const int CalibHCTprevP = 1; ///< 1 = calibrate to HIV prevalence in children receiving HCT - set =0 for prov model, was =1 for national
+const int CalibHCTtotP = 0; ///< 1 = calibrate to recorded number of kids receiving HCT -  set =0 for prov model, was =0 for national
 const int CalibHCTageSex = 0; ///< 1 = calibrate to proportions tested by age/sex and prev by age/sex
 const int CalibDeathsA = 1; ///< 1 = calibrate to recorded numbers of adult deaths
 const int AgeLimitMortCalib = 60; ///< Death data below this age are used in mort calibration
@@ -1484,7 +1484,7 @@ double RandPrior[MCMCdim]; ///< Random numbers used to sample from prior in curr
 double Cholesky1[MCMCdim][MCMCdim];
 double Covariance[MCMCdim][MCMCdim]; ///< The covariance matrix for the MCMC parameters
 const int InitSample = 10000;
-const int ResampleSize = 18; // MK edit 
+const int ResampleSize = 1; // MK edit 
 int SampleID[ResampleSize];
 int CurrSim;
 double temp[ResampleSize][41]; ///< Previously local to the SampleInput function in OutputArray class
