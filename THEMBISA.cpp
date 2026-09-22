@@ -23426,7 +23426,12 @@ void RunSample()
 	PrevTested17.RecordSample(getOutputPath("PrevTested17.txt", IncludeTB, ProvModel, ProvID).c_str());
 	PrevTested22.RecordSample(getOutputPath("PrevTested22.txt", IncludeTB, ProvModel, ProvID).c_str());
 
-	
+	TotSTestFixedPoint.RecordSample("TotSTestFixedPoint.txt");
+	TotSTestTaxi.RecordSample("TotSTestTaxi.txt");
+	TotSTestANC.RecordSample("TotSTestANC.txt");
+	TotSTestIndex.RecordSample("TotSTestIndex.txt");
+	TotSTestWork1.RecordSample("TotSTestWork1.txt");
+	TotSTestWork2.RecordSample("TotSTestWork2.txt");
 	/*AdultsEverTested.RecordSample("AdultsEverTested.txt");
 	//TestingBias.RecordSample("TestingBias.txt");
 	TotalHIVtests.RecordSample("TotalHIVtests.txt");
@@ -26482,26 +26487,64 @@ void SetSQ() {
 	PrEPdur[1] = 0.25; //women
 	PrEPdur[2] = 0.5;   //MSM
 	PrEPdurPreg = 0.25;   //pregnant women	
-}
 
+
+	//baseline HIVST pack where majority (60%) of tests are going to PHC (200k), total distributed=333,333 at baseline
+	SelfTestUptakeUlt[0] = 0.000673041069773436; //fixed
+	SelfTestUptakeUlt[1] = 0.000164730065841953; //taxi
+	SelfTestUptakeUlt[2] = 0.0183840957930371; //anc
+	SelfTestUptakeUlt[3] = 0.00161757047874691; //index
+	SelfTestUptakeUlt[4] = 0.0072141665070482; //work
+
+	//200kHIVST
+	TotSTestprimaryPHC.out[CurrSim - 1][2023 - 1985] = 400;
+	TotSTestprimaryPHC.out[CurrSim - 1][2024 - 1985] = 600;
+	for (int i = 2025 - 1985; i < 86; i++) {
+		TotSTestprimaryPHC.out[CurrSim - 1][i] = -7344780.6 + 3707.4*(1985 + i); //linear regression based on the change above
+	}
+	//HTS increase for 200k HIVST
+	for (int iy = 2025 - 1985; iy < 86; iy++) {
+		HCT1stTimeF25init[iy] = 0.3662; //default 0.3626
+	}	
+}
 
 
 
 void SimInvestmentCase() {
 	SetSQ();
 
+	if (CurrSim > 1){
 
+		double p;
+		p = CurrSim;
+		p = 1+p/5;
+		LastCondomMultiplier = p;
+
+	}
+	
+
+	/*
+		double p;
+		p=CurrSim;
+		p = 1+p/100;
+		for (int iy = ICstart -1; iy < 86; iy++) {
+		HCT1stTimeF25init[iy] = 0.395496; //default 0.3626
+		}*/
+
+	
+
+
+
+
+
+/*
 	double p;
 	p= CurrSim;
 	p=1+(9*(p-1))/38;
 	
 	for (int i = 0; i < 93; i++) {
 		RR_ARTinit[i] = p;		//1= no change to ART coverage		
-	}
-
-
-
-
+	}*/
 
 
 	/*
@@ -31443,43 +31486,43 @@ void Int_EIMCMax() {
 void Int_CondomSupplyBm2() {
 	LastCondomMultiplier = 0.5;
 	for (int iy = ICstart; iy < 86; iy++) {
-		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.13;
 	}
 }
 void Int_CondomSupplyBm1() {
 	LastCondomMultiplier = 0.8;
 	for (int iy = ICstart; iy < 86; iy++) {
-		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.13;
 	}
 }
 void Int_CondomSupplyDefault() {
 	LastCondomMultiplier = 1.00;
 	for (int iy = ICstart; iy < 86; iy++) {
-		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.13;
 	}
 }
 void Int_CondomSupplyBp1() {
 	LastCondomMultiplier = 1.5;
 	for (int iy = ICstart; iy < 86; iy++) {
-		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.13;
 	}
 }
 void Int_CondomSupplyBp2() {
 	LastCondomMultiplier = 2;
 	for (int iy = ICstart; iy < 86; iy++) {
-		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.13;
 	}
 }
 void Int_CondomSupplyBp3() {
 	LastCondomMultiplier = 2.5;
 	for (int iy = ICstart; iy < 86; iy++) {
-		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.13;
 	}
 }
 void Int_CondomSupplyMax() {
 	LastCondomMultiplier = 3;
 	for (int iy = ICstart; iy < 86; iy++) {
-		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.57;
+		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.13;
 	}
 }
 
@@ -33090,7 +33133,7 @@ void Int_HCTBm2() {
 
 	}
 
-
+	
 	for (int iy = ICstart; iy < 86; iy++) {
 		HCT1stTimeF25init[iy] = h;
 	}
