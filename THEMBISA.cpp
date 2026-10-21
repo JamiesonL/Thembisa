@@ -9766,10 +9766,14 @@ void SetARTinitiation()
 
 		//Change CurrARTinitiation to modify for HIV IC or other analyses, assuming the same adjustment for males and females	
 		for (int r = 0; r < 93; r++) {
-			if (CurrYear == (RR_ARTinityr + r)) {
+
+			if (RR_ARTinit[0] > 1) { RR_ARTinit[0] = RR_ARTinit[0]/2;}
+			if (RR_ARTinit[0] < 1) { RR_ARTinit[0] = RR_ARTinit[0]+(1-RR_ARTinit[0])/2;}
+
+			if (CurrYear == (RR_ARTinityr + r)-1) {
 				CurrARTinitiation[0] = CurrARTinitiation[0] * RR_ARTinit[r];
 				CurrARTinitiation[1] = CurrARTinitiation[1] * RR_ARTinit[r];
-			}
+			}			
 		}
 	}
 	else{
@@ -9836,11 +9840,17 @@ void SetARTinitiation()
 	}
 	//Change CurrARTinitiation to modify for HIV IC or other analyses	
 	for (int r = 0; r < 93; r++) {
-		if (CurrYear == (RR_ARTinityr + r)) {
+		if (RR_ARTinit[0] > 1) { RR_ARTinit[0] = RR_ARTinit[0]/2;}
+		if (RR_ARTinit[0] < 1) { RR_ARTinit[0] = RR_ARTinit[0]+(1-RR_ARTinit[0])/2;}
+
+			if (RR_ARTinit[0] < 1) { RR_ARTinit[0] = RR_ARTinit[0]+(1-RR_ARTinit[0])/2;}
+		
+		if (CurrYear == (RR_ARTinityr + r)-1) {
 			PaedARTinitiation = PaedARTinitiation * RR_ARTinit[r];
 		}
 	}
 
+		
 
 
 	ARTinitByStage[0][2] = 0.0;
@@ -23132,7 +23142,7 @@ void RunSample()
 	//LJ
 	for (int ic = 0; ic < ResampleSize; ic++) { 
 		for (iy = 0; iy < 86; iy++) {				
-			CondomUsageAdjFactor.out[ic][iy] = 5.57;  //calculated as # condoms distributed (HST DHB) divide by TotProtSexacts in the same year
+			CondomUsageAdjFactor.out[ic][iy] = 5.13;  //calculated as # condoms distributed (HST DHB) divide by TotProtSexacts in the same year
 			CovPregWomenTest.out[ic][iy] = 0.98;      //Default Value of CovPregWomenTest
 			TotSTestprimaryPHC.out[ic][iy] = 0;
 		}
@@ -23499,6 +23509,12 @@ void RunSample()
 	NewPrEPinNonFSW.RecordSample("NewPrEPinNonFSW.txt");
 	NewPrEPinFSW.RecordSample("NewPrEPinFSW.txt");
 	NewPrEPinPWID.RecordSample("NewPrEPinPWID.txt");
+
+	PrEPcoverageAllF.RecordSample("PrEPcoverageAllF.txt");
+	PrEPcoverageAGYW.RecordSample("PrEPcoverageAGYW.txt");
+	PrEPcoverageFSW.RecordSample("PrEPcoverageFSW.txt");
+	PrEPcoverageMSM.RecordSample("PrEPcoverageMSM.txt");
+
 
 	TotSexActs.RecordSample("TotSexActs.txt");
 	TotProtSexActs.RecordSample("TotProtSexActs.txt");
@@ -26513,14 +26529,70 @@ void SetSQ() {
 void SimInvestmentCase() {
 	SetSQ();
 
-	if (CurrSim > 1){
 
-		double p;
-		p = CurrSim;
-		p = 1+p/5;
-		LastCondomMultiplier = p;
+
+
+	/*
+	
+
+	double p = CurrSim;
+	p = 1.05 + ((p-1)/20);
+
+	//for (int iy = 2027-1985; iy < 86; iy++) { RR_PrEPstartPWID[iy] = 0.075;}	
+
+if (ProvModel == 0){ if (CurrYear >= 2027-1) { UltPrEPrateFSW = 0.0187;} }    //national    
+if (CurrSim == 1) {for (int iy = 2027-1985; iy < 86; iy++) { RR_PrEPstartPWID[iy] = 0.15;} }       
+if (CurrSim == 2) {for (int iy = 2027-1985; iy < 86; iy++) { RR_PrEPstartPWID[iy] = 3.7316;} }       
+if (CurrSim == 3) {for (int iy = 2027-1985; iy < 86; iy++) { RR_PrEPstartPWID[iy] = 2.7642;} }       
+if (CurrSim == 4) {for (int iy = 2027-1985; iy < 86; iy++) { RR_PrEPstartPWID[iy] = 1.8469;} }       
+if (CurrSim == 5) {for (int iy = 2027-1985; iy < 86; iy++) { RR_PrEPstartPWID[iy] = 0.9766;} }       
+if (CurrSim == 6) {for (int iy = 2027-1985; iy < 86; iy++) { RR_PrEPstartPWID[iy] = 0.075;} }       
+if (CurrSim == 7) {for (int iy = 2027-1985; iy < 86; iy++) { RR_PrEPstartPWID[iy] = 0;} }  */     
+
+/*
+	//we can only model one long acting PrEP at a time
+	if (CurrSim == 1){ //Baseline status quo = oral PrEP + low LEN (do we want to include any injectable PrEP in baseline?)
+		if (CurrYear >= ICstart - 1) {
+			UltCABLArateFSW = 0; //assume no long acting products at baseline
+		}
+	}
+
+	if (CurrSim == 2){ //Scale up oral PrEP only
+		if (CurrYear >= ICstart - 1) {
+			UltPrEPrateFSW = 0.10; //double the rates, default = 0.053
+		}
+	}
+
+	if (CurrSim == 3){ //Scale up LEN only, conservative scale up and duration
+		//efficacy
+		CABLAefficacy[0] = 0.99;
+		CABLAefficacy[1] = 0.99;
+		CABLAefficacyMSM = 0.99;
+		CABLAefficacyPreg = 0.99;	
+
+		//uptake rates
+		if (CurrYear >= ICstart - 1) {
+			UltCABLArateFSW = 0.06; //double the rates - figure out the rate
+
+			//possiblity here to change uptake rates by population, using parameters:
+			//RR_CABLAstartMSM, RR_CABLAstartPWID, RR_CABLAstartPWID, CABLApregnant and CABLAelig.. variables
+		}
+		//avg duration per person, in years (duration on programme + tail)
+		CABLAdur[0] = 0.5 + 0.25;   //men nonMSM
+		CABLAdur[1] = 0.5 + 0.25;   //women
+		CABLAdur[2] = 0.5 + 0.25;   //MSM
+		CABLAdurPreg = 0.5 + 0.25;  //pregnant women		
+	}
+
+	if (CurrSim == 4){ //Scale up MK - conservative, model: PHC
 
 	}
+
+	if (CurrSim == 5){ //Scale up MK - conservative, model: Mobile
+
+	}*/
+
+	
 	
 
 	/*
@@ -31248,78 +31320,61 @@ void GetDefaultAssump() {
 
 
 void Int_MMCBm2() {
-	double mmcfactor = 0.5;
 
-	if (bl == 0 || bl == 1 || bl == 3) {
-		for (int iy = ICstart - 1; iy < 86; iy++) {
-			RR_MMCpromo10[iy] = 1 * mmcfactor;
-			RR_MMCpromo15[iy] = 0.59 * mmcfactor;
-			RR_MMCpromo20[iy] = 0.27 * mmcfactor;
-			RR_MMCpromo25[iy] = 0.14 * mmcfactor;
-			RR_MMCpromo50[iy] = 0.012 * mmcfactor;
-		}
-	}
-	if (bl == 2 || bl == 4) {
-		for (int iy = ICstart - 1; iy < 86; iy++) {
-			RR_MMCpromo10[iy] = 0.55 * mmcfactor;
-			RR_MMCpromo15[iy] = 0.3245 * mmcfactor;
-			RR_MMCpromo20[iy] = 0.1485 * mmcfactor;
-			RR_MMCpromo25[iy] = 0.077 * mmcfactor;
-			RR_MMCpromo50[iy] = 0.0066 * mmcfactor;
-		}
-	}
+	double mmcfactor;
+	if (ProvModel == 0){	 mmcfactor = 0.5;}
+	if (ProvModel ==1 && ProvID == "EC"){ mmcfactor = 0.5; }
+	if (ProvModel ==1 && ProvID == "FS"){ mmcfactor = 0.5; }
+	if (ProvModel ==1 && ProvID == "GT"){ mmcfactor = 0.5; }
+	if (ProvModel ==1 && ProvID == "KZ"){ mmcfactor = 0.5; }
+	if (ProvModel ==1 && ProvID == "LM"){ mmcfactor = 0.5; }
+	if (ProvModel ==1 && ProvID == "MP"){ mmcfactor = 0.5; }
+	if (ProvModel ==1 && ProvID == "NC"){ mmcfactor = 0.5; }
+	if (ProvModel ==1 && ProvID == "NW"){ mmcfactor = 0.5; }
+	if (ProvModel ==1 && ProvID == "WC"){ mmcfactor = 0.5; }
 
+
+	for (int iy = ICstart - 1; iy < 86; iy++) {
+		RR_MMCpromo10[iy] = 1 * mmcfactor;
+		RR_MMCpromo15[iy] = 0.59 * mmcfactor;
+		RR_MMCpromo20[iy] = 0.27 * mmcfactor;
+		RR_MMCpromo25[iy] = 0.14 * mmcfactor;
+		RR_MMCpromo50[iy] = 0.012 * mmcfactor;
+	}
+	
 
 }
+
+
+
 void Int_MMCBm1() {
 	double mmcfactor = 0.8;
-
-	if (bl == 0 || bl == 1 || bl == 3) {
-		for (int iy = ICstart - 1; iy < 86; iy++) {
-			RR_MMCpromo10[iy] = 1 * mmcfactor;
-			RR_MMCpromo15[iy] = 0.59 * mmcfactor;
-			RR_MMCpromo20[iy] = 0.27 * mmcfactor;
-			RR_MMCpromo25[iy] = 0.14 * mmcfactor;
-			RR_MMCpromo50[iy] = 0.012 * mmcfactor;
-		}
+for (int iy = ICstart - 1; iy < 86; iy++) {
+		RR_MMCpromo10[iy] = 1 * mmcfactor;
+		RR_MMCpromo15[iy] = 0.59 * mmcfactor;
+		RR_MMCpromo20[iy] = 0.27 * mmcfactor;
+		RR_MMCpromo25[iy] = 0.14 * mmcfactor;
+		RR_MMCpromo50[iy] = 0.012 * mmcfactor;		
 	}
-	if (bl == 2 || bl == 4) {
-		for (int iy = ICstart - 1; iy < 86; iy++) {
-			RR_MMCpromo10[iy] = 0.55 * mmcfactor;
-			RR_MMCpromo15[iy] = 0.3245 * mmcfactor;
-			RR_MMCpromo20[iy] = 0.1485 * mmcfactor;
-			RR_MMCpromo25[iy] = 0.077 * mmcfactor;
-			RR_MMCpromo50[iy] = 0.0066 * mmcfactor;
-		}
-	}
+	
 }
 void Int_MMCDefault() {
 	double mmcfactor = 1;
+	
+	for (int iy = ICstart - 1; iy < 86; iy++) {
+		RR_MMCpromo10[iy] = 1 * mmcfactor;
+		RR_MMCpromo15[iy] = 0.59 * mmcfactor;
+		RR_MMCpromo20[iy] = 0.27 * mmcfactor;
+		RR_MMCpromo25[iy] = 0.14 * mmcfactor;
+		RR_MMCpromo50[iy] = 0.012 * mmcfactor;
+	}	
 
-	if (bl == 0 || bl == 1 || bl == 3) {
-		for (int iy = ICstart - 1; iy < 86; iy++) {
-			RR_MMCpromo10[iy] = 1 * mmcfactor;
-			RR_MMCpromo15[iy] = 0.59 * mmcfactor;
-			RR_MMCpromo20[iy] = 0.27 * mmcfactor;
-			RR_MMCpromo25[iy] = 0.14 * mmcfactor;
-			RR_MMCpromo50[iy] = 0.012 * mmcfactor;
-		}
-	}
-	if (bl == 2 || bl == 4) {
-		for (int iy = ICstart - 1; iy < 86; iy++) {
-			RR_MMCpromo10[iy] = 0.55 * mmcfactor;
-			RR_MMCpromo15[iy] = 0.3245 * mmcfactor;
-			RR_MMCpromo20[iy] = 0.1485 * mmcfactor;
-			RR_MMCpromo25[iy] = 0.077 * mmcfactor;
-			RR_MMCpromo50[iy] = 0.0066 * mmcfactor;
-		}
-	}
 }
 
 void Int_MMCBp1() {
 	double mmcfactor;
-
-	if (bl == 0 || bl == 1 || bl == 3) {
+ 
+	if (ProvModel == 0){
 		mmcfactor = 1.25;
 		for (int iy = ICstart - 1; iy < 86; iy++) {
 			RR_MMCpromo10[iy] = 1 * mmcfactor;
@@ -31329,16 +31384,33 @@ void Int_MMCBp1() {
 			RR_MMCpromo50[iy] = 0.012 * mmcfactor;
 		}
 	}
-	if (bl == 2 || bl == 4) {
-		mmcfactor = 1.65;
-		for (int iy = ICstart - 1; iy < 86; iy++) {
-			RR_MMCpromo10[iy] = 0.55 * mmcfactor;
-			RR_MMCpromo15[iy] = 0.3245 * mmcfactor;
-			RR_MMCpromo20[iy] = 0.1485 * mmcfactor;
-			RR_MMCpromo25[iy] = 0.077 * mmcfactor;
-			RR_MMCpromo50[iy] = 0.0066 * mmcfactor;
+
+	if (ProvModel == 1){ // province parameters still to be updated
+		if (ProvID == "EC"){
+			mmcfactor = 1.25;
+			for (int iy = ICstart - 1; iy < 86; iy++) {
+				RR_MMCpromo10[iy] = 1 * mmcfactor;
+				RR_MMCpromo15[iy] = 0.59 * mmcfactor;
+				RR_MMCpromo20[iy] = 0.27 * mmcfactor;
+				RR_MMCpromo25[iy] = 0.14 * mmcfactor;
+				RR_MMCpromo50[iy] = 0.012 * mmcfactor;
+			}
 		}
+		if (ProvID == "FS"){
+			mmcfactor = 1.25;
+			for (int iy = ICstart - 1; iy < 86; iy++) {
+				RR_MMCpromo10[iy] = 1 * mmcfactor;
+				RR_MMCpromo15[iy] = 0.59 * mmcfactor;
+				RR_MMCpromo20[iy] = 0.27 * mmcfactor;
+				RR_MMCpromo25[iy] = 0.14 * mmcfactor;
+				RR_MMCpromo50[iy] = 0.012 * mmcfactor;
+			}
+		}
+
+		//etc...
 	}
+
+	
 }
 
 
@@ -31398,27 +31470,25 @@ void Int_MMCBp3() {
 
 void Int_MMCMax() {
 	double mmcfactor;
+	if (ProvModel == 0){ mmcfactor = 1.5;}
+	if (ProvModel ==1 && ProvID == "EC"){ mmcfactor = 2; }
+	if (ProvModel ==1 && ProvID == "FS"){ mmcfactor = 2; }
+	if (ProvModel ==1 && ProvID == "GT"){ mmcfactor = 2; }
+	if (ProvModel ==1 && ProvID == "KZ"){ mmcfactor = 2; }
+	if (ProvModel ==1 && ProvID == "LM"){ mmcfactor = 2; }
+	if (ProvModel ==1 && ProvID == "MP"){ mmcfactor = 2; }
+	if (ProvModel ==1 && ProvID == "NC"){ mmcfactor = 2; }
+	if (ProvModel ==1 && ProvID == "NW"){ mmcfactor = 2; }
+	if (ProvModel ==1 && ProvID == "WC"){ mmcfactor = 2; }
 
-	if (bl == 0 || bl == 1 || bl == 3) {
-		mmcfactor = 2;
-		for (int iy = ICstart - 1; iy < 86; iy++) {
-			RR_MMCpromo10[iy] = 1 * mmcfactor;
-			RR_MMCpromo15[iy] = 0.59 * mmcfactor;
-			RR_MMCpromo20[iy] = 0.27 * mmcfactor;
-			RR_MMCpromo25[iy] = 0.14 * mmcfactor;
-			RR_MMCpromo50[iy] = 0.012 * mmcfactor;
-		}
+	for (int iy = ICstart - 1; iy < 86; iy++) {
+		RR_MMCpromo10[iy] = 1 * mmcfactor;
+		RR_MMCpromo15[iy] = 0.59 * mmcfactor;
+		RR_MMCpromo20[iy] = 0.27 * mmcfactor;
+		RR_MMCpromo25[iy] = 0.14 * mmcfactor;
+		RR_MMCpromo50[iy] = 0.012 * mmcfactor; 
 	}
-	if (bl == 2 || bl == 4) {
-		mmcfactor = 3.6;
-		for (int iy = ICstart - 1; iy < 86; iy++) {
-			RR_MMCpromo10[iy] = 0.55 * mmcfactor;
-			RR_MMCpromo15[iy] = 0.3245 * mmcfactor;
-			RR_MMCpromo20[iy] = 0.1485 * mmcfactor;
-			RR_MMCpromo25[iy] = 0.077 * mmcfactor;
-			RR_MMCpromo50[iy] = 0.0066 * mmcfactor;
-		}
-	}
+
 }
 
 
@@ -31484,13 +31554,13 @@ void Int_EIMCMax() {
 
 
 void Int_CondomSupplyBm2() {
-	LastCondomMultiplier = 0.5;
+	LastCondomMultiplier = 0.95;
 	for (int iy = ICstart; iy < 86; iy++) {
 		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.13;
 	}
 }
 void Int_CondomSupplyBm1() {
-	LastCondomMultiplier = 0.8;
+	LastCondomMultiplier = 0.97;
 	for (int iy = ICstart; iy < 86; iy++) {
 		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.13;
 	}
@@ -31502,25 +31572,25 @@ void Int_CondomSupplyDefault() {
 	}
 }
 void Int_CondomSupplyBp1() {
-	LastCondomMultiplier = 1.5;
+	LastCondomMultiplier = 1.025;
 	for (int iy = ICstart; iy < 86; iy++) {
 		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.13;
 	}
 }
 void Int_CondomSupplyBp2() {
-	LastCondomMultiplier = 2;
+	LastCondomMultiplier = 1.05;
 	for (int iy = ICstart; iy < 86; iy++) {
 		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.13;
 	}
 }
 void Int_CondomSupplyBp3() {
-	LastCondomMultiplier = 2.5;
+	LastCondomMultiplier = 1.075;
 	for (int iy = ICstart; iy < 86; iy++) {
 		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.13;
 	}
 }
 void Int_CondomSupplyMax() {
-	LastCondomMultiplier = 3;
+	LastCondomMultiplier = 1.1;
 	for (int iy = ICstart; iy < 86; iy++) {
 		CondomUsageAdjFactor.out[CurrSim - 1][iy] = 5.13;
 	}
@@ -31530,19 +31600,18 @@ void Int_CondomSupplyMax() {
 
 
 
-void Int_Test18monthsBm2() {
+void Int_Test18monthsBm2() {	
 	
-	
-	if (ProvModel == 0) { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
-	if (ProvModel == 1 && ProvID == "EC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
-	if (ProvModel == 1 && ProvID == "FS") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.0908; } }
-	if (ProvModel == 1 && ProvID == "GT") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.1244; } }
-	if (ProvModel == 1 && ProvID == "KZ") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.00845000000000001; } }
-	if (ProvModel == 1 && ProvID == "LM") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
-	if (ProvModel == 1 && ProvID == "MP") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.19235; } }
-	if (ProvModel == 1 && ProvID == "NC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
-	if (ProvModel == 1 && ProvID == "NW") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
-	if (ProvModel == 1 && ProvID == "WC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
+if (ProvModel == 0) { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.04175; } }
+if (ProvModel == 1 && ProvID == "EC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
+if (ProvModel == 1 && ProvID == "FS") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.19775; } }
+if (ProvModel == 1 && ProvID == "GT") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.1505; } }
+if (ProvModel == 1 && ProvID == "KZ") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.10235; } }
+if (ProvModel == 1 && ProvID == "LM") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
+if (ProvModel == 1 && ProvID == "MP") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.1994; } }
+if (ProvModel == 1 && ProvID == "NC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
+if (ProvModel == 1 && ProvID == "NW") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0.03395; } }
+if (ProvModel == 1 && ProvID == "WC") { for (int iy = ICstart; iy < 86; iy++) { TestingAt18mo[iy] = 0; } }
 
 
 }
@@ -31754,234 +31823,85 @@ void Int_Test10weeksMax() {
 
 
 void Int_OralPrepDefault() {
-	if (bl == 0 || bl == 1) {
-		if (CurrYear >= ICstart - 1) {
-			UltPrEPrateFSW = 0.035;
-		}
-
-		for (int iy = ICstart; iy < 86; iy++) {
-			PrEPeligMSM[iy] = 1;
-			PrEPeligOtherG[iy][1] = 0.02; //other women	
-			PrEPeligOtherG[iy][0] = 0.02; //other men	
-			PrEPeligAGYW[iy] = 1;
-
-			RR_PrEPstartF20[iy] = 0.5; //AGYW
-			RR_PrEPstartMSM[iy] = 0.4; //MSM			
-		}
+	
+	if (CurrYear >= ICstart - 1) {
+		UltPrEPrateFSW = 0.035;
 	}
 
-	if (bl == 3) {
-		//reduction on oral PrEP due to 50% OP to LEN (planned dist) on BL old	
-			
-		double OPtempAGYW[19] = {0.284988658904142,0.311236414844098,0.317339542464181,0.315863546498,0.315782215980871,0.328913599638829,0.328514625126812,0.329079570715253,0.330009489402073,0.330691694218155,0.33012062886437,0.330080428539509,0.32956059816084,0.329344953564536,0.329259114407213,0.329358419630089,0.329584304487113,0.329852934067434,0.344983943853991};
-		double OPtempFSW[19] = { 0.0253478397946021,0.0230674126675031,0.0225626151103978,0.0226209881009839,0.0225891294921098,0.0216424687100732,0.0216575985693442,0.0216649074160448,0.0216524540305742,0.0216241212266514,0.0216048619810834,0.0215957938516041,0.0215902870185404,0.0215892569290466,0.0215851279666815,0.0215663361022456,0.0215402542379482,0.0215185380922861,0.0205784930375266 };
-		double OPtempMSM[19] = { 0.389506918510113,0.407699037760727,0.409954006046206,0.405870196604483,0.405074798788771,0.42129431973938,0.42113953807894,0.419877023588626,0.417706709636956,0.415870631875716,0.415824136339286,0.415151785536109,0.414076587601332,0.414032947427478,0.414169473747495,0.41339533589962,0.412180137905985,0.411020874273844,0.42907992055608 };
-		double OPtempmen[19] = { 0.0192966358249795,0.0193219654765607,0.0192679003896619,0.0191988906135866,0.0191399052634929,0.0190731714041869,0.0189899668066841,0.0189182042426897,0.0188517013249968,0.0187863291788027,0.0187356529133891,0.0186801543979811,0.0186240694622907,0.0185602443572411,0.0185126017722302,0.0184606744825046,0.0184039101571664,0.0183434210103421,0.0182784598161834 }; 
-				
-		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltPrEPrateFSW = OPtempFSW[CurrYear - 2027]; } //FSW
-		if (CurrYear > 2045) { UltPrEPrateFSW = 0; } //FSW
+	for (int iy = ICstart; iy < 86; iy++) {
+		PrEPeligMSM[iy] = 1;
+		PrEPeligOtherG[iy][1] = 0.02; //other women	
+		PrEPeligOtherG[iy][0] = 0.02; //other men	
+		PrEPeligAGYW[iy] = 1;
+
+		RR_PrEPstartF20[iy] = 0.5; //AGYW
+		RR_PrEPstartMSM[iy] = 0.4; //MSM	
 		
-		//from 2028
-		for (int iy = ICstart + 1; iy < ICstart + 20; iy++) {
-			PrEPeligMSM[iy] = 1;
-			PrEPeligOtherG[iy][1] = 1; //other women	
-			PrEPeligOtherG[iy][0] = OPtempmen[iy - ICstart - 1]; //other men	
-			PrEPeligAGYW[iy] = 1;
-
-			RR_PrEPstartF20[iy] = OPtempAGYW[iy - ICstart - 1]; //AGYW
-			RR_PrEPstartMSM[iy] = OPtempMSM[iy - ICstart - 1]; //MSM					
-		}
+		PrEPpregnant[iy] = 0.0961; //pregnant women
+		
 	}
-	if (bl == 4) {
-
-		//reduction on oral PrEP
-		double OPtempAGYW[20] = { 0.0449185192751223,0.0481178367014518,0.0544895334188093,0.0564432781088772,0.0566843713535195,0.0558987985266399,0.054457650338534,0.0526313924303909,0.0509679626045153,0.0494243959504602,0.0478599418926793,0.0462366948058533,0.0448368236589839,0.0434493675769212,0.0421389773553893,0.041031059634061,0.0402858650219301,0.0397371094869155,0.0393845065715682,0.0392643120191439 };
-		double OPtempFSW[20] = { 0.0191644134188622,0.0197646801582181,0.0172740686067107,0.0163777021421273,0.0159967094490055,0.015810718502553,0.015728560409162,0.0157066488899985,0.0156758429808126,0.0156053345507765,0.0155263656255683,0.0154824997262143,0.0154522388551283,0.0154242800227396,0.0153846080197642,0.0153372834284121,0.0152891722212207,0.0152395503720741,0.0151930957425228,0.0151454090843067 };
-		double OPtempPBFW[20] = { 0.0675726924964318,0.0675898124727655,0.0683893167552858,0.0692712750779918,0.070091624754363,0.0709633905036695,0.0718549245565968,0.0727343575764936,0.0735913067970215,0.0744751437555695,0.0753981773490508,0.0762720447189409,0.0771967942881696,0.0781687506574088,0.0791318676361985,0.0801119487658186,0.0811189847570118,0.0821529889944375,0.0832090901690509,0.0842335722938514 };
-		double OPtempMSM[20] = { 0.384785359225636,0.386335542401396,0.405959799473164,0.412988658519685,0.418225174633974,0.423078699386503,0.423321588738059,0.422547624675325,0.423331001176747,0.422343947224196,0.421597122234241,0.421790623036649,0.421952625,0.422071476923077,0.42240702668585,0.42286780623608,0.423395795567867,0.423992889215102,0.424570648514851,0.425847248901099 };
-
-		double OPtempmen[20] = { 0.113642603689901,0.111954409416022,0.11158211261834,0.112569445029346,0.114528791099048,0.117204563455895,0.120620048735977,0.124705976616963,0.128857089723576,0.133273228783492,0.138027313987846,0.142846313297448,0.147260649497728,0.151838543236189,  0.156577391139001,0.160921597598497,0.16400367310262,0.166405607891529,0.168022335028178,0.169039266703699 };
-
-		if (CurrYear >= (ICstart + 1985) && CurrYear <= 2045) { UltPrEPrateFSW = OPtempFSW[CurrYear - 2027]; } //FSW
-		if (CurrYear > 2045) { UltPrEPrateFSW = 0; } //FSW
-
-		for (int iy = ICstart; iy < 86; iy++) {
-			PrEPeligMSM[iy] = 1;
-			PrEPeligOtherG[iy][1] = 1; //other women	
-			PrEPeligOtherG[iy][0] = OPtempmen[iy - ICstart - 1];; //other men	
-			PrEPeligAGYW[iy] = 1;
-
-			RR_PrEPstartF20[iy] = OPtempAGYW[iy - ICstart - 1]; //AGYW
-			RR_PrEPstartMSM[iy] = OPtempMSM[iy - ICstart - 1]; //MSM
-			//PrEPpregnant[iy] = OPtempPBFW[iy - ICstart - 1]; //PBFW					
-
-		}
-
-	}
-
+	
 }
 
 
 void Int_OralPrepMedium() {
-	if (bl == 0 || bl == 1) {
-		if (CurrYear >= ICstart + 1985 - 1) {
-			UltPrEPrateFSW = 0.05;
-		}
-
-		for (int iy = ICstart; iy < 86; iy++) {
-			PrEPeligMSM[iy] = 1;
-			PrEPeligOtherG[iy][1] = 0.02; //other women	
-			PrEPeligOtherG[iy][0] = 0.02; //other men	
-			PrEPeligAGYW[iy] = 1;
-
-			RR_PrEPstartF20[iy] = 0.5; //AGYW
-			RR_PrEPstartMSM[iy] = 0.4; //MSM			
-		}
-	}
-	if (bl == 3 || bl == 4) {
-		if (CurrYear >= ICstart + 1985 - 1) {
-			UltPrEPrateFSW = 0.035;
-		}
-
-		for (int iy = ICstart; iy < 86; iy++) {
-			PrEPeligMSM[iy] = 1;
-			PrEPeligOtherG[iy][1] = 0.02; //other women	
-			PrEPeligOtherG[iy][0] = 0.02; //other men	
-			PrEPeligAGYW[iy] = 1;
-
-			RR_PrEPstartF20[iy] = 0.5; //AGYW
-			RR_PrEPstartMSM[iy] = 0.4; //MSM				
-		}
+	
+	if (CurrYear >= ICstart + 1985 - 1) {
+		UltPrEPrateFSW = 0.05;
 	}
 
+	for (int iy = ICstart; iy < 86; iy++) {
+
+		PrEPeligMSM[iy] = 1;
+		PrEPeligOtherG[iy][1] = 0.02; //other women	
+		PrEPeligOtherG[iy][0] = 0.02; //other men	
+		PrEPeligAGYW[iy] = 1;
+
+		RR_PrEPstartF20[iy] = 0.5; //AGYW
+		RR_PrEPstartMSM[iy] = 0.4; //MSM		
+		
+		PrEPpregnant[iy] = 0.30; //pregnant women		
+	}	
 
 }
+
 void Int_OralPrepHigh() {
 
-	if (bl == 0 || bl == 1) {
-		if (CurrYear >= ICstart + 1985 - 1) {
-			UltPrEPrateFSW = 0.065;
-		}
-
-		for (int iy = ICstart; iy < 86; iy++) {
-			PrEPeligMSM[iy] = 1;
-			PrEPeligOtherG[iy][1] = 0.02; //other women	
-			PrEPeligOtherG[iy][0] = 0.02; //other men	
-			PrEPeligAGYW[iy] = 1;
-
-			RR_PrEPstartF20[iy] = 0.5; //AGYW
-			RR_PrEPstartMSM[iy] = 0.4; //MSM			
-		}
+	
+	if (CurrYear >= ICstart + 1985 - 1) {
+		UltPrEPrateFSW = 0.065;
 	}
-	if (bl == 3 || bl == 4) {
-		if (CurrYear >= ICstart + 1985 - 1) {
-			UltPrEPrateFSW = 0.07;
-		}
 
-		for (int iy = ICstart; iy < 86; iy++) {
-			PrEPeligMSM[iy] = 1;
-			PrEPeligOtherG[iy][1] = 0.02; //other women	
-			PrEPeligOtherG[iy][0] = 0.02; //other men	
-			PrEPeligAGYW[iy] = 1;
+	for (int iy = ICstart; iy < 86; iy++) {
+		PrEPeligMSM[iy] = 1;
+		PrEPeligOtherG[iy][1] = 0.02; //other women	
+		PrEPeligOtherG[iy][0] = 0.02; //other men	
+		PrEPeligAGYW[iy] = 1;
 
-			RR_PrEPstartF20[iy] = 0.5; //AGYW
-			RR_PrEPstartMSM[iy] = 0.4; //MSM			
-		}
-	}
+		RR_PrEPstartF20[iy] = 0.5; //AGYW
+		RR_PrEPstartMSM[iy] = 0.4; //MSM
+
+		PrEPpregnant[iy] = 0.5400; //pregnant women			
+	}	
 
 }
 
 
-void Int_OralPrepPregDefault() {
-
-	if (bl == 0 || bl == 1) {
-		for (int iy = ICstart; iy < 86; iy++) {
-			PrEPpregnant[iy] = 0.0961;
-		}
-	}
-
-	if (bl == 3) {
-		//reduction on oral PrEP due to 50% OP to LEN (planned dist) on BL old	
-		double OPtempPBFW[19] = { 0.0499505679755955,0.0497046925509099,0.049662906890645,0.0496282992186634,0.04959756408911,0.0495813045154604,0.0495861708759823,0.049584753351655,0.0495628389652968,0.0495332888161316,0.0495199651106715,0.0495169635942209,0.0495185872393578,0.0495165930625585,0.0495087237157914,0.0495003095935348,0.0494921224050725,0.0494839044561883,0.0494775358755037 };
-
-		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
-			PrEPpregnant[iy] = OPtempPBFW[iy - ICstart-1]; //PBFW			
-		}
-	}
-
-	if (bl == 4) {
-		//reduction on oral PrEP due to 50% OP to LEN (planned dist) on BL old	
-		double OPtempPBFW[20] = { 0.0923800233887172,0.0350467205599741,0.0343554650454656,0.0341334530749161,0.034195718940832,0.0344144357596978,0.0353174796934169,0.036535058659645,0.036725080477406,0.0365803547349116,0.0367091985214758,0.0376146557616668,0.0380872816508573,0.0386988160229885,0.0387988622550015,0.038991447304361,0.0392567551470219,0.0394482954520425,0.0396095419658494,0.0398378354106509 };
-		for (int iy = ICstart+1; iy < ICstart + 20; iy++) {
-			PrEPpregnant[iy] = OPtempPBFW[iy - ICstart - 1]; //PBFW			
-		}
-	}
+void Int_OralPrepPregDefault() {	
 }
 
 
 void Int_OralPrepPregBp1() {
-	if (bl == 0 || bl == 1) {
-		PrEPpregnant[ICstart] = 0.045;
-		PrEPpregnant[ICstart + 1] = 0.09;
-		for (int iy = ICstart + 2; iy < 86; iy++) {
-			PrEPpregnant[iy] = 0.1350;
-		}
-	}
-	if (bl == 3 || bl == 4) {
-		PrEPpregnant[ICstart] = 0.0787;
-		PrEPpregnant[ICstart + 1] = 0.0874;
-		for (int iy = ICstart + 2; iy < 86; iy++) {
-			PrEPpregnant[iy] = 0.0961;
-		}
-	}
+	
 }
 void Int_OralPrepPregBp2() {
-	if (bl == 0 || bl == 1) {
-		PrEPpregnant[ICstart] = 0.09;
-		PrEPpregnant[ICstart + 1] = 0.18;
-		for (int iy = ICstart + 2; iy < 86; iy++) {
-			PrEPpregnant[iy] = 0.2528;
-		}
-	}
-	if (bl == 3 || bl == 4) {
-		PrEPpregnant[ICstart] = 0.1309;
-		PrEPpregnant[ICstart + 1] = 0.1918;
-		for (int iy = ICstart + 2; iy < 86; iy++) {
-			PrEPpregnant[iy] = 0.2528;
-		}
-	}
+	
 }
 void Int_OralPrepPregBp3() {
-	if (bl == 0 || bl == 1) {
-		PrEPpregnant[ICstart] = 0.1350;
-		PrEPpregnant[ICstart + 1] = 0.2700;
-		for (int iy = ICstart + 2; iy < 86; iy++) {
-			PrEPpregnant[iy] = 0.4094;
-		}
-	}
-	if (bl == 3 || bl == 4) {
-		PrEPpregnant[ICstart] = 0.1831;
-		PrEPpregnant[ICstart + 1] = 0.2963;
-		for (int iy = ICstart + 2; iy < 86; iy++) {
-			PrEPpregnant[iy] = 0.4094;
-		}
-	}
+	
 }
 void Int_OralPrepPregMax() {
-	if (bl == 0 || bl == 1) {
-		PrEPpregnant[ICstart] = 0.18;
-		PrEPpregnant[ICstart + 1] = 0.36;
-		for (int iy = ICstart + 2; iy < 86; iy++) {
-			PrEPpregnant[iy] = 0.5400;
-		}
-	}
-	if (bl == 3 || bl == 4) {
-		PrEPpregnant[ICstart] = 0.2267;
-		PrEPpregnant[ICstart + 1] = 0.3833;
-		for (int iy = ICstart + 2; iy < 86; iy++) {
-			PrEPpregnant[iy] = 0.5400;
-		}
-	}
+	
 }
 
 
