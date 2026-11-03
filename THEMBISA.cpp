@@ -26544,8 +26544,6 @@ void SetSQ() {
 // ---------------------------------------------------------------------------
 void SetTBscenario()
 {
-	// Baselines captured once per simulation, before the first intervention year,
-	// so that values are applied to the baseline and never compound.
 	static double XpNegBase[86][2];
 	static double ILTFU1base = 0.0;
 	ILTFU_indi = 0;
@@ -26557,6 +26555,7 @@ void SetTBscenario()
  
 	PlusLifePHC = 0;
 	TBscreenMult = 1.0;                            // reset every call; only PHC Xpert / PlusLife scenarios change it
+												   // main implememtation in void CalcTBscreenPropn()
  
 	// Assumptions for all scenarios, including baseline
 	if (CurrYear >= 2026) {
@@ -26569,8 +26568,7 @@ void SetTBscenario()
 	else if (CurrYear > 2026)  yr = 2;
 	else return;
  
-	// ---- STATUS QUO from 2026, as in the coverage workbook (Baseline column) ----
-	// Applied to EVERY scenario, including baseline, because these programmes are not set in the model.
+	// ---- STATUS QUO from 2026, as in the coverage workbook (Baseline column, Google doc) ----
 	const double D2D_BASE = 0.02;                  // RateD2Dscreen baseline (D2D symptom screening sheet)
 	for (int i = 35; i < 61; i++) {
 		TPTfraction3HP[i]         = 0.2;
@@ -26590,7 +26588,7 @@ void SetTBscenario()
 	const int k   = (CurrSim - 2) / 4;             // intervention 0..12
 	const int lvl = (CurrSim - 2) % 4 + 1;         // 1..4 = B+1, B+2, B+3, Max
  
-	// ---- coverage tables [year][level 0..4], level 0 = baseline --------------
+	// ---- from GoogleDoc coverage tables [year][level 0..4], level 0 = baseline, level 4 = max -------------
 	// 0 TPT PLHIV
 	static const double tpt3HP[3][5]    = { {0.2,0.25833,0.31667,0.375,0.43333}, {0.2,0.31667,0.43333,0.55,0.66667}, {0.2,0.375,0.55,0.725,0.9} };
 	static const double tptMult[3][5]   = { {1,1.1475,1.295,1.4425,1.59}, {1,1.295,1.59,1.885,2.18}, {1,1.4425,1.885,2.3275,2.77} };
@@ -26613,7 +26611,7 @@ void SetTBscenario()
 	static const double cult[3][5]      = { {1.01,1.10364,1.19728,1.29093,1.38457}, {1.01,1.19728,1.38457,1.57185,1.75913}, {1.01,1.29093,1.57185,1.85278,2.1337} };
 	// 6, 7 PHC PlusLife / PHC Xpert: multiplier on TBsymptomScreened (identical tables on both sheets; baseline 1.12)
 	static const double phcMult[3][5]   = { {1.12,1.13083,1.14167,1.1525,1.16333}, {1.12,1.14167,1.16333,1.185,1.20667}, {1.12,1.1525,1.185,1.2175,1.25} };
-	const double PHC_BASE = 1.12;                  // set to 1.0 if the model's own TBsymptomScreened does NOT already include the 1.12 baseline
+	const double PHC_BASE = 1.12;                  // set to 1.0 if the model's own TBsymptomScreened does NOT already include the 1.12 baseline to reach ~3mil xperts
 	// 12 Initial loss to follow-up
 	static const double iltfu[3][5]     = { {0.18,0.17333,0.16667,0.16,0.15333}, {0.18,0.16667,0.15333,0.14,0.12667}, {0.18,0.16,0.14,0.12,0.1} };
  
