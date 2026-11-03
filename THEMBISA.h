@@ -1484,7 +1484,7 @@ double RandPrior[MCMCdim]; ///< Random numbers used to sample from prior in curr
 double Cholesky1[MCMCdim][MCMCdim];
 double Covariance[MCMCdim][MCMCdim]; ///< The covariance matrix for the MCMC parameters
 const int InitSample = 10000;
-const int ResampleSize = 15; // MK edit 
+const int ResampleSize = 53;//30; 
 int SampleID[ResampleSize];
 int CurrSim;
 double temp[ResampleSize][41]; ///< Previously local to the SampleInput function in OutputArray class
@@ -3071,7 +3071,8 @@ double TBOptmiseParms[ROWS_TBOpt][COLS_TBOpt];
 
 //long long totalcost[100][54]; //values for total cost, to export, array denote types and year
 //long long TotalCost[ResampleSize]; //Totalcost over 20 years
-
+double TBscreenMult = 1.0; // TB testing / screening multiplier
+int PlusLifePHC = 0; // 1 = PHC symptomatic tests costed as PlusLife
 int ILTFU_indi; //indicator to activate intervention to reduce ILTFU
 //double Diagnosed_LinkedIN[100][86];
 
@@ -3108,7 +3109,7 @@ double RetentionRR_POCVL = 1.06; //POC VL retention impact
 
 
 //const int CEAstart = 2015, CEAstop = 2034;
-string effectmeasure = "LYL"; //Choose effective measure to be used in ICER calculation: LYL, HIV, DALY
+//string effectmeasure = "LYL"; //Choose effective measure to be used in ICER calculation: LYL, HIV, DALY
 int newint, newnegint, NWnewint; //values for number of interventions in pool to be considered (excl those which were excluded)
 string InterventionName[ResampleSize][maxinter]; //Names for all interventions
 int InterventionExclude[ResampleSize][maxinter]; //Which interventions to exclude because they fall in the NW quandrant
@@ -3189,12 +3190,16 @@ long long totalcost[250][54]; //values for total cost, array denote types and ye
 long long CostforICER[ResampleSize][maxinter + 1];
 long long TotalCost[ResampleSize]; //Totalcost
 
-double LYLforICER[ResampleSize]; //LYL for ICER  - changed from long long to double 20 jan 16
+double LYLforICER[ResampleSize]; //LYL HIV for ICER  - changed from long long to double 20 jan 16
 double DALYforICER[ResampleSize]; //DALY for ICER
 long long HIVforICER[ResampleSize]; //HIV infections for ICER&&
 long long baselinecost[ResampleSize]; //Baseline TotalCost
 double baselineEff[ResampleSize]; //Effectiveness measure for baseline - changed from long long to double 20 jan 16
 
+
+string effectmeasure = "TB";
+void SetTBscenario();
+//void SetSQ_TB();
 // TB ICER outputs
 double TBLYLforICER[ResampleSize];     // TB life-years lost
 double TBDALYforICER[ResampleSize];    // TB DALYs, summed over the investment-case horizon
