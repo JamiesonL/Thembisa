@@ -28,7 +28,6 @@ using namespace std;
   #define MKDIR(path) mkdir((path).c_str(), 0755)
 #endif
 
-//int main() // commented out to work in VS code
 int main()
 {
 	
@@ -69,6 +68,7 @@ int main()
 			<< (now->tm_mon + 1) << '-'
 			<< now->tm_mday << "; Time " << h.str() << ":" << m.str() << endl;
 
+		//HIV outputs	
 		for (int i = 0; i < ResampleSize; i++) {
 			if (effectmeasure == "LYL") {
 				cout << "Scenario; TotalCost; LYL: " << i + 1 << "; " << TotalCost[i] << "; " << fixed << LYLforICER[i] << endl;
@@ -81,6 +81,26 @@ int main()
 			}
 		}
 
+		//TB 
+		for (int i = 0; i < ResampleSize; i++) {
+			if (effectmeasure == "LYL") {
+				cout << "Scenario; TotalCost; LYL_TB: " << i + 1 << "; " << TotalCost[i] << "; " << fixed << TBLYLforICER[i] << endl;
+			}
+			if (effectmeasure == "TB") {
+				cout << "Scenario; TotalCost; TB: " << i + 1 << "; " << TotalCost[i] << "; " << fixed << TBCasesforICER[i] << endl;
+			}
+			if (effectmeasure == "DALY") {
+				cout << "Scenario; TotalCost; TB_DALY: " << i + 1 << "; " << TotalCost[i] << "; " << fixed << TBDALYforICER[i] << endl;
+			}
+		}
+
+		//TB-HIV joint outputs
+		//for (int i = 0; i < ResampleSize; i++) {
+		//	if (effectmeasure == "DALY") {
+		//		cout << "Scenario; TotalCost; Combined_DALY: " << i + 1 << "; " << TotalCost[i] << "; "
+		//			<< fixed << (DALYforICER[i] + TBDALYforICER[i]) << endl;
+		//	}
+		//}
 	}
 
 	
@@ -16365,6 +16385,11 @@ void CalcTBscreenPropn()
 		}
 		if (TBsymptomScreened[iy] > 1.0) { TBsymptomScreened[iy] = 1.0; }
 	}
+
+	// TB-HIV investment case: changes for Xpert and Plus Life
+	TBsymptomScreened[iy] *= TBscreenMult;
+	if (TBsymptomScreened[iy] > 1.0) { TBsymptomScreened[iy] = 1.0; }
+
 	EmpiricalAdj = pow(TBsymptomScreened[iy] / 0.2, LogEmpiricToMicro);
 	TBsymptomScreened2[iy] = TBsymptomScreened[iy] / RRscreenSymptoms;
 	ModelTBtests[iy] = (temp1 + temp2) * TBsymptomScreened[iy];
@@ -26537,11 +26562,155 @@ void SetSQ() {
 	}	
 }
 
+// ---------------------------------------------------------------------------
+// TB intervention scenarios at Baseline / B+1 / B+2 / B+3 / Max coverage.
+// Values come from "TBadded_Re-calibration of coverage levels" (v2026.09.10),
+// Year 1 / Year 2 / Year 3+ tables on each TB sheet.
+// CurrSim 1            = baseline (nothing changed)  -> written to file as 0
+// CurrSim 2..53        = intervention k = (CurrSim-2)/4, level = (CurrSim-2)%4 + 1
+//                     level 1..4 = B+1, B+2, B+3, Max
+// ResampleSize = 53
+// ---------------------------------------------------------------------------
+void SetTBscenario()
+{
+	static double XpNegBase[86][2];
+	static double ILTFU1base = 0.0;
+	ILTFU_indi = 0;
 
+	if (CurrYear == 2024) {
+		for (int i = 0; i < 86; i++) { for (int ii = 0; ii < 2; ii++) { XpNegBase[i][ii] = CultureConfirmXpNeg[i][ii]; } }
+		ILTFU1base = InitialLTFU[1];
+	}
+ 
+	PlusLifePHC = 0;
+	TBscreenMult = 1.0;                            // reset every call; only PHC Xpert / PlusLife scenarios change it
+												   // main implememtation in void CalcTBscreenPropn()
+ 
+	// Assumptions for all scenarios, including baseline
+	if (CurrYear >= 2026) {
+		for (int i = 32; i < 61; i++) { MicroscopyPropn[i] = 0.0; IPTduration[i] = 6.0; }
+	}
+ 
+	int yr;                                        // 0 = 2026, 1 = 2027, 2 = 2028+
+	if (CurrYear == 2025)      yr = 0;             // CurrYear is the year BEFORE the one about to be simulated
+	else if (CurrYear == 2026) yr = 1;
+	else if (CurrYear > 2026)  yr = 2;
+	else return;
+ 
+	// ---- STATUS QUO from 2026, as in the coverage workbook (Baseline column, Google doc) ----
+	const double D2D_BASE = 0.02;                  // RateD2Dscreen baseline (D2D symptom screening sheet)
+	for (int i = 35; i < 61; i++) {
+		TPTfraction3HP[i]         = 0.2;
+		BaseIPTuptake[i]          = IPTuptakeUlt * 1.0;
+		PropnHHcontactScreened[i] = 0.48;
+		RateD2Dscreen[i]          = D2D_BASE;
+		PropnD2DdCXR[i]           = 0.0097;
+		PropnHHcontactTUTT[i]     = 0.29;
+		RatePrevTBscreened[i]     = 0.29;
+		PropnPrevTB_TUTT[i]       = 1.0;
+		RateART_TBscreened[i]     = 0.41;
+		PropnART_TB_TUTT[i]       = 1.0;
+	}
+ 
+	if (CurrSim < 2) return;                       // baseline: nothing more to change
+ 
+	const int k   = (CurrSim - 2) / 4;             // intervention 0..12
+	const int lvl = (CurrSim - 2) % 4 + 1;         // 1..4 = B+1, B+2, B+3, Max
+ 
+	// ---- from GoogleDoc coverage tables [year][level 0..4], level 0 = baseline, level 4 = max -------------
+	// 0 TPT PLHIV
+	static const double tpt3HP[3][5]    = { {0.2,0.25833,0.31667,0.375,0.43333}, {0.2,0.31667,0.43333,0.55,0.66667}, {0.2,0.375,0.55,0.725,0.9} };
+	static const double tptMult[3][5]   = { {1,1.1475,1.295,1.4425,1.59}, {1,1.295,1.59,1.885,2.18}, {1,1.4425,1.885,2.3275,2.77} };
+	// 1 TPT HH (uses tpt3HP above)
+	static const double hhScr[3][5]     = { {0.48,0.51375,0.5475,0.58125,0.615}, {0.48,0.5475,0.615,0.6825,0.75}, {0.48,0.58125,0.6825,0.78375,0.885} };
+	// 3 D2D symptom screen
+	static const double d2dSym[3][5]    = { {0.02,0.04872,0.07743,0.10615,0.13487}, {0.02,0.07743,0.13487,0.1923,0.24973}, {0.02,0.10615,0.1923,0.27845,0.3646} };
+	// 4 D2D dCXR
+	static const double dcxrRate[3][5]  = { {0.005,0.00533,0.00567,0.006,0.00633}, {0.005,0.00567,0.00633,0.007,0.00767}, {0.005,0.006,0.007,0.008,0.009} };
+	static const double dcxrProp[3][5]  = { {0.0097,0.01052,0.01133,0.01215,0.01297}, {0.0097,0.01133,0.01297,0.0146,0.01623}, {0.0097,0.01215,0.0146,0.01705,0.0195} };
+	// 5 PlusLife D2D
+	static const double plD2D[3][5]     = { {0,0.01519,0.03038,0.04557,0.06076}, {0,0.03038,0.06076,0.09115,0.12153}, {0,0.04557,0.09115,0.13672,0.18229} };
+	// 8 TUTT HH
+	static const double tuttHH[3][5]    = { {0.29,0.30517,0.32033,0.3355,0.35067}, {0.29,0.32033,0.35067,0.381,0.41133}, {0.29,0.3355,0.381,0.4265,0.472} };
+	// 9 TUTT previous TB
+	static const double tuttPrev[3][5]  = { {0.29,0.30394,0.31788,0.33182,0.34577}, {0.29,0.31788,0.34577,0.37365,0.40153}, {0.29,0.33182,0.37365,0.41547,0.4573} };
+	// 10 TUTT PLHIV
+	static const double tuttART[3][5]   = { {0.41,0.4275,0.445,0.4625,0.48}, {0.41,0.445,0.48,0.515,0.55}, {0.41,0.4625,0.515,0.5675,0.62} };
+	// 11 Culture for Xpert-negative PLHIV (CultureHIVpos_Multiplier; baseline 1.01)
+	static const double cult[3][5]      = { {1.01,1.10364,1.19728,1.29093,1.38457}, {1.01,1.19728,1.38457,1.57185,1.75913}, {1.01,1.29093,1.57185,1.85278,2.1337} };
+	// 6, 7 PHC PlusLife / PHC Xpert: multiplier on TBsymptomScreened (identical tables on both sheets; baseline 1.12)
+	static const double phcMult[3][5]   = { {1.12,1.13083,1.14167,1.1525,1.16333}, {1.12,1.14167,1.16333,1.185,1.20667}, {1.12,1.1525,1.185,1.2175,1.25} };
+	const double PHC_BASE = 1.12;                  // set to 1.0 if the model's own TBsymptomScreened does NOT already include the 1.12 baseline to reach ~3mil xperts
+	// 12 Initial loss to follow-up
+	static const double iltfu[3][5]     = { {0.18,0.17333,0.16667,0.16,0.15333}, {0.18,0.16667,0.15333,0.14,0.12667}, {0.18,0.16,0.14,0.12,0.1} };
+ 
+	for (int i = 35; i < 61; i++) {
+		switch (k) {
+		case 0:  // TPT_PLHIV
+			TPTfraction3HP[i] = tpt3HP[yr][lvl];
+			BaseIPTuptake[i]  = IPTuptakeUlt * tptMult[yr][lvl];
+			break;
+		case 1:  // TPT_HH
+			TPTfraction3HP[i]         = tpt3HP[yr][lvl];
+			PropnHHcontactScreened[i] = hhScr[yr][lvl];
+			PropnHHcontactTPT[i]      = 1.0;
+			break;
+		case 2:  // Symptom_Screening_HH
+			PropnHHcontactScreened[i] = hhScr[yr][lvl];
+			break;
+		case 3:  // Symptom_Screening_D2D
+			RateD2Dscreen[i] = d2dSym[yr][lvl];
+			break;
+		case 4:  // dCXR_Screening_D2D
+			RateD2Dscreen[i] = D2D_BASE * dcxrRate[yr][lvl] / 0.005;   // sheet baseline for this rate is 0.005
+			PropnD2DdCXR[i]  = dcxrProp[yr][lvl];
+			break;
+		case 5:  // PlusLife_testing_D2D
+			RateD2Dscreen[i] = (plD2D[yr][lvl] > D2D_BASE) ? plD2D[yr][lvl] : D2D_BASE;   // sheet baseline is 0; never below the D2D baseline
+			break;
+		case 6:  // PlusLife_testing_PHC: same uptake multiplier, but the tests are costed as PlusLife
+			PlusLifePHC = 1;
+			// fall through
+		case 7:  // Xpert_testing_PHC:    same multiplier (tables are identical); differs only in which test is costed
+			TBscreenMult = phcMult[yr][lvl] / PHC_BASE;
+			break;
+		case 8:  // TUTT_HH
+			PropnHHcontactTUTT[i]     = tuttHH[yr][lvl];
+			PropnHHcontactScreened[i] = 1.0;
+			break;
+		case 9:  // TUTT_PrevTB
+			RatePrevTBscreened[i] = tuttPrev[yr][lvl];
+			PropnPrevTB_TUTT[i]   = 1.0;
+			break;
+		case 10: // TUTT_PLHIV
+			RateART_TBscreened[i] = tuttART[yr][lvl];
+			PropnART_TB_TUTT[i]   = 1.0;
+			break;
+		case 11: // Culture_testing_PLHIV (relative to the 1.01 baseline)
+			CultureConfirmXpNeg[i][1] = XpNegBase[i][1] * cult[yr][lvl] / 1.01;
+			break;
+		case 12: // ILTFU (relative to the sampled baseline, 0.18 in the coverage sheet)
+			ILTFU_indi = 1;	
+			InitialLTFU[1] = ILTFU1base * iltfu[yr][lvl] / 0.18;
+			break;
+		}
+	}
+ 
+	if (k == 5) {   // PlusLife D2D uses tongue-swab testing; TongueSwabDetected is only computed in ReadAllFiles
+		TongueSwabTested = 1.0;
+		for (int ii = 0; ii < 2; ii++) {
+			TongueSwabDetected[ii] = (1.0 - AbleSputum[ii]) * TongueSwabTested * TongueSwabRelSe[ii] /
+				(AbleSputum[ii] + (1.0 - AbleSputum[ii]) * TongueSwabTested * TongueSwabRelSe[ii]);
+		}
+	}
+}
 
  
 void SimInvestmentCase() {
 	SetSQ();
+		//TB interventions
+	if (CurrYear == 2025) { cout << "TB scenario " << CurrSim << " active" << endl; }
+	if (IncludeTB == 1) { SetTBscenario(); }  
 
 	//9 scenarios, combinations of 1) no change, 2) slow, 3) fast for ART/LEN
 
@@ -27263,7 +27432,7 @@ void SetupCosts()
 
 	//Import unit/average costs		
 	ifstream file("Import_costs.csv");
-	for (int row = 0; row < 150; row++) {
+	for (int row = 0; row < 250; row++) {
 		string line;
 		getline(file, line);
 		stringstream iss(line);
@@ -28418,32 +28587,40 @@ void CalcCostModel()
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round((TBindexCasesLastYr * HHcontactsPerCase));
 		cc++;
-
+	
 		costpopl[cc] = "TPT coverage";
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = IPTcoverage.out[CurrSim - 1][ly-1] * 100.0;
 		cc++;
 
 		//-------------- TB Costing populations used for costing, these labels need to match up exactly to the labels in "Import_costs.csv"
+		double tptHH    = NewTPTinHHcontacts.out[CurrSim - 1][ly - 1];
+		double tptPLHIV = NewIPTlatent.out[CurrSim - 1][ly - 1] - tptHH;
+		double f3HP     = TPTfraction3HP[ly - 1];
+		
 		costpopl[cc] = "IPT for PLHIV";
 		costpop[cc][ly] = 0;
-		costpop[cc][ly] = IPTforPLHIV.out[CurrSim - 1][ly-1];
+		//costpop[cc][ly] = IPTforPLHIV.out[CurrSim - 1][ly-1];
+		costpop[cc][ly] = round(tptPLHIV * (1.0 - f3HP));   // IPT for PLHIV
 		cc++;
 
 		costpopl[cc] = "3HP for PLHIV";
 		costpop[cc][ly] = 0;
-		costpop[cc][ly] = TPT3HPforPLHIV.out[CurrSim - 1][ly-1];
+		//costpop[cc][ly] = TPT3HPforPLHIV.out[CurrSim - 1][ly-1];
+		costpop[cc][ly] = round(tptPLHIV * f3HP);           // 3HP for PLHIV
 		cc++;
 
 		//TPT for contacts
 		costpopl[cc] = "IPT for household contacts";
 		costpop[cc][ly] = 0;
-		costpop[cc][ly] = IPTforHH.out[CurrSim - 1][ly-1];
+		//costpop[cc][ly] = IPTforHH.out[CurrSim - 1][ly-1];
+		costpop[cc][ly] = round(tptHH * (1.0 - f3HP));      // IPT for household contacts
 		cc++;
 
 		costpopl[cc] = "3HP for household contacts";
 		costpop[cc][ly] = 0;
-		costpop[cc][ly] = TPT3HPforHH.out[CurrSim - 1][ly-1];
+		//costpop[cc][ly] = TPT3HPforHH.out[CurrSim - 1][ly-1];
+		costpop[cc][ly] = round(tptHH * f3HP);              // 3HP for household contacts
 		cc++;
 
 		costpopl[cc] = "TB Screening General PHC";
@@ -28492,17 +28669,20 @@ void CalcCostModel()
 
 		costpopl[cc] = "Testing (Follow-up Xpert DST)"; 
 		costpop[cc][ly] = 0;
-		costpop[cc][ly] = round(DiagnosedDrugSuscTest.out[CurrSim - 1][ly-1]);
+		if (PlusLifePHC == 1) {costpop[cc][ly] = round(LabDiagAdultTB.out[CurrSim - 1][ly - 1]);}
 		cc++;
 		
-		costpopl[cc] = "Testing (TSwabPlusLife PHC)"; 
+		// PHC symptomatic tests: costed as Xpert Ultra, or as PlusLife in the PlusLife scenarios
+		double phcTests = round((TotalScreens.out[CurrSim - 1][ly] - 1 * (1.0 - MicroscopyPropn[ly - 1])));
+
+		costpopl[cc] = "Testing (TSwabPlusLife PHC)";
 		costpop[cc][ly] = 0;
-		costpop[cc][ly] = round(TotTSwabScreensPHC.out[CurrSim - 1][ly-1]);
+		if (PlusLifePHC == 1) { costpop[cc][ly] = phcTests;}
 		cc++;
 
-		costpopl[cc] = "Testing (TSwabPlusLife immediate treat)"; 
+		costpopl[cc] = "Testing (TSwabPlusLife immediate treat)";
 		costpop[cc][ly] = 0;
-		costpop[cc][ly] = round(FollowupTreat.out[CurrSim - 1][ly-1]);
+		if (PlusLifePHC == 1) {costpop[cc][ly] = round(LabDiagAdultTB.out[CurrSim - 1][ly - 1]);}
 		cc++;
 
 		// Tongue swabs are offered to people seeking treatment for TB symptoms at PHC
@@ -28516,12 +28696,11 @@ void CalcCostModel()
 		//costpop[cc][ly] = ((TotTSwabScreensPHC.out[CurrSim - 1][ly] * (1.0 - MicroscopyPropn[ly]))); /// 1000000
 		//cc++;
 		
-		costpopl[cc] = "Testing (Xpert Ultra)"; 
+		costpopl[cc] = "Testing (Xpert Ultra)";
 		costpop[cc][ly] = 0;
-		costpop[cc][ly] = round((TotalScreens.out[CurrSim - 1][ly]-1 * (1.0 - MicroscopyPropn[ly-1])));
+		if (PlusLifePHC == 0) {	costpop[cc][ly] = phcTests;}
 		cc++;
 
-		
 	//Create a population for costing Xpert (drug susceptibilty testing) for those diagnosed positively on TSwabPlusLife
 	//	costpopl[cc] = "Testing: TUTT for PLHIV (follow-up)";
 	//	costpop[cc][ly] = round(NewRxAdultTB_ART_ICF.out[CurrSim - 1][ly] / (1.0 - CurrInitLTFU));
@@ -28625,12 +28804,14 @@ void CalcCostModel()
 
 		costpopl[cc] = "Treatment DS-TB (Outpatient)";
 		costpop[cc][ly] = 0;
-		costpop[cc][ly] = round(TotRxInitAllTBscreening.out[CurrSim - 1][ly-1] - New2ndRxAdultTB.out[CurrSim - 1][ly-1]);
+		//costpop[cc][ly] = round(TotRxInitAllTBscreening.out[CurrSim - 1][ly-1] - New2ndRxAdultTB.out[CurrSim - 1][ly-1]);
+		costpop[cc][ly] = round(NewRxAdultTB.out[CurrSim - 1][ly - 1] - New2ndRxAdultTB.out[CurrSim - 1][ly - 1]);
 		cc++;
 
 		costpopl[cc] = "Treatment: DS-TB (Inpatient)";
 		costpop[cc][ly] = 0;
-		costpop[cc][ly] = round((TotRxInitAllTBscreening.out[CurrSim - 1][ly-1] - New2ndRxAdultTB.out[CurrSim - 1][ly-1]) * 0.18);
+		//costpop[cc][ly] = round((TotRxInitAllTBscreening.out[CurrSim - 1][ly-1] - New2ndRxAdultTB.out[CurrSim - 1][ly-1]) * 0.18);
+		costpop[cc][ly] = round((NewRxAdultTB.out[CurrSim - 1][ly - 1] - New2ndRxAdultTB.out[CurrSim - 1][ly - 1]) * 0.18);
 		cc++;
 
 		costpopl[cc] = "False Positives on Treatment";
@@ -28646,8 +28827,8 @@ void CalcCostModel()
 		//NewDiangnoses * 14 % * 25% 
 		costpopl[cc] = "Treatment: Linkage to treatment";
 		costpop[cc][ly] = 0;
-		costpop[cc][ly] = LinkedToTreatment.out[CurrSim - 1][ly-1];
-		cc++;
+		if (ILTFU_indi == 1) { costpop[cc][ly] = round(0.25 * TotLabDiagAllTBscreening.out[CurrSim - 1][ly - 1]); }
+   		cc++;
 
 		//Linkage to treatment - 
 		//currently the cost of the intervention is applied to all diagnosed individuals (need to be treatmet initiations)
@@ -28700,7 +28881,7 @@ void CalcCostModel()
 		//We only care to run costs from 2023, for 20 years (though we set it to go to 2045)
 		if (ly >= ICstart && ly < ICstart + timehorizon + 1) {    //TO DO: ly >= ICstart - 1 to get the preceding year
 			for (int tc = 0; tc < cc; tc++) { //loop through cost population array first
-				for (int ic = 0; ic < 150; ic++) { //then loop through unit costs
+				for (int ic = 0; ic < 250; ic++) { //then loop through unit costs
 					if (costingl[ic] == costpopl[tc] && costpopl[tc] != "") {
 						totalcostl[tc] = costpopl[tc]; //label for cost output	
 
@@ -28730,7 +28911,7 @@ void CalcCostModel()
 	}
 
 
-	for (int row = 0; row < 150; row++) {
+	for (int row = 0; row < 250; row++) {
 		stringstream newline, newlinep;
 		if (Optimise == 0) {
 			newline << CurrSim - 1 << "," << totalcostl[row] << "," << unitcost2[row] << ", ";
