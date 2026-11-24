@@ -26562,11 +26562,20 @@ void SetTBscenario()
 {
 	static double XpNegBase[86][2];
 	static double ILTFU1base = 0.0;
+	// snapshot of the baseline values read from TBrollout.txt / sampled posterior (Leigh's 2.2 values), restored every call
+	static double TPT3HPbase[86], RatePrevBase[86], PropPrevBase[86], RateARTbase[86], PropARTbase[86];
 	ILTFU_indi = 0;
 
 	if (CurrYear == 2024) {
 		for (int i = 0; i < 86; i++) { for (int ii = 0; ii < 2; ii++) { XpNegBase[i][ii] = CultureConfirmXpNeg[i][ii]; } }
 		ILTFU1base = InitialLTFU[1];
+		for (int i = 0; i < 86; i++) {
+			TPT3HPbase[i]   = TPTfraction3HP[i];
+			RatePrevBase[i] = RatePrevTBscreened[i];
+			PropPrevBase[i] = PropnPrevTB_TUTT[i];
+			RateARTbase[i]  = RateART_TBscreened[i];
+			PropARTbase[i]  = PropnART_TB_TUTT[i];
+		}
 	}
  
 	PlusLifePHC = 0;
@@ -26587,16 +26596,18 @@ void SetTBscenario()
 	// ---- STATUS QUO from 2026, as in the coverage workbook (Baseline column, Google doc) ----
 	const double D2D_BASE = 0.02;                  // RateD2Dscreen baseline (D2D symptom screening sheet)
 	for (int i = 35; i < 61; i++) {
-		TPTfraction3HP[i]         = 0.2;
+		// 3HP, TUTT for PLHIV and previous-TB TUTT = Leigh's 2.2 values (TBrollout.txt / sampled posterior),
+		// restored from the snapshot each call so one scenario's levels cannot carry over into the next simulation
+		TPTfraction3HP[i]         = TPT3HPbase[i];
+		RatePrevTBscreened[i]     = RatePrevBase[i];
+		PropnPrevTB_TUTT[i]       = PropPrevBase[i];
+		RateART_TBscreened[i]     = RateARTbase[i];
+		PropnART_TB_TUTT[i]       = PropARTbase[i];
 		BaseIPTuptake[i]          = IPTuptakeUlt * 1.0;
 		PropnHHcontactScreened[i] = 0.48;
 		RateD2Dscreen[i]          = D2D_BASE;
 		PropnD2DdCXR[i]           = 0.0097;
-		PropnHHcontactTUTT[i]     = 0.29;
-		RatePrevTBscreened[i]     = 0.29;
-		PropnPrevTB_TUTT[i]       = 1.0;
-		RateART_TBscreened[i]     = 0.41;
-		PropnART_TB_TUTT[i]       = 1.0;
+		PropnHHcontactTUTT[i]     = 0.0;           // HH TUTT left out of the baseline
 	}
  
 	if (CurrSim < 2) return;                       // baseline: nothing more to change
@@ -26634,11 +26645,13 @@ void SetTBscenario()
 	for (int i = 35; i < 61; i++) {
 		switch (k) {
 		case 0:  // TPT_PLHIV
-			TPTfraction3HP[i] = tpt3HP[yr][lvl];
+			//TPTfraction3HP[i] = tpt3HP[yr][lvl];
 			BaseIPTuptake[i]  = IPTuptakeUlt * tptMult[yr][lvl];
+			if (tpt3HP[yr][lvl] > TPTfraction3HP[i]) TPTfraction3HP[i] = tpt3HP[yr][lvl];
 			break;
 		case 1:  // TPT_HH
-			TPTfraction3HP[i]         = tpt3HP[yr][lvl];
+			//TPTfraction3HP[i]         = tpt3HP[yr][lvl];
+			if (tpt3HP[yr][lvl] > TPTfraction3HP[i]) TPTfraction3HP[i] = tpt3HP[yr][lvl];
 			PropnHHcontactScreened[i] = hhScr[yr][lvl];
 			PropnHHcontactTPT[i]      = 1.0;
 			break;
