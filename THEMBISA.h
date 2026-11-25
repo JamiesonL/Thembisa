@@ -36,7 +36,7 @@ const int UseBrassLogit = 0; ///< 1 if using Brass relational logit to get non-H
 int PrEPorVM = 0; ///< 1 if allowing for PrEP or vaginal microbicides. Keep set to 0 as default; it
 				  ///< will automatically get recalculated if there is PrEP/VM rollout.
 const int IncludeTB = 1;//< 1 if including TB simulations // MK edits
-const int IncludeDR_TB = 0; ///< 1 if including drug-resisant (DR) TB 
+const int IncludeDR_TB = 1; ///< 1 if including drug-resisant (DR) TB 
 const int FixedTBscreening = 0; ///< 1 = fix the rates of TB screening at the values generated in
 								///< the uncertainty analysis (only valid if FixedUncertainty = 1)
 double RRtestingDiagnosed = 1.0; ///< Relative rate of consent to testing if individual is diagnosed
@@ -1484,11 +1484,7 @@ double RandPrior[MCMCdim]; ///< Random numbers used to sample from prior in curr
 double Cholesky1[MCMCdim][MCMCdim];
 double Covariance[MCMCdim][MCMCdim]; ///< The covariance matrix for the MCMC parameters
 const int InitSample = 10000;
-<<<<<<< HEAD
-const int ResampleSize = 14; // MK edit 
-=======
-const int ResampleSize = 53;//30; 
->>>>>>> origin/tb-model-updates
+const int ResampleSize = 2; 
 int SampleID[ResampleSize];
 int CurrSim;
 double temp[ResampleSize][41]; ///< Previously local to the SampleInput function in OutputArray class

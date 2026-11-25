@@ -23534,6 +23534,7 @@ void RunSample()
 	MSMbyAge.RecordSample(getOutputPath("PWIDbyAge.txt", IncludeTB, ProvModel, ProvID).c_str());
 
 	LYlostAIDS.RecordSample("LYlostAIDS.txt");
+	TotalPWID.RecordSample("TotalPWID.txt");
 
 	NewCABLAinNonMSM.RecordSample("NewCABLAinNonMSM.txt");
 	NewCABLAinMSM.RecordSample("NewCABLAinMSM.txt");	
@@ -23548,9 +23549,16 @@ void RunSample()
 	NewPrEPinPWID.RecordSample("NewPrEPinPWID.txt");
 
 	PrEPcoverageAllF.RecordSample("PrEPcoverageAllF.txt");
+	PrEPcoverageAllM.RecordSample("PrEPcoverageAllM.txt");
 	PrEPcoverageAGYW.RecordSample("PrEPcoverageAGYW.txt");
 	PrEPcoverageFSW.RecordSample("PrEPcoverageFSW.txt");
 	PrEPcoverageMSM.RecordSample("PrEPcoverageMSM.txt");
+
+	CABLAcoverageAllF.RecordSample("CABLAcoverageAllF.txt");
+	CABLAcoverageAllM.RecordSample("CABLAcoverageAllM.txt");
+	CABLAcoverageAGYW.RecordSample("CABLAcoverageAGYW.txt");
+	CABLAcoverageFSW.RecordSample("CABLAcoverageFSW.txt");
+	CABLAcoverageMSM.RecordSample("CABLAcoverageMSM.txt");	
 
 
 	TotSexActs.RecordSample("TotSexActs.txt");
@@ -26612,7 +26620,9 @@ void SetTBscenario()
 		PropnART_TB_TUTT[i]       = 1.0;
 	}
  
-	if (CurrSim < 2) return;                       // baseline: nothing more to change
+	//if (CurrSim < 2) return;                       // baseline: nothing more to change
+
+	return;
  
 	const int k   = (CurrSim - 2) / 4;             // intervention 0..12
 	const int lvl = (CurrSim - 2) % 4 + 1;         // 1..4 = B+1, B+2, B+3, Max
@@ -26708,154 +26718,141 @@ void SetTBscenario()
  
 void SimInvestmentCase() {
 	SetSQ();
+
+	if (CurrSim==2){
+
+		//HIV interventions
+		Int_ARTuniversalMax(); 
+		Int_CondomSupplyMax();
+		Int_MMCMax();
+		Int_OralPrepMax();
+		Int_LENndohMax();
+		Int_TestAdolMax();
+		Int_HCTMax();
+		Int_STpackMax();
+		PropMessaging = 0.95;
+		PropWithPOCVL = 0.2;
+		prop_peernav = 0.95;
+
+
 		//TB interventions
-	if (CurrYear == 2025) { cout << "TB scenario " << CurrSim << " active" << endl; }
+		// ---- from GoogleDoc coverage tables [year][level 0..4], level 0 = baseline, level 4 = max -------------
+		// TPT PLHIV
+		static const double tpt3HP[3][5]    = { {0.2,0.25833,0.31667,0.375,0.43333}, {0.2,0.31667,0.43333,0.55,0.66667}, {0.2,0.375,0.55,0.725,0.9} };
+		static const double tptMult[3][5]   = { {1,1.1475,1.295,1.4425,1.59}, {1,1.295,1.59,1.885,2.18}, {1,1.4425,1.885,2.3275,2.77} };
+		// TPT HH (uses tpt3HP above)
+		static const double hhScr[3][5]     = { {0.48,0.51375,0.5475,0.58125,0.615}, {0.48,0.5475,0.615,0.6825,0.75}, {0.48,0.58125,0.6825,0.78375,0.885} };
+		//D2D symptom screen
+		static const double d2dSym[3][5]    = { {0.02,0.04872,0.07743,0.10615,0.13487}, {0.02,0.07743,0.13487,0.1923,0.24973}, {0.02,0.10615,0.1923,0.27845,0.3646} };	
+		// TUTT HH
+		static const double tuttHH[3][5]    = { {0.29,0.30517,0.32033,0.3355,0.35067}, {0.29,0.32033,0.35067,0.381,0.41133}, {0.29,0.3355,0.381,0.4265,0.472} };
+		// TUTT previous TB
+		static const double tuttPrev[3][5]  = { {0.29,0.30394,0.31788,0.33182,0.34577}, {0.29,0.31788,0.34577,0.37365,0.40153}, {0.29,0.33182,0.37365,0.41547,0.4573} };
+		// TUTT PLHIV
+		static const double tuttART[3][5]   = { {0.41,0.4275,0.445,0.4625,0.48}, {0.41,0.445,0.48,0.515,0.55}, {0.41,0.4625,0.515,0.5675,0.62} };	
+		// PHC Xpert: multiplier on TBsymptomScreened (identical tables on both sheets; baseline 1.12)
+		static const double phcMult[3][5]   = { {1.12,1.13083,1.14167,1.1525,1.16333}, {1.12,1.14167,1.16333,1.185,1.20667}, {1.12,1.1525,1.185,1.2175,1.25} };
+		const double PHC_BASE = 1.12;                  // set to 1.0 if the model's own TBsymptomScreened does NOT already include the 1.12 baseline to reach ~3mil xperts
+
+		
+		for (int i = ICstart; i < 86; i++) {
+			int lvl=4, yr=2;
+			// TPT_PLHIV
+			TPTfraction3HP[i] = tpt3HP[yr][lvl];
+			BaseIPTuptake[i]  = IPTuptakeUlt * tptMult[yr][lvl];
+
+			// Symptom_Screening_HH
+			PropnHHcontactScreened[i] = hhScr[yr][lvl];
+
+			// Symptom_Screening_D2D
+			RateD2Dscreen[i] = d2dSym[yr][lvl];
+
+			// Xpert_testing_PHC:    same multiplier (tables are identical); differs only in which test is costed
+			TBscreenMult = phcMult[yr][lvl] / PHC_BASE;
+
+			// TUTT_HH
+			PropnHHcontactTUTT[i]     = tuttHH[yr][lvl];
+			PropnHHcontactScreened[i] = 1.0;
+
+			// TUTT_PrevTB
+			RatePrevTBscreened[i] = tuttPrev[yr][lvl];
+			PropnPrevTB_TUTT[i]   = 1.0;
+
+			// TUTT_PLHIV
+			RateART_TBscreened[i] = tuttART[yr][lvl];
+			PropnART_TB_TUTT[i]   = 1.0;
+		}
+	}	
+}
+
+
+
+
+/*
+
+void SimInvestmentCase() {
+	SetSQ();
+		//TB interventions
+	//if (CurrYear == 2025) { cout << "TB scenario " << CurrSim << " active" << endl; }
 	if (IncludeTB == 1) { SetTBscenario(); }  
 
 	//9 scenarios, combinations of 1) no change, 2) slow, 3) fast for ART/LEN
 
+	//LEN duration 1 year for all	
+	CABLAdur[0] = 1; //men nonMSM
+	CABLAdur[1] = 1; //women
+	CABLAdur[2] = 1;   //MSM
+	CABLAdurPreg = 1;   //pregnant women	
 
-	//ART no change, LEN no change -aka baseline
-	if (CurrSim == 1){} 
+	if (CurrYear >= 2026-1) { UltCABLArateFSW = 0.0;}
 
-	//ART slow, LEN no change - and no VLS
-	if (CurrSim == 2){
-		RR_ARTinityr = ICstart + 1985;
-		for (int i = 0; i < 93; i++) {	
-			RR_ARTinit[i] = 7.8; 	
-			/*if (i == 0) { RR_ARTinit[i] = 1.5; }	
-			if (i == 1) { RR_ARTinit[i] = 2.9; }	
-			if (i == 2) { RR_ARTinit[i] = 4.4; }	
-			if (i == 3) { RR_ARTinit[i] = 5.6; }	
-			if (i == 4) { RR_ARTinit[i] = 7.0; }*/	
-			if (i == 0) { RR_ARTinit[i] = 1.68; }	
-			if (i == 1) { RR_ARTinit[i] = 2.36; }	
-			if (i == 2) { RR_ARTinit[i] = 3.04; }	
-			if (i == 3) { RR_ARTinit[i] = 3.72; }	
-			if (i == 4) { RR_ARTinit[i] = 4.4; }	
-			if (i == 5) { RR_ARTinit[i] = 5.08; }	
-			if (i == 6) { RR_ARTinit[i] = 5.76; }	
-			if (i == 7) { RR_ARTinit[i] = 6.44; }	
-			if (i == 8) { RR_ARTinit[i] = 7.12; }
-		}
+	for (int i = 2029-1985; i < 86; i++) {	
+		
+		CABLAeligMSM[i]=0.0;
+		CABLAeligAGYW[i]=0.0;	
+		RR_CABLAstartPWID[i]=0.0;			-
+		CABLAeligOtherG[i][1] = 0; //other women	
+		CABLAeligOtherG[i][0] = 0; //other women	
 	}
 
-	//ART fast, LEN no change - and no VLS
+	//ART/VLS no change, LEN no change -aka baseline
+	if (CurrSim == 1){ //LEN only for 2027 and 2028
+		
+
+	}
+	if (CurrSim == 2){ //LEN beyond 2028. eg thembisa default
+		if (CurrYear >= 2026-1) { UltCABLArateFSW = 0.03;}
+
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
+
+	} 
+	
+	//ART no change, 1m LEN scale up - and no VLS95
 	if (CurrSim == 3){
-		RR_ARTinityr = ICstart + 1985;
-		for (int i = 0; i < 93; i++) {				
-			RR_ARTinit[i] = 7.8; 
-			if (i == 0) { RR_ARTinit[i] = 4; }	
-		}
-	}
-
-
-
-
-	//ART slow, LEN no change
-	if (CurrSim == 4){
-		VLsuppOR = 10;
-
-		RR_ARTinityr = ICstart + 1985;
-		for (int i = 0; i < 93; i++) {	
-			RR_ARTinit[i] = 7.8; 	
-			/*if (i == 0) { RR_ARTinit[i] = 1.5; }	
-			if (i == 1) { RR_ARTinit[i] = 2.9; }	
-			if (i == 2) { RR_ARTinit[i] = 4.4; }	
-			if (i == 3) { RR_ARTinit[i] = 5.6; }	
-			if (i == 4) { RR_ARTinit[i] = 7.0; }*/	
-			if (i == 0) { RR_ARTinit[i] = 1.68; }	
-			if (i == 1) { RR_ARTinit[i] = 2.36; }	
-			if (i == 2) { RR_ARTinit[i] = 3.04; }	
-			if (i == 3) { RR_ARTinit[i] = 3.72; }	
-			if (i == 4) { RR_ARTinit[i] = 4.4; }	
-			if (i == 5) { RR_ARTinit[i] = 5.08; }	
-			if (i == 6) { RR_ARTinit[i] = 5.76; }	
-			if (i == 7) { RR_ARTinit[i] = 6.44; }	
-			if (i == 8) { RR_ARTinit[i] = 7.12; }
-		}
-	}
-
-	//ART fast, LEN no change
-	if (CurrSim == 5){
-		VLsuppOR = 10;
-
-		RR_ARTinityr = ICstart + 1985;
-		for (int i = 0; i < 93; i++) {				
-			RR_ARTinit[i] = 7.8; 
-			if (i == 0) { RR_ARTinit[i] = 4; }	
-		}
-	}
-
-
-
-
-
-
-	//ART no change, 1m LEN scale up
-	if (CurrSim == 6){
 		double tempLEN[22] = { 0.1299,0.1141,0.1029,0.1028,0.1012,0.0963,0.0855,0.0836,0.0772,0.0761,0.0735,0.0709,0.0693,0.0679,0.0667,0.0671,0.0664,0.0654,0.0643,0.0631,0.062,0.0609 };
 		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.1406;}
 		if (CurrYear >= 2032) {
    			int idx = CurrYear - 2032;
     		if (idx > 21) {idx = 21;  }        
     		UltCABLArateFSW = tempLEN[idx];
+		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
 		}
 	} 
 
-	//ART slow, LEN 1m scale up
-	if (CurrSim == 7){
-		VLsuppOR = 10;
-
-		RR_ARTinityr = ICstart + 1985;
-		for (int i = 0; i < 93; i++) {	
-			RR_ARTinit[i] = 7.8; 
-			/*	
-			if (i == 0) { RR_ARTinit[i] = 1.5; }	
-			if (i == 1) { RR_ARTinit[i] = 2.9; }	
-			if (i == 2) { RR_ARTinit[i] = 4.4; }	
-			if (i == 3) { RR_ARTinit[i] = 5.6; }	
-			if (i == 4) { RR_ARTinit[i] = 7.0; */
-			if (i == 0) { RR_ARTinit[i] = 1.68; }	
-			if (i == 1) { RR_ARTinit[i] = 2.36; }	
-			if (i == 2) { RR_ARTinit[i] = 3.04; }	
-			if (i == 3) { RR_ARTinit[i] = 3.72; }	
-			if (i == 4) { RR_ARTinit[i] = 4.4; }	
-			if (i == 5) { RR_ARTinit[i] = 5.08; }	
-			if (i == 6) { RR_ARTinit[i] = 5.76; }	
-			if (i == 7) { RR_ARTinit[i] = 6.44; }	
-			if (i == 8) { RR_ARTinit[i] = 7.12; }
-		}
-
-		double tempLEN[22] = { 0.1299,0.1141,0.1029,0.1028,0.1012,0.0963,0.0855,0.0836,0.0772,0.0761,0.0735,0.0709,0.0693,0.0679,0.0667,0.0671,0.0664,0.0654,0.0643,0.0631,0.062,0.0609 };
-		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.1406;}
-		if (CurrYear >= 2032) {
-   			int idx = CurrYear - 2032;
-    		if (idx > 21) {idx = 21;  }        
-    		UltCABLArateFSW = tempLEN[idx];
-		}
-	}
-
-	//ART fast, LEN 1m scale up
-	if (CurrSim == 8){
-		VLsuppOR = 10;
-
-		RR_ARTinityr = ICstart + 1985;
-		for (int i = 0; i < 93; i++) {				
-			RR_ARTinit[i] = 7.8; 
-			if (i == 0) { RR_ARTinit[i] = 4; }	
-		}
-		double tempLEN[22] = { 0.1299,0.1141,0.1029,0.1028,0.1012,0.0963,0.0855,0.0836,0.0772,0.0761,0.0735,0.0709,0.0693,0.0679,0.0667,0.0671,0.0664,0.0654,0.0643,0.0631,0.062,0.0609 };
-		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.1406;}
-		if (CurrYear >= 2032) {
-   			int idx = CurrYear - 2032;
-    		if (idx > 21) {idx = 21;  }        
-    		UltCABLArateFSW = tempLEN[idx];		}
-	}
-
-
-	//ART no change, LEN 2m scale up
-	if (CurrSim == 9){
+	//ART no change, LEN 2m scale up - and no VLS95
+	if (CurrSim == 4){
 		double tempLEN[22] = { 0.3023,0.2606,0.2316,0.229,0.2242,0.2115,0.1842,0.1792,0.1632,0.16,0.1533,0.147,0.1431,0.1396,0.137,0.1349,0.134,0.1307,0.1268,0.1227,0.1188 };
 		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.3226;}
 		if (CurrYear >= 2032) {
@@ -26863,21 +26860,97 @@ void SimInvestmentCase() {
     		if (idx > 21) {idx = 21;  }        
     		UltCABLArateFSW = tempLEN[idx];
 		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
+	} 
+
+	//ART no change, LEN 4m scale up - and no VLS95
+	if (CurrSim == 5){
+		double tempLEN[22] = { 0.7101,	0.6112,	0.5575,	0.5329,	0.5075,	0.4542,	0.4172,	0.3819,	0.36,	0.3432,	0.3279,	0.3157,	0.3065,	0.2997,	0.2946,	0.2919,	0.2872,	0.2789,	0.267,	0.2536,	0.2418 };
+		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.808;}
+		if (CurrYear >= 2032) {
+   			int idx = CurrYear - 2032;
+    		if (idx > 21) {idx = 21;  }        
+    		UltCABLArateFSW = tempLEN[idx];
+		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
 	} 
 
 
+	//ART slow, LEN no change - and no VLS95
+	if (CurrSim == 6){
+		//VLsuppOR = 10;
+		//UTTretention = 1;
 
-	//ART slow, LEN 2m scale up
-	if (CurrSim == 10){
-		VLsuppOR = 10;
 		RR_ARTinityr = ICstart + 1985;
 		for (int i = 0; i < 93; i++) {	
-			RR_ARTinit[i] = 7.8; 	
-			/*if (i == 0) { RR_ARTinit[i] = 1.5; }	
-			if (i == 1) { RR_ARTinit[i] = 2.9; }	
-			if (i == 2) { RR_ARTinit[i] = 4.4; }	
-			if (i == 3) { RR_ARTinit[i] = 5.6; }	
-			if (i == 4) { RR_ARTinit[i] = 7.0; }*/	
+			RR_ARTinit[i] = 7.8; 				
+			if (i == 0) { RR_ARTinit[i] = 1.68; }	
+			if (i == 1) { RR_ARTinit[i] = 2.36; }	
+			if (i == 2) { RR_ARTinit[i] = 3.04; }	
+			if (i == 3) { RR_ARTinit[i] = 3.72; }	
+			if (i == 4) { RR_ARTinit[i] = 4.4; }	
+			if (i == 5) { RR_ARTinit[i] = 5.08; }	
+			if (i == 6) { RR_ARTinit[i] = 5.76; }	
+			if (i == 7) { RR_ARTinit[i] = 6.44; }	
+			if (i == 8) { RR_ARTinit[i] = 7.12; }
+		}
+	}
+
+
+
+	//ART slow, LEN 1m scale up - and no VLS95
+	if (CurrSim == 7){
+		//UTTretention = 1;
+		//VLsuppOR = 10;
+		RR_ARTinityr = ICstart + 1985;
+		for (int i = 0; i < 93; i++) {	
+			RR_ARTinit[i] = 7.8; 			
+			if (i == 0) { RR_ARTinit[i] = 1.68; }	
+			if (i == 1) { RR_ARTinit[i] = 2.36; }	
+			if (i == 2) { RR_ARTinit[i] = 3.04; }	
+			if (i == 3) { RR_ARTinit[i] = 3.72; }	
+			if (i == 4) { RR_ARTinit[i] = 4.4; }	
+			if (i == 5) { RR_ARTinit[i] = 5.08; }	
+			if (i == 6) { RR_ARTinit[i] = 5.76; }	
+			if (i == 7) { RR_ARTinit[i] = 6.44; }	
+			if (i == 8) { RR_ARTinit[i] = 7.12; }
+		}
+
+		double tempLEN[22] = { 0.1299,0.1141,0.1029,0.1028,0.1012,0.0963,0.0855,0.0836,0.0772,0.0761,0.0735,0.0709,0.0693,0.0679,0.0667,0.0671,0.0664,0.0654,0.0643,0.0631,0.062,0.0609 };
+		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.1406;}
+		if (CurrYear >= 2032) {
+   			int idx = CurrYear - 2032;
+    		if (idx > 21) {idx = 21;  }        
+    		UltCABLArateFSW = tempLEN[idx];
+		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
+	}
+
+	//ART slow, LEN 2m scale up - and no VLS95
+	if (CurrSim == 8){
+		//UTTretention = 1;
+		//VLsuppOR = 10;
+		RR_ARTinityr = ICstart + 1985;
+		for (int i = 0; i < 93; i++) {	
+			RR_ARTinit[i] = 7.8; 				
 			if (i == 0) { RR_ARTinit[i] = 1.68; }	
 			if (i == 1) { RR_ARTinit[i] = 2.36; }	
 			if (i == 2) { RR_ARTinit[i] = 3.04; }	
@@ -26895,11 +26968,93 @@ void SimInvestmentCase() {
     		if (idx > 21) {idx = 21;  }        
     		UltCABLArateFSW = tempLEN[idx];
 		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
 	}
 
-	//ART fast, LEN 2m scale up
+
+	//ART slow, LEN 4m scale up - and no VLS95
+	if (CurrSim == 9){
+		//UTTretention = 1;
+		//VLsuppOR = 10;
+		RR_ARTinityr = ICstart + 1985;
+		for (int i = 0; i < 93; i++) {	
+			RR_ARTinit[i] = 7.8; 				
+			if (i == 0) { RR_ARTinit[i] = 1.68; }	
+			if (i == 1) { RR_ARTinit[i] = 2.36; }	
+			if (i == 2) { RR_ARTinit[i] = 3.04; }	
+			if (i == 3) { RR_ARTinit[i] = 3.72; }	
+			if (i == 4) { RR_ARTinit[i] = 4.4; }	
+			if (i == 5) { RR_ARTinit[i] = 5.08; }	
+			if (i == 6) { RR_ARTinit[i] = 5.76; }	
+			if (i == 7) { RR_ARTinit[i] = 6.44; }	
+			if (i == 8) { RR_ARTinit[i] = 7.12; }	
+		}
+		double tempLEN[22] = { 0.7101,	0.6112,	0.5575,	0.5329,	0.5075,	0.4542,	0.4172,	0.3819,	0.36,	0.3432,	0.3279,	0.3157,	0.3065,	0.2997,	0.2946,	0.2919,	0.2872,	0.2789,	0.267,	0.2536,	0.2418 };
+		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.808;}
+		if (CurrYear >= 2032) {
+   			int idx = CurrYear - 2032;
+    		if (idx > 21) {idx = 21;  }        
+    		UltCABLArateFSW = tempLEN[idx];
+		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
+	}
+
+
+	//ART fast, LEN no change - and no VLS 95
+	if (CurrSim == 10){
+		//UTTretention = 1;
+		//VLsuppOR = 10;
+		RR_ARTinityr = ICstart + 1985;
+		for (int i = 0; i < 93; i++) {				
+			RR_ARTinit[i] = 7.8; 
+			if (i == 0) { RR_ARTinit[i] = 4; }	
+		}
+	}
+
+	//ART fast, LEN 1m scale up  - and no VLS 95
 	if (CurrSim == 11){
-		VLsuppOR = 10;
+		//VLsuppOR = 10;
+		//UTTretention = 1;
+
+		RR_ARTinityr = ICstart + 1985;
+		for (int i = 0; i < 93; i++) {				
+			RR_ARTinit[i] = 7.8; 
+			if (i == 0) { RR_ARTinit[i] = 4; }	
+		}
+		double tempLEN[22] = { 0.1299,0.1141,0.1029,0.1028,0.1012,0.0963,0.0855,0.0836,0.0772,0.0761,0.0735,0.0709,0.0693,0.0679,0.0667,0.0671,0.0664,0.0654,0.0643,0.0631,0.062,0.0609 };
+		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.1406;}
+		if (CurrYear >= 2032) {
+   			int idx = CurrYear - 2032;
+    		if (idx > 21) {idx = 21;  }        
+    		UltCABLArateFSW = tempLEN[idx];		
+		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
+	}
+
+	
+
+	//ART fast, LEN 2m scale up  - and no VLS 95
+	if (CurrSim == 12){
+		//UTTretention = 1;
+		//VLsuppOR = 10;
 		RR_ARTinityr = ICstart + 1985;
 		for (int i = 0; i < 93; i++) {				
 			RR_ARTinit[i] = 7.8; 
@@ -26912,43 +27067,24 @@ void SimInvestmentCase() {
     		if (idx > 21) {idx = 21;  }        
     		UltCABLArateFSW = tempLEN[idx];
 		}
-	}
-
-
-
-	//ART no change, LEN 4m scale up
-	if (CurrSim == 12){
-		double tempLEN[22] = { 0.7101,	0.6112,	0.5575,	0.5329,	0.5075,	0.4542,	0.4172,	0.3819,	0.36,	0.3432,	0.3279,	0.3157,	0.3065,	0.2997,	0.2946,	0.2919,	0.2872,	0.2789,	0.267,	0.2536,	0.2418 };
-		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.808;}
-		if (CurrYear >= 2032) {
-   			int idx = CurrYear - 2032;
-    		if (idx > 21) {idx = 21;  }        
-    		UltCABLArateFSW = tempLEN[idx];
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
 		}
-	} 
+	}
+	
 
-
-	//ART slow, LEN 4m scale up
+	//ART fast, LEN 4m scale up  - and no VLS 95
 	if (CurrSim == 13){
-		VLsuppOR = 10;
+		//UTTretention = 1;
+		//VLsuppOR = 10;
 		RR_ARTinityr = ICstart + 1985;
-		for (int i = 0; i < 93; i++) {	
-			RR_ARTinit[i] = 7.8; 	
-			/*	
-			if (i == 0) { RR_ARTinit[i] = 1.5; }	
-			if (i == 1) { RR_ARTinit[i] = 2.9; }	
-			if (i == 2) { RR_ARTinit[i] = 4.4; }	
-			if (i == 3) { RR_ARTinit[i] = 5.6; }	
-			if (i == 4) { RR_ARTinit[i] = 7.0; */
-			if (i == 0) { RR_ARTinit[i] = 1.68; }	
-			if (i == 1) { RR_ARTinit[i] = 2.36; }	
-			if (i == 2) { RR_ARTinit[i] = 3.04; }	
-			if (i == 3) { RR_ARTinit[i] = 3.72; }	
-			if (i == 4) { RR_ARTinit[i] = 4.4; }	
-			if (i == 5) { RR_ARTinit[i] = 5.08; }	
-			if (i == 6) { RR_ARTinit[i] = 5.76; }	
-			if (i == 7) { RR_ARTinit[i] = 6.44; }	
-			if (i == 8) { RR_ARTinit[i] = 7.12; }	
+		for (int i = 0; i < 93; i++) {				
+			RR_ARTinit[i] = 7.8; 
+			if (i == 0) { RR_ARTinit[i] = 4.0; }	
 		}
 		double tempLEN[22] = { 0.7101,	0.6112,	0.5575,	0.5329,	0.5075,	0.4542,	0.4172,	0.3819,	0.36,	0.3432,	0.3279,	0.3157,	0.3065,	0.2997,	0.2946,	0.2919,	0.2872,	0.2789,	0.267,	0.2536,	0.2418 };
 		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.808;}
@@ -26957,11 +27093,268 @@ void SimInvestmentCase() {
     		if (idx > 21) {idx = 21;  }        
     		UltCABLArateFSW = tempLEN[idx];
 		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
 	}
 
-	//ART fast, LEN 4m scale up
+
+	//and from here, VL95 applies for all scenarios
+
+	//only VLS95
 	if (CurrSim == 14){
 		VLsuppOR = 10;
+	} 
+
+	
+	//ART no change, 1m LEN scale up - and VLS95
+	if (CurrSim == 15){
+		VLsuppOR = 10;
+		double tempLEN[22] = { 0.1299,0.1141,0.1029,0.1028,0.1012,0.0963,0.0855,0.0836,0.0772,0.0761,0.0735,0.0709,0.0693,0.0679,0.0667,0.0671,0.0664,0.0654,0.0643,0.0631,0.062,0.0609 };
+		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.1406;}
+		if (CurrYear >= 2032) {
+   			int idx = CurrYear - 2032;
+    		if (idx > 21) {idx = 21;  }        
+    		UltCABLArateFSW = tempLEN[idx];
+		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
+	} 
+
+	//ART no change, LEN 2m scale up - and VLS95
+	if (CurrSim == 16){
+		VLsuppOR = 10;
+		double tempLEN[22] = { 0.3023,0.2606,0.2316,0.229,0.2242,0.2115,0.1842,0.1792,0.1632,0.16,0.1533,0.147,0.1431,0.1396,0.137,0.1349,0.134,0.1307,0.1268,0.1227,0.1188 };
+		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.3226;}
+		if (CurrYear >= 2032) {
+   			int idx = CurrYear - 2032;
+    		if (idx > 21) {idx = 21;  }        
+    		UltCABLArateFSW = tempLEN[idx];
+		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
+	} 
+
+	//ART no change, LEN 4m scale up - and VLS95
+	if (CurrSim == 17){
+		VLsuppOR = 10;
+		double tempLEN[22] = { 0.7101,	0.6112,	0.5575,	0.5329,	0.5075,	0.4542,	0.4172,	0.3819,	0.36,	0.3432,	0.3279,	0.3157,	0.3065,	0.2997,	0.2946,	0.2919,	0.2872,	0.2789,	0.267,	0.2536,	0.2418 };
+		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.808;}
+		if (CurrYear >= 2032) {
+   			int idx = CurrYear - 2032;
+    		if (idx > 21) {idx = 21;  }        
+    		UltCABLArateFSW = tempLEN[idx];
+		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
+	} 
+
+
+	//ART slow, LEN no change - and VLS95
+	if (CurrSim == 18){
+		VLsuppOR = 10;
+		//UTTretention = 1;
+
+		RR_ARTinityr = ICstart + 1985;
+		for (int i = 0; i < 93; i++) {	
+			RR_ARTinit[i] = 7.8; 				
+			if (i == 0) { RR_ARTinit[i] = 1.68; }	
+			if (i == 1) { RR_ARTinit[i] = 2.36; }	
+			if (i == 2) { RR_ARTinit[i] = 3.04; }	
+			if (i == 3) { RR_ARTinit[i] = 3.72; }	
+			if (i == 4) { RR_ARTinit[i] = 4.4; }	
+			if (i == 5) { RR_ARTinit[i] = 5.08; }	
+			if (i == 6) { RR_ARTinit[i] = 5.76; }	
+			if (i == 7) { RR_ARTinit[i] = 6.44; }	
+			if (i == 8) { RR_ARTinit[i] = 7.12; }
+		}
+	}
+
+
+
+	//ART slow, LEN 1m scale up - and VLS95
+	if (CurrSim == 19){
+		VLsuppOR = 10;
+		//UTTretention = 1;
+		RR_ARTinityr = ICstart + 1985;
+		for (int i = 0; i < 93; i++) {	
+			RR_ARTinit[i] = 7.8; 			
+			if (i == 0) { RR_ARTinit[i] = 1.68; }	
+			if (i == 1) { RR_ARTinit[i] = 2.36; }	
+			if (i == 2) { RR_ARTinit[i] = 3.04; }	
+			if (i == 3) { RR_ARTinit[i] = 3.72; }	
+			if (i == 4) { RR_ARTinit[i] = 4.4; }	
+			if (i == 5) { RR_ARTinit[i] = 5.08; }	
+			if (i == 6) { RR_ARTinit[i] = 5.76; }	
+			if (i == 7) { RR_ARTinit[i] = 6.44; }	
+			if (i == 8) { RR_ARTinit[i] = 7.12; }
+		}
+
+		double tempLEN[22] = { 0.1299,0.1141,0.1029,0.1028,0.1012,0.0963,0.0855,0.0836,0.0772,0.0761,0.0735,0.0709,0.0693,0.0679,0.0667,0.0671,0.0664,0.0654,0.0643,0.0631,0.062,0.0609 };
+		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.1406;}
+		if (CurrYear >= 2032) {
+   			int idx = CurrYear - 2032;
+    		if (idx > 21) {idx = 21;  }        
+    		UltCABLArateFSW = tempLEN[idx];
+		}
+	}
+
+	//ART slow, LEN 2m scale up - and VLS95
+	if (CurrSim == 20){
+		VLsuppOR = 10;
+		//UTTretention = 1;
+		RR_ARTinityr = ICstart + 1985;
+		for (int i = 0; i < 93; i++) {	
+			RR_ARTinit[i] = 7.8; 				
+			if (i == 0) { RR_ARTinit[i] = 1.68; }	
+			if (i == 1) { RR_ARTinit[i] = 2.36; }	
+			if (i == 2) { RR_ARTinit[i] = 3.04; }	
+			if (i == 3) { RR_ARTinit[i] = 3.72; }	
+			if (i == 4) { RR_ARTinit[i] = 4.4; }	
+			if (i == 5) { RR_ARTinit[i] = 5.08; }	
+			if (i == 6) { RR_ARTinit[i] = 5.76; }	
+			if (i == 7) { RR_ARTinit[i] = 6.44; }	
+			if (i == 8) { RR_ARTinit[i] = 7.12; }	
+		}
+		double tempLEN[22] = { 0.3023,0.2606,0.2316,0.229,0.2242,0.2115,0.1842,0.1792,0.1632,0.16,0.1533,0.147,0.1431,0.1396,0.137,0.1349,0.134,0.1307,0.1268,0.1227,0.1188 };
+		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.3226;}
+		if (CurrYear >= 2032) {
+   			int idx = CurrYear - 2032;
+    		if (idx > 21) {idx = 21;  }        
+    		UltCABLArateFSW = tempLEN[idx];
+		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
+	}
+
+
+	//ART slow, LEN 4m scale up - and VLS95
+	if (CurrSim == 21){
+		VLsuppOR = 10;
+		//UTTretention = 1;
+		RR_ARTinityr = ICstart + 1985;
+		for (int i = 0; i < 93; i++) {	
+			RR_ARTinit[i] = 7.8; 				
+			if (i == 0) { RR_ARTinit[i] = 1.68; }	
+			if (i == 1) { RR_ARTinit[i] = 2.36; }	
+			if (i == 2) { RR_ARTinit[i] = 3.04; }	
+			if (i == 3) { RR_ARTinit[i] = 3.72; }	
+			if (i == 4) { RR_ARTinit[i] = 4.4; }	
+			if (i == 5) { RR_ARTinit[i] = 5.08; }	
+			if (i == 6) { RR_ARTinit[i] = 5.76; }	
+			if (i == 7) { RR_ARTinit[i] = 6.44; }	
+			if (i == 8) { RR_ARTinit[i] = 7.12; }	
+		}
+		double tempLEN[22] = { 0.7101,	0.6112,	0.5575,	0.5329,	0.5075,	0.4542,	0.4172,	0.3819,	0.36,	0.3432,	0.3279,	0.3157,	0.3065,	0.2997,	0.2946,	0.2919,	0.2872,	0.2789,	0.267,	0.2536,	0.2418 };
+		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.808;}
+		if (CurrYear >= 2032) {
+   			int idx = CurrYear - 2032;
+    		if (idx > 21) {idx = 21;  }        
+    		UltCABLArateFSW = tempLEN[idx];
+		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
+	}
+
+
+	//ART fast, LEN no change - and VLS 95
+	if (CurrSim == 22){
+		VLsuppOR = 10;
+		//UTTretention = 1;
+		RR_ARTinityr = ICstart + 1985;
+		for (int i = 0; i < 93; i++) {				
+			RR_ARTinit[i] = 7.8; 
+			if (i == 0) { RR_ARTinit[i] = 4; }	
+		}
+	}
+
+	//ART fast, LEN 1m scale up  - and VLS 95
+	if (CurrSim == 23){
+		VLsuppOR = 10;
+		//UTTretention = 1;
+
+		RR_ARTinityr = ICstart + 1985;
+		for (int i = 0; i < 93; i++) {				
+			RR_ARTinit[i] = 7.8; 
+			if (i == 0) { RR_ARTinit[i] = 4; }	
+		}
+		double tempLEN[22] = { 0.1299,0.1141,0.1029,0.1028,0.1012,0.0963,0.0855,0.0836,0.0772,0.0761,0.0735,0.0709,0.0693,0.0679,0.0667,0.0671,0.0664,0.0654,0.0643,0.0631,0.062,0.0609 };
+		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.1406;}
+		if (CurrYear >= 2032) {
+   			int idx = CurrYear - 2032;
+    		if (idx > 21) {idx = 21;  }        
+    		UltCABLArateFSW = tempLEN[idx];		
+		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
+	}
+
+	
+
+	//ART fast, LEN 2m scale up  - and VLS 95
+	if (CurrSim == 24){
+		VLsuppOR = 10;
+		//UTTretention = 1;
+		RR_ARTinityr = ICstart + 1985;
+		for (int i = 0; i < 93; i++) {				
+			RR_ARTinit[i] = 7.8; 
+			if (i == 0) { RR_ARTinit[i] = 4.0; }	
+		}
+		double tempLEN[22] = { 0.3023,0.2606,0.2316,0.229,0.2242,0.2115,0.1842,0.1792,0.1632,0.16,0.1533,0.147,0.1431,0.1396,0.137,0.1349,0.134,0.1307,0.1268,0.1227,0.1188 };
+		if (CurrYear >= 2027-1) { UltCABLArateFSW = 0.3226;}
+		if (CurrYear >= 2032) {
+   			int idx = CurrYear - 2032;
+    		if (idx > 21) {idx = 21;  }        
+    		UltCABLArateFSW = tempLEN[idx];
+		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
+	}
+	
+
+	//ART fast, LEN 4m scale up  - and VLS 95
+	if (CurrSim == 25){
+		VLsuppOR = 10;
+		//UTTretention = 1;
 		RR_ARTinityr = ICstart + 1985;
 		for (int i = 0; i < 93; i++) {				
 			RR_ARTinit[i] = 7.8; 
@@ -26974,13 +27367,17 @@ void SimInvestmentCase() {
     		if (idx > 21) {idx = 21;  }        
     		UltCABLArateFSW = tempLEN[idx];
 		}
+		for (int i = 2029-1985; i < 86; i++) {			
+			CABLAeligMSM[i]=1.0;
+			CABLAeligAGYW[i]=1.0;	
+			RR_CABLAstartPWID[i]=0.15;		
+			CABLAeligOtherG[i][1] = 0.02; //other women	
+			CABLAeligOtherG[i][0] = 0.02; //other women	
+		}
 	}
-
-
-
 }
 
-
+*/
 
 
 /*
@@ -27719,6 +28116,12 @@ void CalcCostModel()
 		costpop[cc][ly] = round(TotalHIV.out[CurrSim - 1][ly]);
 		cc++;
 
+		costpopl[cc] = "TotalPWID"; //STOCK
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(TotalPWID.out[CurrSim - 1][ly]);
+		cc++;
+
+
 		costpopl[cc] = "TotPop"; //STOCK
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(TotPop.out[CurrSim - 1][ly]);
@@ -27795,6 +28198,7 @@ void CalcCostModel()
 		costpop[cc][ly] = round(TotalARTunder15.out[CurrSim - 1][ly]);
 		cc++;
 
+	
 		costpopl[cc] = "Total number of patients on ART (public + private)"; //STOCK
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round(TotalART15M.out[CurrSim - 1][ly] + TotalART15F.out[CurrSim - 1][ly] + TotalARTunder15.out[CurrSim - 1][ly]);
@@ -27867,14 +28271,23 @@ void CalcCostModel()
 		costpop[cc][ly] = round(VLsuppressed.out[CurrSim - 1][ly]  * 1000);
 		cc++;
 
-		costpopl[cc] = "All Third95 (of PLHIV)";
+		//costpopl[cc] = "All Third95 (of PLHIV)";
+		//costpop[cc][ly] = 0;
+		//costpop[cc][ly] = round(VLsuppressed.out[CurrSim - 1][ly] *
+		//	 ARTcoverageDiag.out[CurrSim - 1][ly] * 
+		//	 DiagnosedPropn.out[CurrSim - 1][ly] * 1000);
+		//cc++;
+
+		costpopl[cc] = "All Third95 (of PLHIV) lt 400";
 		costpop[cc][ly] = 0;
-		costpop[cc][ly] = round(VLsuppressed.out[CurrSim - 1][ly] *
-			 ARTcoverageDiag.out[CurrSim - 1][ly] * 
-			 DiagnosedPropn.out[CurrSim - 1][ly] * 1000);
+		costpop[cc][ly] = round(VLsuppressedAllHIV.out[CurrSim - 1][ly] * 1000);
 		cc++;
 
-	
+		costpopl[cc] = "All Third95 (of PLHIV) lt 1000";
+		costpop[cc][ly] = 0;
+		costpop[cc][ly] = round(VLsuppressedAll1000.out[CurrSim - 1][ly] * 1000);
+		cc++;		
+
 		costpopl[cc] = "ART clients with Peer Navigators"; //this will account for cost not related to ART (that is accounted elsewhere)
 		costpop[cc][ly] = 0;
 		costpop[cc][ly] = round((TotalART10to14.out[CurrSim - 1][ly] + TotalART15M.out[CurrSim - 1][ly] + TotalART15F.out[CurrSim - 1][ly])
@@ -28380,8 +28793,16 @@ void CalcCostModel()
 		if (UTTretention == 0) { costpop[cc][ly] = 0; }
 		cc++;
 
+		costpopl[cc] = "Incremental LA-ART"; //assuming on all adults
+		if (VLsuppOR > 1) { costpop[cc][ly] = round((TotalART15M.out[CurrSim - 1][ly] + TotalART15F.out[CurrSim - 1][ly])*(1 - pvtsector)); }
+		if (VLsuppOR == 1) { costpop[cc][ly] = 0; }
+		cc++;	
 
 		//with no POC VL testing included
+
+
+
+
 
 		//cost only public sector, so ultimately remove 5.8% of ART patients across the board
 		costpopl[cc] = "ART Adults (1st line 1st year)"; //STOCK
@@ -28402,6 +28823,13 @@ void CalcCostModel()
 		costpopl[cc] = "ART Adults (2nd line followup)"; //STOCK
 		costpop[cc][ly] = round((TotalART15M2L.out[CurrSim - 1][ly] + TotalART15F2L.out[CurrSim - 1][ly])*(1 - pvtsector));
 		cc++;
+
+
+		costpopl[cc] = "ART Adults (1st line new+follow-up)"; //STOCK
+		costpop[cc][ly] = round((TotalART15M.out[CurrSim - 1][ly] + TotalART15F.out[CurrSim - 1][ly])*(1 - pvtsector)
+			- (TotalART15M2L.out[CurrSim - 1][ly] + TotalART15F2L.out[CurrSim - 1][ly])*(1 - pvtsector));
+		cc++;
+
 
 		costpopl[cc] = "ART Paeds Neonates"; //STOCK
 		costpop[cc][ly] = round(StartingART0.out[CurrSim - 1][ly - 1]);
@@ -32465,7 +32893,6 @@ void Int_OralPrepBm2(){
 if (ProvModel == 0){ if (CurrYear >= 2027-1) { UltPrEPrateFSW = 0.0187;} 
 for (int iy = ICstart; iy < 86; iy++) { PrEPpregnant[iy] = 0.0667; }} //national 
 if (ProvModel == 1 && ProvID == "EC"){ if (CurrYear >= 2027-1) { UltPrEPrateFSW = 0.0172;} 
-for (int iy = ICstart; iy < 86; iy++) { PrEPpregnant[iy] = 0.0974; }}
 if (ProvModel == 1 && ProvID == "FS"){ if (CurrYear >= 2027-1) { UltPrEPrateFSW = 0.0217;} 
 for (int iy = ICstart; iy < 86; iy++) { PrEPpregnant[iy] = 0.0401; }}
 if (ProvModel == 1 && ProvID == "GT"){ if (CurrYear >= 2027-1) { UltPrEPrateFSW = 0.0273;} 
@@ -32483,6 +32910,7 @@ for (int iy = ICstart; iy < 86; iy++) { PrEPpregnant[iy] = 0.0469; }}
 if (ProvModel == 1 && ProvID == "WC"){ if (CurrYear >= 2027-1) { UltPrEPrateFSW = 0.0133;}
 for (int iy = ICstart; iy < 86; iy++) { PrEPpregnant[iy] = 0.0171; } }
 
+}
 }
 
 
@@ -32510,6 +32938,7 @@ for (int iy = ICstart; iy < 86; iy++) { PrEPpregnant[iy] = 0.0703; }}
 if (ProvModel == 1 && ProvID == "WC"){ if (CurrYear >= 2027-1) { UltPrEPrateFSW = 0.0257;}
 for (int iy = ICstart; iy < 86; iy++) { PrEPpregnant[iy] = 0.0256; } }
 }
+
 
 void Int_OralPrepDefault(){
 
